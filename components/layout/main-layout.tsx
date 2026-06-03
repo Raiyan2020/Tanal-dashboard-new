@@ -52,7 +52,7 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
   const toggleLanguage = () => setLanguage(language === 'en' ? 'ar' : 'en');
   const logout = () => router.push('/login');
 
-  if (pathname === '/login' || pathname.startsWith('/client-portal')) {
+  if (pathname === '/login' || pathname.startsWith('/client-portal') || pathname.startsWith('/guest-view')) {
     return (
       <div className="font-sans text-secondary min-h-screen selection:bg-primary/20 selection:text-primary-dark">
         {children}

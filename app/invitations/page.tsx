@@ -68,19 +68,19 @@ export default function InvitationsPage() {
       case 'sent':
         return { 
           icon: Send, 
-          label: t('sent' as any), 
+          label: t('sent' as any) || (dir === 'ltr' ? 'Sent' : 'مرسلة'), 
           colors: 'text-emerald-600 bg-emerald-50 ring-emerald-500/20' 
         };
       case 'unsent':
         return { 
           icon: Clock, 
-          label: t('unsent' as any), 
+          label: t('unsent' as any) || (dir === 'ltr' ? 'Unsent' : 'غير مرسلة'), 
           colors: 'text-amber-600 bg-amber-50 ring-amber-500/20' 
         };
       case 'past':
         return { 
           icon: Calendar, 
-          label: t('past' as any), 
+          label: t('past' as any) || (dir === 'ltr' ? 'Past' : 'سابقة'), 
           colors: 'text-gray-600 bg-gray-50 ring-gray-500/20' 
         };
     }
@@ -122,7 +122,11 @@ export default function InvitationsPage() {
       <InvitationDetails 
         invitation={viewingInvitation} 
         onBack={() => setViewingInvitation(null)} 
-        onNavigateToEventGuests={(eventId) => {}} 
+        onNavigateToEventGuests={(eventId) => {}}
+        onEdit={(invitation) => {
+          setViewingInvitation(null);
+          setEditingInvitation(invitation);
+        }}
       />
     );
   }
@@ -132,16 +136,16 @@ export default function InvitationsPage() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h2 className={cn("text-2xl font-semibold text-primary-dark", dir === 'ltr' ? 'font-serif' : 'font-arabic font-bold')}>
-            {t('invitations' as any)}
+            {t('invitations' as any) || (dir === 'ltr' ? 'Invitations' : 'الدعوات')}
           </h2>
-          <p className="text-secondary/60 mt-1">{t('manageInvitations' as any)}</p>
+          <p className="text-secondary/60 mt-1">{t('manageInvitations' as any) || (dir === 'ltr' ? 'Manage your event invitations' : 'إدارة دعوات مناسباتك')}</p>
         </div>
         <button
           onClick={() => setIsCreateModalOpen(true)}
           className="flex items-center gap-2 bg-primary hover:bg-primary-dark text-white px-5 py-2.5 rounded-xl transition-all shadow-md shadow-primary/20 hover:shadow-lg hover:shadow-primary/30 active:scale-95"
         >
           <Plus className="w-5 h-5" />
-          <span className="font-medium">{t('createInvitation' as any) || t('addInvitation' as any)}</span>
+          <span className="font-medium">{t('createInvitation' as any) || t('addInvitation' as any) || (dir === 'ltr' ? 'Create Invitation' : 'إنشاء دعوة')}</span>
         </button>
       </div>
 
@@ -152,7 +156,7 @@ export default function InvitationsPage() {
           </div>
           <input
             type="text"
-            placeholder={t('searchInvitations' as any)}
+            placeholder={t('searchInvitations' as any) || (dir === 'ltr' ? 'Search invitations...' : 'البحث عن دعوات...')}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full bg-white/50 border border-white/60 focus:border-primary/50 focus:ring-2 focus:ring-primary/20 rounded-xl py-3 pl-12 pr-4 rtl:pr-12 rtl:pl-4 transition-all outline-none text-secondary"
@@ -161,9 +165,9 @@ export default function InvitationsPage() {
 
         <div className="flex w-full overflow-x-auto scrollbar-hide gap-2 mb-4 pb-2">
           {([
-            { id: 'all', label: t('all' as any) },
-            { id: 'upcoming', label: t('upcoming' as any) },
-            { id: 'past', label: t('past' as any) },
+            { id: 'all', label: t('all' as any) || (dir === 'ltr' ? 'All' : 'الكل') },
+            { id: 'upcoming', label: t('upcoming' as any) || (dir === 'ltr' ? 'Upcoming' : 'قادمة') },
+            { id: 'past', label: t('past' as any) || (dir === 'ltr' ? 'Past' : 'سابقة') },
           ] as const).map((option) => (
             <button
               key={option.id}
@@ -183,9 +187,9 @@ export default function InvitationsPage() {
         {primaryFilter === 'upcoming' && (
           <div className="flex w-full overflow-x-auto scrollbar-hide gap-2 mb-6 pb-2">
             {([
-              { id: 'all', label: t('all' as any) },
-              { id: 'sent', label: t('sent' as any) },
-              { id: 'unsent', label: t('unsent' as any) },
+              { id: 'all', label: t('all' as any) || (dir === 'ltr' ? 'All' : 'الكل') },
+              { id: 'sent', label: t('sent' as any) || (dir === 'ltr' ? 'Sent' : 'مرسلة') },
+              { id: 'unsent', label: t('unsent' as any) || (dir === 'ltr' ? 'Unsent' : 'غير مرسلة') },
             ] as const).map((option) => (
               <button
                 key={option.id}
@@ -234,12 +238,12 @@ export default function InvitationsPage() {
                       <div className="flex flex-col sm:flex-row sm:items-center text-sm text-secondary/60 gap-2 sm:gap-4 mt-1">
                         <div className="flex items-center gap-1.5">
                            <Calendar className="w-3.5 h-3.5 shrink-0" />
-                           <span>{t('deadline' as any)}: {invitation.deadlineDate}</span>
+                           <span>{t('deadline' as any) || (dir === 'ltr' ? 'Deadline' : 'الموعد النهائي')}: {invitation.deadlineDate}</span>
                         </div>
                         <span className="hidden sm:block w-1 h-1 rounded-full bg-secondary/20 shrink-0" />
                         <div className="flex items-center gap-1.5">
                            <Users className="w-3.5 h-3.5 shrink-0" />
-                           <span>{invitation.guestsNumber} {t('guests' as any)}</span>
+                           <span>{invitation.guestsNumber} {t('guests' as any) || (dir === 'ltr' ? 'Guests' : 'الضيوف')}</span>
                         </div>
                         <span className="hidden sm:block w-1 h-1 rounded-full bg-secondary/20 shrink-0" />
                         <span className="font-mono text-xs">{invitation.id}</span>
@@ -248,7 +252,7 @@ export default function InvitationsPage() {
                     
                     <div className="flex items-center gap-2 mt-3 md:mt-0 border-t border-secondary/5 md:border-none pt-3 md:pt-0 justify-end shrink-0">
                       <button 
-                        title="View"
+                        title={dir === 'ltr' ? "View" : "عرض"}
                         onClick={(e) => { e.stopPropagation(); setViewingInvitation(invitation); }}
                         className="p-2 sm:p-2.5 bg-white text-blue-500 border border-transparent hover:bg-blue-50 hover:border-blue-200 hover:text-blue-600 hover:-translate-y-[2px] hover:scale-[1.03] hover:shadow-md active:scale-95 active:translate-y-0 rounded-xl transition-all duration-200 ease-out flex items-center justify-center cursor-pointer"
                       >
@@ -256,7 +260,7 @@ export default function InvitationsPage() {
                       </button>
                       {invitation.status !== 'past' && (
                         <button 
-                          title={t('edit' as any)}
+                          title={t('edit' as any) || (dir === 'ltr' ? 'Edit' : 'تعديل')}
                           onClick={(e) => { e.stopPropagation(); setEditingInvitation(invitation); }}
                           className="p-2 sm:p-2.5 bg-white text-yellow-500 border border-transparent hover:bg-yellow-50 hover:border-yellow-200 hover:text-yellow-600 hover:-translate-y-[2px] hover:scale-[1.03] hover:shadow-md active:scale-95 active:translate-y-0 rounded-xl transition-all duration-200 ease-out flex items-center justify-center cursor-pointer"
                         >
@@ -265,7 +269,7 @@ export default function InvitationsPage() {
                       )}
                       {invitation.status === 'unsent' && (
                         <button 
-                          title={t('remove' as any)}
+                          title={t('remove' as any) || (dir === 'ltr' ? 'Remove' : 'إزالة')}
                           onClick={(e) => { e.stopPropagation(); setInvitationToDelete(invitation.id); }}
                           className="p-2 sm:p-2.5 bg-white text-red-500 border border-transparent hover:bg-red-50 hover:border-red-200 hover:text-red-600 hover:-translate-y-[2px] hover:scale-[1.03] hover:shadow-md active:scale-95 active:translate-y-0 rounded-xl transition-all duration-200 ease-out flex items-center justify-center cursor-pointer"
                         >
@@ -283,7 +287,7 @@ export default function InvitationsPage() {
                 className="flex flex-col items-center justify-center py-12 text-secondary/40 text-center px-4"
               >
                 <Ticket className="w-12 h-12 mb-4 opacity-50" />
-                <p className="text-base">{t('noDataFound' as any) || 'No invitations found'}</p>
+                <p className="text-base">{t('noDataFound' as any) || (dir === 'ltr' ? 'No invitations found' : 'لم يتم العثور على دعوات')}</p>
               </motion.div>
             )}
           </AnimatePresence>
@@ -294,8 +298,8 @@ export default function InvitationsPage() {
         isOpen={!!invitationToDelete}
         onClose={() => setInvitationToDelete(null)}
         onConfirm={handleDelete}
-        title={t('confirmDeleteInvitation' as any)}
-        message={t('confirmDeleteInvitationMessage' as any)}
+        title={t('confirmDeleteInvitation' as any) || (dir === 'ltr' ? 'Delete Invitation' : 'حذف الدعوة')}
+        message={t('confirmDeleteInvitationMessage' as any) || (dir === 'ltr' ? 'Are you sure you want to delete this invitation?' : 'هل أنت متأكد من رغبتك في حذف هذه الدعوة؟')}
       />
     </div>
   );

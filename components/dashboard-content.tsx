@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useLanguage } from '@/lib/i18n';
 import { motion } from 'motion/react';
 import { Users, CalendarHeart, HandPlatter, HandCoins, QrCode, MailCheck, UsersRound, Send, Plus } from 'lucide-react';
@@ -20,6 +20,7 @@ const revenueData = [
 
 export function DashboardContent({ onNavigate, onCreateEvent }: { onNavigate?: (id: string) => void, onCreateEvent?: () => void }) {
   const { t, dir } = useLanguage();
+  const [revenueFilter, setRevenueFilter] = useState('all');
 
   const stats = [
     { title: 'totalClients', value: '1,248', icon: Users, change: '+12%', isPositive: true, onClick: () => onNavigate?.('clients') },
@@ -95,20 +96,41 @@ export function DashboardContent({ onNavigate, onCreateEvent }: { onNavigate?: (
         ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-1 gap-6 lg:gap-8">
         
         {/* Charts */}
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.4, duration: 0.5 }}
-          className="lg:col-span-2 p-6 rounded-3xl glass-panel flex flex-col"
+          className="p-6 rounded-3xl glass-panel flex flex-col"
         >
-          <div className="flex justify-between items-center mb-6">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
             <h3 className={cn("text-xl font-medium", dir === 'ltr' ? 'font-serif' : 'font-arabic')}>{t('revenue')}</h3>
-            <button onClick={() => onNavigate?.('financial')} className="text-sm font-medium text-primary hover:text-primary-dark bg-white/40 px-4 py-1.5 rounded-full shadow-sm ring-1 ring-white/60 cursor-pointer">
-              {t('viewAll')}
-            </button>
+            <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+              <div className="relative">
+                <select
+                  value={revenueFilter}
+                  onChange={(e) => setRevenueFilter(e.target.value)}
+                  className={cn(
+                    "bg-white/50 border border-white/60 focus:border-primary/50 focus:ring-2 focus:ring-primary/20 rounded-xl py-1.5 outline-none text-secondary cursor-pointer appearance-none text-sm font-medium transition-all",
+                    dir === 'ltr' ? 'pl-3 pr-8' : 'pr-3 pl-8'
+                  )}
+                >
+                  <option value="all">{dir === 'ltr' ? 'All Time' : 'كل الوقت'}</option>
+                  <option value="today">{dir === 'ltr' ? 'Today' : 'اليوم'}</option>
+                  <option value="lastWeek">{dir === 'ltr' ? 'Last Week' : 'الأسبوع الماضي'}</option>
+                  <option value="lastMonth">{dir === 'ltr' ? 'Last Month' : 'الشهر الماضي'}</option>
+                  <option value="lastYear">{dir === 'ltr' ? 'Last Year' : 'السنة الماضية'}</option>
+                </select>
+                <div className={cn("absolute inset-y-0 flex items-center pointer-events-none text-secondary/50", dir === 'ltr' ? 'right-2' : 'left-2')}>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
+                </div>
+              </div>
+              <button onClick={() => onNavigate?.('financial')} className="text-sm font-medium text-primary hover:text-primary-dark bg-white/40 px-4 py-1.5 rounded-full shadow-sm ring-1 ring-white/60 cursor-pointer whitespace-nowrap">
+                {t('viewAll')}
+              </button>
+            </div>
           </div>
           <div className="h-[300px] w-full">
             <ResponsiveContainer width="100%" height="100%">
@@ -156,38 +178,6 @@ export function DashboardContent({ onNavigate, onCreateEvent }: { onNavigate?: (
             </ResponsiveContainer>
           </div>
         </motion.div>
-
-        {/* Small Widgets column */}
-        <div className="space-y-6 lg:space-y-8">
-           {/* Recent Activity */}
-           <motion.div 
-             initial={{ opacity: 0, y: 20 }}
-             animate={{ opacity: 1, y: 0 }}
-             transition={{ delay: 0.5, duration: 0.5 }}
-             className="p-6 rounded-3xl glass-panel"
-           >
-             <h3 className={cn("text-xl font-medium mb-6", dir === 'ltr' ? 'font-serif' : 'font-arabic')}>{t('recentActivity')}</h3>
-             <div className="space-y-6">
-               {[
-                 { title: 'Invitation Sent', desc: 'To 350 guests for Al Olayan Wedding', icon: Send, color: 'text-blue-500', bg: 'bg-blue-100/50' },
-                 { title: 'New Event Created', desc: 'Royal Palace Hall Booking', icon: CalendarHeart, color: 'text-primary', bg: 'bg-primary/10' },
-                 { title: 'Payment Received', desc: '12.5k KWD from Al Rajhi Family', icon: HandCoins, color: 'text-emerald-500', bg: 'bg-emerald-100/50' },
-                 { title: 'QR Scan Spike', desc: '150 scans in last 10 minutes', icon: QrCode, color: 'text-purple-500', bg: 'bg-purple-100/50' },
-               ].map((item, i) => (
-                 <div key={i} className="flex gap-4 relative group cursor-pointer">
-                   {i !== 3 && <div className="absolute left-[19px] rtl:right-[19px] rtl:left-auto top-10 bottom-[-16px] w-[2px] bg-secondary/5 group-hover:bg-primary/20 transition-colors" />}
-                   <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center shrink-0 z-10 shadow-sm", item.bg)}>
-                     <item.icon className={cn("w-5 h-5", item.color)} strokeWidth={1.5} />
-                   </div>
-                   <div className="pt-1">
-                     <p className="text-sm font-semibold text-secondary">{item.title}</p>
-                     <p className="text-xs text-secondary/60 mt-0.5">{item.desc}</p>
-                   </div>
-                 </div>
-               ))}
-             </div>
-           </motion.div>
-        </div>
       </div>
       
       {/* Upcoming Events Table */}

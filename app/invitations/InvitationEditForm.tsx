@@ -75,20 +75,20 @@ export function InvitationEditForm({ invitation, onBack, onSave }: InvitationEdi
           ) : (
             <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
           )}
-          <span className="font-medium">{t('back' as any) || 'Back'}</span>
+          <span className="font-medium">{t('back' as any) || (dir === 'ltr' ? 'Back' : 'الرجوع')}</span>
         </button>
       </div>
 
       <div className="glass-panel p-6 sm:p-8 rounded-[2rem] border border-secondary/5 shadow-sm w-full max-w-2xl mx-auto crystal-accent">
          <h2 className={cn("text-2xl font-medium text-secondary mb-8", dir === 'ltr' ? 'font-serif' : 'font-arabic font-bold')}>
-            {invitation ? (t('editInvitation' as any) || 'Edit Invitation') : (t('createInvitation' as any) || 'Create Invitation')}
+            {invitation ? (t('editInvitation' as any) || (dir === 'ltr' ? 'Edit Invitation' : 'تعديل الدعوة')) : (t('createInvitation' as any) || (dir === 'ltr' ? 'Create Invitation' : 'إنشاء دعوة'))}
          </h2>
          <form onSubmit={handleSubmit} className="space-y-6">
            
            <div>
              <label className="block text-sm font-medium text-secondary/80 mb-1.5 ml-1 flex items-center gap-2 cursor-pointer">
                <Ticket className="w-4 h-4 text-secondary/50" />
-               Select Event <span className="text-red-500">*</span>
+               {t('selectEvent' as any) || (dir === 'ltr' ? 'Select Event' : 'اختر الحفل')} <span className="text-red-500">*</span>
              </label>
              <select 
                value={eventId}
@@ -96,7 +96,7 @@ export function InvitationEditForm({ invitation, onBack, onSave }: InvitationEdi
                className="w-full bg-white/50 border border-secondary/20 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-all text-secondary appearance-none font-medium cursor-pointer"
                required
              >
-               <option value="" disabled>Choose a event...</option>
+               <option value="" disabled>{t('chooseEvent' as any) || (dir === 'ltr' ? 'Choose an event...' : 'اختر حفلاً...')}</option>
                {eventsList.map(ev => (
                  <option key={ev.id} value={ev.id}>{ev.name}</option>
                ))}
@@ -105,7 +105,7 @@ export function InvitationEditForm({ invitation, onBack, onSave }: InvitationEdi
            
            <div>
              <label className="block text-sm font-medium text-secondary/80 mb-2 ml-1">
-               Invitation Logic <span className="text-red-500">*</span>
+               {t('invitationLogic' as any) || (dir === 'ltr' ? 'Invitation Logic' : 'منطق الدعوة')} <span className="text-red-500">*</span>
              </label>
              <div className="space-y-3">
                <label className={cn("flex items-start gap-3 p-4 rounded-xl border cursor-pointer transition-colors", logic === 'strict' ? 'border-primary/50 bg-primary/5' : 'border-secondary/20 bg-white/50 hover:bg-white/80')}>
@@ -117,8 +117,8 @@ export function InvitationEditForm({ invitation, onBack, onSave }: InvitationEdi
                    className="mt-1 w-4 h-4 text-primary bg-white border-secondary/30 focus:ring-primary/30"
                  />
                  <div>
-                   <span className="block text-sm font-medium text-secondary">Strict Action</span>
-                   <span className="block text-xs text-secondary/60 mt-0.5">If no response, recorded as declined.</span>
+                   <span className="block text-sm font-medium text-secondary">{t('strictAction' as any) || (dir === 'ltr' ? 'Strict Action' : 'إجراء صارم')}</span>
+                   <span className="block text-xs text-secondary/60 mt-0.5">{t('strictActionDesc' as any) || (dir === 'ltr' ? 'If no response, recorded as declined.' : 'إذا لم يتم الرد، تسجل كمرفوضة.')}</span>
                  </div>
                </label>
                
@@ -131,8 +131,8 @@ export function InvitationEditForm({ invitation, onBack, onSave }: InvitationEdi
                    className="mt-1 w-4 h-4 text-primary bg-white border-secondary/30 focus:ring-primary/30"
                  />
                  <div>
-                   <span className="block text-sm font-medium text-secondary">Default Accept</span>
-                   <span className="block text-xs text-secondary/60 mt-0.5">If no response, recorded as accepted.</span>
+                   <span className="block text-sm font-medium text-secondary">{t('defaultAccept' as any) || (dir === 'ltr' ? 'Default Accept' : 'قبول تلقائي')}</span>
+                   <span className="block text-xs text-secondary/60 mt-0.5">{t('defaultAcceptDesc' as any) || (dir === 'ltr' ? 'If no response, recorded as accepted.' : 'إذا لم يتم الرد، تسجل كمقبولة.')}</span>
                  </div>
                </label>
 
@@ -145,8 +145,8 @@ export function InvitationEditForm({ invitation, onBack, onSave }: InvitationEdi
                    className="mt-1 w-4 h-4 text-primary bg-white border-secondary/30 focus:ring-primary/30"
                  />
                  <div>
-                   <span className="block text-sm font-medium text-secondary">View Only</span>
-                   <span className="block text-xs text-secondary/60 mt-0.5">Accepted right away, for informing only.</span>
+                   <span className="block text-sm font-medium text-secondary">{t('viewOnly' as any) || (dir === 'ltr' ? 'View Only' : 'للعرض فقط')}</span>
+                   <span className="block text-xs text-secondary/60 mt-0.5">{t('viewOnlyDesc' as any) || (dir === 'ltr' ? 'Accepted right away, for informing only.' : 'تقبل فوراً، للعلم بالخبر فقط.')}</span>
                  </div>
                </label>
              </div>
@@ -156,7 +156,7 @@ export function InvitationEditForm({ invitation, onBack, onSave }: InvitationEdi
              <div>
                <label className="block text-sm font-medium text-secondary/80 mb-1.5 ml-1 flex items-center gap-2">
                  <Calendar className="w-4 h-4 text-secondary/50" />
-                 Deadline <span className="text-red-500">*</span>
+                 {t('deadline' as any) || (dir === 'ltr' ? 'Deadline' : 'الموعد النهائي')} <span className="text-red-500">*</span>
                </label>
                <input
                  type="date"
@@ -169,7 +169,7 @@ export function InvitationEditForm({ invitation, onBack, onSave }: InvitationEdi
              <div>
                <label className="block text-sm font-medium text-secondary/80 mb-1.5 ml-1 flex items-center gap-2">
                  <Clock className="w-4 h-4 text-secondary/50" />
-                 Time <span className="text-red-500">*</span>
+                 {t('deadlineTime' as any) || (dir === 'ltr' ? 'Time' : 'الوقت')} <span className="text-red-500">*</span>
                </label>
                <input
                  type="time"
@@ -183,7 +183,7 @@ export function InvitationEditForm({ invitation, onBack, onSave }: InvitationEdi
 
            <div>
              <label className="block text-sm font-medium text-secondary/80 mb-1.5 ml-1">
-               Upload Design
+               {t('uploadDesign' as any) || (dir === 'ltr' ? 'Upload Design' : 'رفع التصميم')}
              </label>
              <div 
                onDragOver={e => e.preventDefault()}
@@ -200,10 +200,10 @@ export function InvitationEditForm({ invitation, onBack, onSave }: InvitationEdi
                />
                <Upload className="w-8 h-8 text-secondary/40 mb-3" />
                <p className="text-sm font-medium text-secondary mb-1">
-                 {fileName ? fileName : 'Upload Design'}
+                 {fileName ? fileName : (t('uploadDesign' as any) || (dir === 'ltr' ? 'Upload Design' : 'رفع التصميم'))}
                </p>
                <p className="text-xs text-secondary/50">
-                 PNG, JPG, PDF up to 10MB
+                 {t('uploadDesignDesc' as any) || (dir === 'ltr' ? 'PNG, JPG, PDF up to 10MB' : 'أقصى حجم 10 ميجابايت (PNG, JPG, PDF)')}
                </p>
              </div>
            </div>
@@ -214,13 +214,13 @@ export function InvitationEditForm({ invitation, onBack, onSave }: InvitationEdi
                onClick={onBack}
                className="w-full sm:flex-1 px-5 py-3.5 rounded-xl border border-secondary/20 bg-white/50 text-secondary hover:bg-white/80 font-medium transition-colors cursor-pointer"
              >
-               Cancel
+               {t('cancel' as any) || (dir === 'ltr' ? 'Cancel' : 'إلغاء')}
              </button>
              <button
                type="submit"
                className="w-full sm:flex-1 bg-primary hover:bg-primary-dark text-white py-3.5 rounded-xl font-medium transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 cursor-pointer"
              >
-               {invitation ? 'Save Changes' : 'Create Invitation'}
+               {invitation ? (t('saveChanges' as any) || (dir === 'ltr' ? 'Save Changes' : 'حفظ التغييرات')) : (t('createInvitation' as any) || (dir === 'ltr' ? 'Create Invitation' : 'إنشاء دعوة'))}
              </button>
            </div>
          </form>

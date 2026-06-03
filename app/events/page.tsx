@@ -3,7 +3,7 @@
 import React, { useState, useMemo } from 'react';
 import { useLanguage } from '@/lib/i18n';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Search, Eye, Edit2, Trash2, CalendarSearch, Mail, CheckCircle2, Clock, Check, XCircle, CreditCard, Banknote, AlertTriangle } from 'lucide-react';
+import { Plus, Search, Eye, Edit2, Trash2, CalendarSearch, Mail, CheckCircle2, Clock, Check, XCircle, CreditCard, Banknote, AlertTriangle, Filter } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Image from 'next/image';
 
@@ -76,6 +76,10 @@ export default function EventsPage() {
   const [events, setEvents] = useState<AppEvent[]>(initialEvents);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | EventStatus>('all');
+  const [guestsFilter, setGuestsFilter] = useState<string>('all');
+  const [dateFrom, setDateFrom] = useState<string>('');
+  const [dateTo, setDateTo] = useState<string>('');
+  const [showFilters, setShowFilters] = useState(false);
   
   const [isAddEventModalOpen, setIsAddEventModalOpen] = useState(false);
   const [eventToEdit, setEventToEdit] = useState<AppEvent | null>(null);
@@ -86,9 +90,29 @@ export default function EventsPage() {
     return events.filter(event => {
       const matchSearch = event.name.toLowerCase().includes(searchTerm.toLowerCase()) || event.id.includes(searchTerm);
       const matchStatus = statusFilter === 'all' || event.status === statusFilter;
-      return matchSearch && matchStatus;
+      
+      let matchGuests = true;
+      if (guestsFilter === '0-100') matchGuests = event.guests <= 100;
+      else if (guestsFilter === '101-500') matchGuests = event.guests > 100 && event.guests <= 500;
+      else if (guestsFilter === '501-1000') matchGuests = event.guests > 500 && event.guests <= 1000;
+      else if (guestsFilter === '1000+') matchGuests = event.guests > 1000;
+
+      let matchDate = true;
+      if (dateFrom || dateTo) {
+        const eventDate = new Date(event.creationDate).getTime();
+        // Set to end of day for the end date to include events on that day
+        const toDate = dateTo ? new Date(dateTo) : null;
+        if (toDate) {
+          toDate.setHours(23, 59, 59, 999);
+        }
+        
+        if (dateFrom && eventDate < new Date(dateFrom).getTime()) matchDate = false;
+        if (toDate && eventDate > toDate.getTime()) matchDate = false;
+      }
+
+      return matchSearch && matchStatus && matchGuests && matchDate;
     });
-  }, [events, searchTerm, statusFilter]);
+  }, [events, searchTerm, statusFilter, guestsFilter, dateFrom, dateTo]);
 
   const getStatusDisplay = (event: AppEvent) => {
     switch (event.status) {
@@ -172,18 +196,78 @@ export default function EventsPage() {
       </div>
 
       <div className="glass-panel rounded-3xl p-3 sm:p-6 w-full mx-auto overflow-hidden">
-        <div className="mb-4 sm:mb-6 relative w-full">
-          <div className="absolute inset-y-0 left-0 rtl:right-0 rtl:left-auto flex items-center px-3 sm:px-4 pointer-events-none text-secondary/40">
-            <Search className="w-4 h-4 sm:w-5 sm:h-5" />
+        <div className="flex flex-col md:flex-row gap-3 mb-4 sm:mb-6 w-full">
+          <div className="relative flex-1">
+            <div className="absolute inset-y-0 left-0 rtl:right-0 rtl:left-auto flex items-center px-3 sm:px-4 pointer-events-none text-secondary/40">
+              <Search className="w-4 h-4 sm:w-5 sm:h-5" />
+            </div>
+            <input
+              type="text"
+              placeholder={dir === 'ltr' ? 'Search by ID or event name' : 'البحث بالمعرف أو اسم الحفل'}
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full bg-white/50 border border-white/60 focus:border-primary/50 focus:ring-2 focus:ring-primary/20 rounded-xl py-2 sm:py-3 pl-10 pr-4 rtl:pr-10 rtl:pl-4 transition-all outline-none text-secondary text-sm sm:text-base h-[46px] sm:h-[50px]"
+            />
           </div>
-          <input
-            type="text"
-            placeholder="Search by ID or event name"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full bg-white/50 border border-white/60 focus:border-primary/50 focus:ring-2 focus:ring-primary/20 rounded-xl py-2 sm:py-3 pl-10 pr-4 rtl:pr-10 rtl:pl-4 transition-all outline-none text-secondary text-sm sm:text-base"
-          />
+          <div className="flex items-center gap-2">
+            <button
+               onClick={() => setShowFilters(!showFilters)}
+               className={cn(
+                 "flex items-center gap-2 px-4 py-2 sm:py-3 bg-white/40 hover:bg-white/60 border rounded-xl text-sm font-medium transition-colors ring-1 ring-secondary/5 cursor-pointer h-[46px] sm:h-[50px]",
+                 showFilters ? "border-primary text-primary" : "border-secondary/10 text-secondary"
+               )}
+            >
+               <Filter className="w-4 h-4" />
+               {dir === 'ltr' ? 'Filters' : 'تصفية'}
+            </button>
+          </div>
         </div>
+
+        <AnimatePresence>
+          {showFilters && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="overflow-hidden mb-4 sm:mb-6"
+            >
+              <div className="p-4 bg-white/40 border border-secondary/10 rounded-2xl flex flex-col md:flex-row gap-4">
+                <div className="flex-1">
+                  <label className="block text-xs font-medium text-secondary/70 mb-1">{dir === 'ltr' ? 'Number of Guests' : 'عدد الضيوف'}</label>
+                  <select
+                    value={guestsFilter}
+                    onChange={(e) => setGuestsFilter(e.target.value)}
+                    className="w-full bg-white/60 border border-secondary/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary/40 cursor-pointer"
+                  >
+                    <option value="all">{dir === 'ltr' ? 'All Guests' : 'جميع الضيوف'}</option>
+                    <option value="0-100">0 - 100</option>
+                    <option value="101-500">101 - 500</option>
+                    <option value="501-1000">501 - 1000</option>
+                    <option value="1000+">+1000</option>
+                  </select>
+                </div>
+                <div className="flex-1">
+                  <label className="block text-xs font-medium text-secondary/70 mb-1">{dir === 'ltr' ? 'From Date' : 'تاريخ من'}</label>
+                  <input
+                    type="date"
+                    value={dateFrom}
+                    onChange={(e) => setDateFrom(e.target.value)}
+                    className="w-full bg-white/60 border border-secondary/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary/40 cursor-pointer cursor-text"
+                  />
+                </div>
+                <div className="flex-1">
+                  <label className="block text-xs font-medium text-secondary/70 mb-1">{dir === 'ltr' ? 'To Date' : 'تاريخ إلى'}</label>
+                  <input
+                    type="date"
+                    value={dateTo}
+                    onChange={(e) => setDateTo(e.target.value)}
+                    className="w-full bg-white/60 border border-secondary/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary/40 cursor-pointer cursor-text"
+                  />
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         <div className="flex w-full overflow-x-auto scrollbar-hide gap-2 mb-4 sm:mb-6 pb-2">
           {(['all', 'completed', 'paid', 'installments', 'unpaid', 'canceled'] as const).map((status) => (
@@ -197,7 +281,7 @@ export default function EventsPage() {
                   : "bg-white/60 text-secondary/70 ring-white/60 hover:bg-white hover:text-secondary"
               )}
             >
-              {status === 'all' ? t('allStatuses' as any) : t(status as any)}
+              {status === 'all' ? (dir === 'ltr' ? 'All' : 'الكل') : (t(status as any) || status)}
             </button>
           ))}
         </div>
@@ -243,7 +327,7 @@ export default function EventsPage() {
                              </span>
                            ) : (
                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-secondary/5 text-secondary/50 text-xs font-medium">
-                               {t('notCreated')}
+                               {t('notCreated') || (dir === 'ltr' ? 'Not Created' : 'غير منشأ')}
                              </span>
                            )}
                          </div>
@@ -259,21 +343,21 @@ export default function EventsPage() {
 
                       <div className="flex items-center gap-1.5">
                         <button 
-                          title={t('view')} 
+                          title={t('view') || (dir === 'ltr' ? 'View' : 'عرض')} 
                           onClick={(e) => { e.stopPropagation(); setEventToView(event); }}
                           className="p-2 sm:p-2 bg-white text-secondary/60 border border-transparent hover:bg-gray-50 hover:border-gray-200 hover:text-gray-900 hover:-translate-y-[2px] hover:scale-[1.03] hover:shadow-md active:scale-95 active:translate-y-0 rounded-xl transition-all duration-200 ease-out flex items-center justify-center cursor-pointer"
                         >
                           <Eye className="w-4 h-4" />
                         </button>
                         <button 
-                          title={t('edit' as any)} 
+                          title={t('edit' as any) || (dir === 'ltr' ? 'Edit' : 'تعديل')} 
                           onClick={(e) => { e.stopPropagation(); setEventToEdit(event); }}
                           className="p-2 sm:p-2 bg-white text-yellow-500 border border-transparent hover:bg-yellow-50 hover:border-yellow-200 hover:text-yellow-600 hover:-translate-y-[2px] hover:scale-[1.03] hover:shadow-md active:scale-95 active:translate-y-0 rounded-xl transition-all duration-200 ease-out flex items-center justify-center cursor-pointer"
                         >
                           <Edit2 className="w-4 h-4" />
                         </button>
                         <button 
-                          title={t('remove')} 
+                          title={t('remove') || (dir === 'ltr' ? 'Remove' : 'حذف')} 
                           onClick={(e) => { e.stopPropagation(); setEventToDelete(event.id); }}
                           className="p-2 sm:p-2 bg-white text-red-500 border border-transparent hover:bg-red-50 hover:border-red-200 hover:text-red-600 hover:-translate-y-[2px] hover:scale-[1.03] hover:shadow-md active:scale-95 active:translate-y-0 rounded-xl transition-all duration-200 ease-out flex items-center justify-center cursor-pointer"
                         >
@@ -288,7 +372,7 @@ export default function EventsPage() {
           ) : (
             <div className="flex flex-col items-center justify-center py-12 text-secondary/40 text-center px-4">
               <CalendarSearch className="w-10 h-10 sm:w-12 sm:h-12 mb-3 sm:mb-4 opacity-50" />
-              <p className="text-sm sm:text-base">No events found.</p>
+              <p className="text-sm sm:text-base">{dir === 'ltr' ? 'No events found.' : 'لا يوجد حفلات للأسف.'}</p>
             </div>
           )}
         </div>

@@ -91,19 +91,19 @@ function GuestEditForm({ guest, onBack, onSave }: GuestEditFormProps) {
           ) : (
             <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
           )}
-          <span className="font-medium">{t('back' as any)}</span>
+          <span className="font-medium">{dir === 'ltr' ? 'Back' : 'الرجوع'}</span>
         </button>
       </div>
 
       <div className="glass-panel p-6 sm:p-8 rounded-[2rem] border border-secondary/5 shadow-sm w-full max-w-2xl mx-auto crystal-accent">
          <h2 className={cn("text-2xl font-medium text-secondary mb-8", dir === 'ltr' ? 'font-serif' : 'font-arabic font-bold')}>
-            {guest ? (t('editGuest' as any) || 'Edit Guest') : (t('addGuest' as any) || 'Add Guest')}
+            {guest ? (dir === 'ltr' ? 'Edit Guest' : 'تعديل بيانات الضيف') : (dir === 'ltr' ? 'Add Guest' : 'إضافة ضيف')}
          </h2>
          
          <form onSubmit={handleSubmit} className="space-y-5">
            <div>
              <label className="block text-sm font-medium text-secondary/80 mb-1.5 ml-1 rtl:mr-1 rtl:ml-0">
-               {t('fullName' as any) || 'Full Name'}
+               {dir === 'ltr' ? 'Full Name' : 'الاسم الكامل'}
              </label>
              <input
                type="text"
@@ -111,13 +111,13 @@ function GuestEditForm({ guest, onBack, onSave }: GuestEditFormProps) {
                value={name}
                onChange={e => setName(e.target.value)}
                className="w-full bg-white/50 border border-secondary/20 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-all text-secondary"
-               placeholder={t('fullName' as any) || 'Full Name'}
+               placeholder={dir === 'ltr' ? 'Full Name' : 'الاسم الكامل'}
              />
            </div>
            
            <div>
              <label className="block text-sm font-medium text-secondary/80 mb-1.5 ml-1 rtl:mr-1 rtl:ml-0">
-               {t('phoneNumber' as any) || 'Phone Number'}
+               {dir === 'ltr' ? 'Phone Number' : 'رقم الهاتف'}
              </label>
              <div className="flex gap-2 relative">
                <select 
@@ -148,7 +148,7 @@ function GuestEditForm({ guest, onBack, onSave }: GuestEditFormProps) {
              </div>
              <p className="text-xs text-secondary/50 mt-1.5 ml-1 rtl:mr-1 rtl:ml-0 flex items-center gap-1.5">
                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-               {t('phoneMustHaveWhatsapp' as any) || 'Phone number must have WhatsApp'}
+               {dir === 'ltr' ? 'Phone number must have WhatsApp' : 'يجب أن يكون الرقم مرتبطاً بواتساب'}
              </p>
            </div>
            
@@ -157,14 +157,14 @@ function GuestEditForm({ guest, onBack, onSave }: GuestEditFormProps) {
                type="submit"
                className="w-full bg-primary hover:bg-primary-dark text-white py-3.5 rounded-xl font-medium transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 cursor-pointer"
              >
-               {t('saveChanges' as any) || 'Save Changes'}
+               {dir === 'ltr' ? 'Save Changes' : 'حفظ التغييرات'}
              </button>
              <button
                type="button"
                onClick={onBack}
                className="w-full py-3.5 rounded-xl text-secondary hover:bg-secondary/5 font-medium transition-colors cursor-pointer"
              >
-               {t('cancel' as any) || 'Cancel'}
+               {dir === 'ltr' ? 'Cancel' : 'إلغاء'}
              </button>
            </div>
          </form>
@@ -245,21 +245,21 @@ export function EventDetails({ event, onBack, onEdit, onDelete, onUpdateEvent }:
           ) : (
             <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
           )}
-          <span className="font-medium">{t('back' as any)}</span>
+          <span className="font-medium">{dir === 'ltr' ? 'Back' : 'الرجوع'}</span>
         </button>
         
         <div className="flex items-center gap-2">
           <button
             onClick={onEdit}
             className="p-2 sm:p-2 bg-white text-yellow-500 border border-transparent hover:bg-yellow-50 hover:border-yellow-200 hover:text-yellow-600 hover:-translate-y-[2px] hover:scale-[1.03] hover:shadow-md active:scale-95 active:translate-y-0 rounded-xl transition-all duration-200 ease-out flex items-center justify-center cursor-pointer"
-            title={t('edit' as any)}
+            title={dir === 'ltr' ? 'Edit' : 'تعديل'}
           >
             <Edit2 className="w-5 h-5" />
           </button>
           <button
             onClick={onDelete}
             className="p-2 sm:p-2 bg-white text-red-500 border border-transparent hover:bg-red-50 hover:border-red-200 hover:text-red-600 hover:-translate-y-[2px] hover:scale-[1.03] hover:shadow-md active:scale-95 active:translate-y-0 rounded-xl transition-all duration-200 ease-out flex items-center justify-center cursor-pointer"
-            title={t('remove' as any)}
+            title={dir === 'ltr' ? 'Remove' : 'حذف'}
           >
             <Trash2 className="w-5 h-5" />
           </button>
@@ -293,11 +293,11 @@ export function EventDetails({ event, onBack, onEdit, onDelete, onUpdateEvent }:
                    getStatusColor(event.status)
                  )}
                 >
-                  <option value="unpaid">{t('unpaid' as any) || 'Unpaid'}</option>
-                  <option value="paid">{t('paid' as any) || 'Paid'}</option>
-                  <option value="installments">{t('installments' as any) || 'Installments'}</option>
-                  <option value="completed">{t('completed' as any) || 'Completed'}</option>
-                  <option value="canceled">{t('canceled' as any) || 'Canceled'}</option>
+                  <option value="unpaid">{dir === 'ltr' ? 'Unpaid' : 'غير مدفوع'}</option>
+                  <option value="paid">{dir === 'ltr' ? 'Paid' : 'مدفوع'}</option>
+                  <option value="installments">{dir === 'ltr' ? 'Installments' : 'أقساط'}</option>
+                  <option value="completed">{dir === 'ltr' ? 'Completed' : 'مكتمل'}</option>
+                  <option value="canceled">{dir === 'ltr' ? 'Canceled' : 'ملغي'}</option>
                 </select>
                 <div className={cn("pointer-events-none absolute inset-y-0 flex items-center", dir === 'ltr' ? 'right-2' : 'left-2')}>
                   <svg className="w-3 h-3 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
@@ -333,7 +333,7 @@ export function EventDetails({ event, onBack, onEdit, onDelete, onUpdateEvent }:
             activeTab === 'info' ? "bg-white text-secondary shadow-sm" : "text-secondary/60 hover:text-secondary hover:bg-white/50"
           )}
         >
-          {t('eventInfo' as any) || 'Event Info'}
+          {dir === 'ltr' ? 'Event Info' : 'تفاصيل الحفل'}
         </button>
         <button
           onClick={() => setActiveTab('guests')}
@@ -342,7 +342,7 @@ export function EventDetails({ event, onBack, onEdit, onDelete, onUpdateEvent }:
             activeTab === 'guests' ? "bg-white text-secondary shadow-sm" : "text-secondary/60 hover:text-secondary hover:bg-white/50"
           )}
         >
-          {t('eventGuests' as any) || 'Event Guests'}
+          {dir === 'ltr' ? 'Event Guests' : 'ضيوف الحفل'}
         </button>
       </div>
 
@@ -359,13 +359,13 @@ export function EventDetails({ event, onBack, onEdit, onDelete, onUpdateEvent }:
               <div className="glass-panel p-6 rounded-3xl space-y-5">
                 <h3 className="font-semibold text-secondary flex items-center gap-2">
                   <FileText className="w-5 h-5 text-primary" />
-                  {t('eventDetails' as any) || 'Event Details'}
+                  {dir === 'ltr' ? 'Event Details' : 'تفاصيل الحفل'}
                 </h3>
                 
                 <div className="space-y-4">
                   {client && (
                     <div className="flex items-center justify-between p-3 rounded-2xl bg-white/50 border border-secondary/5">
-                      <span className="text-secondary/60 text-sm flex items-center gap-1.5"><User className="w-4 h-4" />{t('client' as any)}</span>
+                      <span className="text-secondary/60 text-sm flex items-center gap-1.5"><User className="w-4 h-4" />{dir === 'ltr' ? 'Client' : 'العميل'}</span>
                       <button 
                         onClick={() => setViewClient(client)}
                         className="font-medium text-primary hover:text-primary-dark underline hover:bg-primary/5 px-2 py-0.5 rounded-lg transition-colors cursor-pointer"
@@ -375,24 +375,24 @@ export function EventDetails({ event, onBack, onEdit, onDelete, onUpdateEvent }:
                     </div>
                   )}
                   <div className="flex items-center justify-between p-3 rounded-2xl bg-white/50 border border-secondary/5">
-                    <span className="text-secondary/60 text-sm">{t('creationDate' as any) || 'Creation Date'}</span>
+                    <span className="text-secondary/60 text-sm">{dir === 'ltr' ? 'Creation Date' : 'تاريخ الإنشاء'}</span>
                     <span className="font-medium text-secondary">{event.creationDate}</span>
                   </div>
                   <div className="flex items-center justify-between p-3 rounded-2xl bg-white/50 border border-secondary/5">
-                    <span className="text-secondary/60 text-sm">{t('eventDateAndTime' as any) || 'Date & Time'}</span>
+                    <span className="text-secondary/60 text-sm">{dir === 'ltr' ? 'Date & Time' : 'التاريخ والوقت'}</span>
                     <span className="font-medium text-secondary" dir="ltr">{event.eventDate || '-'} - {event.eventTime || '-'}</span>
                   </div>
                   <div className="flex items-center justify-between p-3 rounded-2xl bg-white/50 border border-secondary/5">
-                    <span className="text-secondary/60 text-sm">{t('numberOfGuests' as any) || 'Guests'}</span>
+                    <span className="text-secondary/60 text-sm">{dir === 'ltr' ? 'Guests' : 'الضيوف'}</span>
                     <span className="font-medium text-secondary">{event.guests}</span>
                   </div>
                   {(event.eventCost || event.paymentType) && (
                     <div className="flex flex-col gap-2 p-3 rounded-2xl bg-white/50 border border-secondary/5">
                       <div className="flex items-center justify-between">
-                        <span className="text-secondary/60 text-sm">{t('eventCost' as any) || 'Event Cost'}</span>
+                        <span className="text-secondary/60 text-sm">{dir === 'ltr' ? 'Event Cost' : 'تكلفة الحفل'}</span>
                         <div className="flex flex-col items-end">
                           <span className="font-medium text-secondary">{event.eventCost ? `${event.eventCost} SAR` : '-'}</span>
-                          <span className="text-xs text-secondary/60">{event.paymentType === 'one_payment' ? (t('onePayment' as any) || 'One Payment') : event.paymentType === 'installments' ? (t('installments' as any) || 'Installments') : ''}</span>
+                          <span className="text-xs text-secondary/60">{event.paymentType === 'one_payment' ? (dir === 'ltr' ? 'One Payment' : 'دفعة واحدة') : event.paymentType === 'installments' ? (dir === 'ltr' ? 'Installments' : 'أقساط') : ''}</span>
                         </div>
                       </div>
                       {(event.status === 'unpaid' || event.status === 'installments') && (
@@ -419,16 +419,16 @@ export function EventDetails({ event, onBack, onEdit, onDelete, onUpdateEvent }:
               <div className="glass-panel p-6 rounded-3xl space-y-5">
                 <h3 className="font-semibold text-secondary flex items-center gap-2">
                   <Building className="w-5 h-5 text-primary" />
-                  {t('hallInfo' as any) || 'Hall Info'}
+                  {dir === 'ltr' ? 'Hall Info' : 'معلومات القاعة'}
                 </h3>
                 
                 <div className="space-y-4">
                   <div className="flex items-center justify-between p-3 rounded-2xl bg-white/50 border border-secondary/5">
-                    <span className="text-secondary/60 text-sm">{t('name' as any) || 'Name'}</span>
+                    <span className="text-secondary/60 text-sm">{dir === 'ltr' ? 'Name' : 'الاسم'}</span>
                     <span className="font-medium text-secondary">{event.hallName || '-'}</span>
                   </div>
                   <div className="flex flex-col gap-2 p-3 rounded-2xl bg-white/50 border border-secondary/5">
-                    <span className="text-secondary/60 text-sm">{t('hallGoogleMaps' as any) || 'Google Maps URL'}</span>
+                    <span className="text-secondary/60 text-sm">{dir === 'ltr' ? 'Google Maps URL' : 'رابط خرائط جوجل'}</span>
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-sm font-medium text-secondary truncate">{event.hallLocation || '-'}</span>
                       {event.hallLocation && (
@@ -444,7 +444,7 @@ export function EventDetails({ event, onBack, onEdit, onDelete, onUpdateEvent }:
               <div className="glass-panel p-6 rounded-3xl space-y-5">
                 <h3 className="font-semibold text-secondary flex items-center gap-2">
                   <Ticket className="w-5 h-5 text-primary" />
-                  {t('welcomeMessage' as any) || 'Welcome Message'}
+                  {dir === 'ltr' ? 'Welcome Message' : 'رسالة الترحيب'}
                 </h3>
                 <div className="p-4 rounded-2xl bg-white/50 border border-secondary/5 text-secondary/80 text-sm whitespace-pre-wrap leading-relaxed">
                   {event.welcomeMessage || '-'}
@@ -455,14 +455,14 @@ export function EventDetails({ event, onBack, onEdit, onDelete, onUpdateEvent }:
                 <div className="flex items-center justify-between gap-4">
                   <h3 className="font-semibold text-secondary flex items-center gap-2">
                     <User className="w-5 h-5 text-primary" />
-                    Assigned Employee
+                    {dir === 'ltr' ? 'Assigned Employee' : 'الموظف المختص'}
                   </h3>
                   {!event.assignedEmployeeId && (
                     <button 
                       onClick={onNavigateToEmployees}
                       className="px-3 py-1.5 text-xs font-medium bg-primary text-white hover:bg-primary-dark transition-colors rounded-lg shadow-sm cursor-pointer"
                     >
-                      Assign
+                      {dir === 'ltr' ? 'Assign' : 'تعيين'}
                     </button>
                   )}
                 </div>
@@ -474,7 +474,7 @@ export function EventDetails({ event, onBack, onEdit, onDelete, onUpdateEvent }:
                     </div>
                     <div className="flex flex-col min-w-0 flex-1">
                       <h4 className="font-medium text-secondary truncate">
-                        {MOCK_EMPLOYEES.find(e => e.id === event.assignedEmployeeId)?.name || 'Unknown Employee'}
+                        {MOCK_EMPLOYEES.find(e => e.id === event.assignedEmployeeId)?.name || (dir === 'ltr' ? 'Unknown Employee' : 'موظف غير معروف')}
                       </h4>
                       <div className="flex items-center text-xs text-secondary/60 gap-1.5 mt-1">
                         <span className="font-mono">#{event.assignedEmployeeId}</span>
@@ -483,7 +483,7 @@ export function EventDetails({ event, onBack, onEdit, onDelete, onUpdateEvent }:
                     <button 
                       onClick={onNavigateToEmployees}
                       className="p-2 text-secondary/40 hover:text-primary hover:bg-primary/5 rounded-xl transition-all cursor-pointer"
-                      title="Change Employee"
+                      title={dir === 'ltr' ? 'Change Employee' : 'تغيير الموظف'}
                     >
                       <Edit2 className="w-4 h-4" />
                     </button>
@@ -491,7 +491,9 @@ export function EventDetails({ event, onBack, onEdit, onDelete, onUpdateEvent }:
                 ) : (
                   <div className="flex flex-col items-center justify-center py-6 px-4 text-center">
                     <User className="w-10 h-10 text-secondary/20 mb-2" />
-                    <p className="text-secondary/60 text-sm">No employee is currently assigned to this event.</p>
+                    <p className="text-secondary/60 text-sm">
+                      {dir === 'ltr' ? 'No employee is currently assigned to this event.' : 'لا يوجد موظف مختص بهذه المناسبة حالياً.'}
+                    </p>
                   </div>
                 )}
               </div>
@@ -501,13 +503,13 @@ export function EventDetails({ event, onBack, onEdit, onDelete, onUpdateEvent }:
               <div className="glass-panel p-6 rounded-3xl space-y-5">
                 <h3 className="font-semibold text-secondary flex items-center gap-2">
                   <Mail className="w-5 h-5 text-primary" />
-                  {t('invitations' as any) || 'Invitations'}
+                  {dir === 'ltr' ? 'Invitations' : 'الدعوات'}
                 </h3>
                 {event.invitationsCreated ? (
                   <>
                     <div className="flex items-center justify-between p-4 rounded-2xl bg-white/50 border border-secondary/5">
                       <span className="text-sm font-medium text-secondary/70">
-                        {t('invitationsSent' as any) || 'Invitations Sent'}
+                        {dir === 'ltr' ? 'Invitations Sent' : 'الدعوات المرسلة'}
                       </span>
                       <span className="px-3 py-1 rounded-full text-sm font-medium bg-emerald-50 text-emerald-600 ring-1 ring-inset ring-emerald-500/20">
                         {event.guests}
@@ -515,22 +517,22 @@ export function EventDetails({ event, onBack, onEdit, onDelete, onUpdateEvent }:
                     </div>
                     <button className="w-full py-3 bg-primary/10 text-primary font-medium rounded-xl hover:bg-primary/20 transition-colors flex items-center justify-center gap-2 cursor-pointer">
                       <Eye className="w-4 h-4" />
-                      {t('viewInvitations' as any) || 'View Invitations'}
+                      {dir === 'ltr' ? 'View Invitations' : 'عرض الدعوات'}
                     </button>
                   </>
                 ) : (
                   <>
                     <div className="flex items-center justify-between p-4 rounded-2xl bg-white/50 border border-secondary/5">
                       <span className="text-sm font-medium text-secondary/70">
-                        {t('status' as any) || 'Status'}
+                        {dir === 'ltr' ? 'Status' : 'الحالة'}
                       </span>
                       <span className="px-3 py-1 rounded-full text-sm font-medium bg-secondary/10 text-secondary/60">
-                        {t('notCreated' as any) || 'Not Created'}
+                        {dir === 'ltr' ? 'Not Created' : 'غير منشأ'}
                       </span>
                     </div>
                     <button className="w-full py-3 bg-primary text-white font-medium rounded-xl hover:bg-primary-dark transition-colors flex items-center justify-center gap-2 shadow-sm cursor-pointer">
                       <Plus className="w-4 h-4" />
-                      {t('createInvitations' as any) || 'Create Invitations'}
+                      {dir === 'ltr' ? 'Create Invitations' : 'إنشاء دعوات'}
                     </button>
                   </>
                 )}
@@ -540,7 +542,7 @@ export function EventDetails({ event, onBack, onEdit, onDelete, onUpdateEvent }:
                 <div className="flex justify-between items-center">
                   <h3 className="font-semibold text-secondary flex items-center gap-2">
                     <FileText className="w-5 h-5 text-primary" />
-                    {t('transactionsAndPayment' as any) || 'Transactions & Payments'}
+                    {dir === 'ltr' ? 'Transactions & Payments' : 'المعاملات والمدفوعات'}
                   </h3>
                   <button className="flex items-center gap-1.5 px-3 py-1.5 bg-white/40 hover:bg-white/60 transition-colors rounded-lg text-xs font-medium text-secondary shadow-sm ring-1 ring-secondary/5 cursor-pointer">
                     <Download className="w-3.5 h-3.5" />
@@ -550,7 +552,7 @@ export function EventDetails({ event, onBack, onEdit, onDelete, onUpdateEvent }:
                 <div className="flex flex-col items-center justify-center h-48 opacity-50">
                   <FileText className="w-12 h-12 mb-3 text-secondary/30" />
                   <p className="text-sm text-secondary/70 text-center">
-                    {t('transactionsListPlaceholder' as any) || 'No transactions yet'}
+                    {dir === 'ltr' ? 'No transactions yet' : 'لا توجد معاملات حتى الآن'}
                   </p>
                 </div>
               </div>
@@ -568,7 +570,7 @@ export function EventDetails({ event, onBack, onEdit, onDelete, onUpdateEvent }:
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <h3 className="font-semibold text-secondary flex items-center gap-2">
                   <Users className="w-5 h-5 text-primary" />
-                  {t('guestList' as any) || 'Guest List'}
+                  {dir === 'ltr' ? 'Guest List' : 'قائمة الضيوف'}
                   <span className="text-xs bg-secondary/10 px-2 py-0.5 rounded-full text-secondary/70">
                     {filteredGuests.length}
                   </span>
@@ -576,14 +578,14 @@ export function EventDetails({ event, onBack, onEdit, onDelete, onUpdateEvent }:
                 <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 w-full sm:w-auto">
                   <button className="flex-1 sm:flex-none py-2 px-3 sm:px-4 bg-white hover:bg-gray-50 border border-secondary/10 rounded-xl text-xs sm:text-sm font-medium transition-all shadow-sm flex items-center justify-center gap-1.5 sm:gap-2 whitespace-nowrap cursor-pointer">
                     <Upload className="w-4 h-4 shrink-0" />
-                    {t('uploadSheet' as any) || 'Upload Sheet'}
+                    {dir === 'ltr' ? 'Upload Sheet' : 'رفع ملف'}
                   </button>
                   <button 
                     onClick={() => setIsAddingGuest(true)}
                     className="flex-1 sm:flex-none py-2 px-3 sm:px-4 bg-primary hover:bg-primary-dark text-white rounded-xl text-xs sm:text-sm font-medium transition-all shadow-sm flex items-center justify-center gap-1.5 sm:gap-2 whitespace-nowrap cursor-pointer"
                   >
                     <Plus className="w-4 h-4 shrink-0" />
-                    {t('addGuest' as any) || 'Add Guest'}
+                    {dir === 'ltr' ? 'Add Guest' : 'إضافة ضيف'}
                   </button>
                 </div>
               </div>
@@ -592,7 +594,7 @@ export function EventDetails({ event, onBack, onEdit, onDelete, onUpdateEvent }:
                   <Search className={cn("absolute top-1/2 -translate-y-1/2 w-4 h-4 text-secondary/40", dir === 'ltr' ? 'left-3' : 'right-3')} />
                   <input
                     type="text"
-                    placeholder="Search by name or phone number"
+                    placeholder={dir === 'ltr' ? 'Search by name or phone number' : 'البحث بالاسم أو رقم الهاتف'}
                     value={guestSearch}
                     onChange={(e) => setGuestSearch(e.target.value)}
                     className={cn(
@@ -603,9 +605,9 @@ export function EventDetails({ event, onBack, onEdit, onDelete, onUpdateEvent }:
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   {[
-                    { id: 'all', label: t('allGuests' as any) || 'All' },
-                    { id: 'has_whatsapp', label: t('hasWhatsapp' as any) || 'Has WhatsApp' },
-                    { id: 'no_whatsapp', label: t('noWhatsapp' as any) || 'No WhatsApp' }
+                    { id: 'all', label: dir === 'ltr' ? 'All' : 'الكل' },
+                    { id: 'has_whatsapp', label: dir === 'ltr' ? 'Has WhatsApp' : 'لديه واتساب' },
+                    { id: 'no_whatsapp', label: dir === 'ltr' ? 'No WhatsApp' : 'بدون واتساب' }
                   ].map(filter => (
                     <button
                       key={filter.id}
@@ -647,7 +649,7 @@ export function EventDetails({ event, onBack, onEdit, onDelete, onUpdateEvent }:
                               <span className="hidden sm:block w-1 h-1 rounded-full bg-secondary/20 shrink-0" />
                               <div className="flex items-center gap-1.5 text-amber-600 font-medium">
                                 <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                                <span className="truncate">{t('noWhatsappWarning' as any) || 'No WhatsApp'}</span>
+                                <span className="truncate">{dir === 'ltr' ? 'No WhatsApp' : 'ليس لديه واتساب'}</span>
                               </div>
                             </>
                           )}
@@ -657,7 +659,7 @@ export function EventDetails({ event, onBack, onEdit, onDelete, onUpdateEvent }:
                       <div className="flex flex-row md:flex-col items-center md:items-end justify-between md:justify-center gap-3 md:gap-2 mt-2 md:mt-0 border-t border-secondary/5 md:border-none pt-2 md:pt-0 shrink-0 min-w-[120px]">
                         <div className="flex items-center gap-1.5 justify-end w-full">
                           <button 
-                            title="Contact via WhatsApp" 
+                            title={dir === 'ltr' ? 'Contact via WhatsApp' : 'تواصل عبر الواتساب'}
                             onClick={(e) => {
                               e.preventDefault();
                               if (guest.phone) {
@@ -673,14 +675,14 @@ export function EventDetails({ event, onBack, onEdit, onDelete, onUpdateEvent }:
                             </svg>
                           </button>
                           <button 
-                            title={t('edit' as any)} 
+                            title={dir === 'ltr' ? 'Edit' : 'تعديل'}
                             onClick={() => setGuestToEdit(guest)}
                             className="p-2 sm:p-2 bg-white text-yellow-500 border border-transparent hover:bg-yellow-50 hover:border-yellow-200 hover:text-yellow-600 hover:-translate-y-[2px] hover:scale-[1.03] hover:shadow-md active:scale-95 active:translate-y-0 rounded-xl transition-all duration-200 ease-out flex items-center justify-center cursor-pointer"
                           >
                             <Edit2 className="w-4 h-4" />
                           </button>
                           <button 
-                            title={t('remove' as any)} 
+                            title={dir === 'ltr' ? 'Remove' : 'حذف'}
                             onClick={() => setGuests(guests.filter(g => g.id !== guest.id))}
                             className="p-2 sm:p-2 bg-white text-red-500 border border-transparent hover:bg-red-50 hover:border-red-200 hover:text-red-600 hover:-translate-y-[2px] hover:scale-[1.03] hover:shadow-md active:scale-95 active:translate-y-0 rounded-xl transition-all duration-200 ease-out flex items-center justify-center cursor-pointer"
                           >
@@ -693,7 +695,7 @@ export function EventDetails({ event, onBack, onEdit, onDelete, onUpdateEvent }:
                 ) : (
                   <div className="flex flex-col items-center justify-center py-12 text-secondary/40 text-center px-4">
                     <Users className="w-10 h-10 sm:w-12 sm:h-12 mb-3 sm:mb-4 opacity-50" />
-                    <p className="text-sm sm:text-base">{t('noDataFound' as any) || 'No guests found'}</p>
+                    <p className="text-sm sm:text-base">{dir === 'ltr' ? 'No guests found' : 'لا يوجد ضيوف'}</p>
                   </div>
                 )}
               </div>

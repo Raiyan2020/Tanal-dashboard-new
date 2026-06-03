@@ -10,8 +10,9 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, Legend, BarChart, CartesianGrid, XAxis, YAxis, Bar } from 'recharts';
+import { ConfirmModal } from './ConfirmModal';
 
-export type InvitationGuestStatus = 'delivered' | 'failed' | 'read' | 'pending' | 'accepted' | 'declined' | 'link_delivered' | 'link_clicked' | 'attended' | 'not_attended';
+export type InvitationGuestStatus = 'pending' | 'accepted' | 'declined';
 
 export interface InvitationGuest {
   id: string;
@@ -22,11 +23,11 @@ export interface InvitationGuest {
 
 const MOCK_GUESTS: Record<string, InvitationGuest[]> = {
   'INV-1001': [
-    { id: '1', name: 'Mohammed Ali', phone: '+966 50 111 2233', status: 'attended' },
+    { id: '1', name: 'Mohammed Ali', phone: '+966 50 111 2233', status: 'accepted' },
     { id: '2', name: 'Khalid Saif', phone: '+966 55 222 3344', status: 'declined' },
-    { id: '3', name: 'Ahmed Abdullah', phone: '+966 54 333 4455', status: 'link_clicked' },
-    { id: '4', name: 'Fahad Rashid', phone: '+966 53 444 5566', status: 'delivered' },
-    { id: '5', name: 'Saud Nasser', phone: '+966 50 555 6677', status: 'read' },
+    { id: '3', name: 'Ahmed Abdullah', phone: '+966 54 333 4455', status: 'pending' },
+    { id: '4', name: 'Fahad Rashid', phone: '+966 53 444 5566', status: 'pending' },
+    { id: '5', name: 'Saud Nasser', phone: '+966 50 555 6677', status: 'accepted' },
   ],
   'INV-1005': []
 };
@@ -81,7 +82,7 @@ export function AttendanceDetails({ onBack, attendanceNumber, employeeName }: { 
           {dir === 'ltr' ? <ArrowLeft className="w-5 h-5" /> : <ArrowRight className="w-5 h-5" />}
         </button>
         <h2 className={cn("text-2xl font-medium text-secondary", dir === 'ltr' ? 'font-serif' : 'font-arabic font-bold')}>
-          {t('attendanceDetails' as any) || 'Attendance Details'}
+          {t('attendanceDetails' as any) || (dir === 'ltr' ? 'Attendance Details' : 'تفاصيل الحضور')}
         </h2>
       </div>
 
@@ -91,7 +92,7 @@ export function AttendanceDetails({ onBack, attendanceNumber, employeeName }: { 
             <QrCode className="w-6 h-6 text-primary" />
           </div>
           <div>
-            <p className="text-secondary/60 text-sm">{t('attendanceNumber' as any) || 'Attendance Number'}</p>
+            <p className="text-secondary/60 text-sm">{t('attendanceNumber' as any) || (dir === 'ltr' ? 'Attendance Number' : 'رقم الحضور')}</p>
             <p className="text-xl font-bold text-secondary">{attendanceNumber}</p>
           </div>
         </div>
@@ -100,7 +101,7 @@ export function AttendanceDetails({ onBack, attendanceNumber, employeeName }: { 
             <User className="w-6 h-6 text-secondary" />
           </div>
           <div>
-            <p className="text-secondary/60 text-sm">{t('assignedEmployee' as any) || 'Assigned Employee'}</p>
+            <p className="text-secondary/60 text-sm">{t('assignedEmployee' as any) || (dir === 'ltr' ? 'Assigned Employee' : 'الموظف المختص')}</p>
             <p className="text-xl font-bold text-secondary">{employeeName || '-'}</p>
           </div>
         </div>
@@ -110,7 +111,7 @@ export function AttendanceDetails({ onBack, attendanceNumber, employeeName }: { 
         <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
           <h3 className="text-lg font-semibold text-secondary flex items-center gap-2">
             <QrCode className="w-5 h-5 text-primary" />
-            {t('qrCheckIns' as any) || 'QR Check-ins'}
+            {t('qrCheckIns' as any) || (dir === 'ltr' ? 'QR Check-ins' : 'تسجيلات الحضور عبر مسح الرمز')}
           </h3>
           <div className="flex items-center gap-3 w-full md:w-auto">
             <div className="relative flex-1 md:w-64">
@@ -119,7 +120,7 @@ export function AttendanceDetails({ onBack, attendanceNumber, employeeName }: { 
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder={t('searchGuestOrPhone' as any) || 'Search guest or phone...'}
+                placeholder={t('searchGuestOrPhone' as any) || (dir === 'ltr' ? 'Search guest or phone...' : 'البحث عن ضيف أو رقم هاتف...')}
                 className={cn(
                   "w-full bg-white/50 border border-white/60 focus:border-primary/50 focus:ring-2 focus:ring-primary/20 rounded-xl py-2 transition-all outline-none text-secondary text-sm",
                   dir === 'ltr' ? 'pl-9 pr-4' : 'pr-9 pl-4'
@@ -129,7 +130,7 @@ export function AttendanceDetails({ onBack, attendanceNumber, employeeName }: { 
             <button
               onClick={() => setSortOrder(prev => prev === 'desc' ? 'asc' : 'desc')}
               className="p-2 border border-secondary/10 bg-white/50 rounded-xl hover:bg-white/80 transition-colors flex items-center gap-2 text-secondary text-sm font-medium shrink-0 cursor-pointer"
-              title="Sort by Time"
+              title={dir === 'ltr' ? 'Sort by Time' : 'ترتيب حسب الوقت'}
             >
               <SortDesc className={cn("w-4 h-4 transition-transform", sortOrder === 'asc' ? 'rotate-180' : '')} />
             </button>
@@ -152,7 +153,7 @@ export function AttendanceDetails({ onBack, attendanceNumber, employeeName }: { 
           ))}
           {filteredAndSortedCheckIns.length === 0 && (
              <div className="py-10 text-center text-secondary/40">
-               {t('noCheckInsFound' as any) || 'No check-ins found.'}
+               {t('noCheckInsFound' as any) || (dir === 'ltr' ? 'No check-ins found.' : 'لم يتم العثور على تسجيلات حضور.')}
              </div>
           )}
         </div>
@@ -176,17 +177,18 @@ interface InvitationDetailsProps {
   invitation: Invitation;
   onBack: () => void;
   onNavigateToEventGuests?: (eventId: string) => void;
+  onEdit?: (invitation: Invitation) => void;
 }
 
-export function InvitationDetails({ invitation, onBack, onNavigateToEventGuests }: InvitationDetailsProps) {
+export function InvitationDetails({ invitation, onBack, onNavigateToEventGuests, onEdit }: InvitationDetailsProps) {
   const { t, dir } = useLanguage();
   const [activeTab, setActiveTab] = useState<'info' | 'guests'>('info');
   const [guestSearch, setGuestSearch] = useState('');
   const [guestStatusFilter, setGuestStatusFilter] = useState<'all' | InvitationGuestStatus>('all');
   const [isDesignHovered, setIsDesignHovered] = useState(false);
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [selectedGuest, setSelectedGuest] = useState<InvitationGuest | null>(null);
   const [showAttendanceDetails, setShowAttendanceDetails] = useState(false);
+  const [showSendConfirm, setShowSendConfirm] = useState(false);
 
   const isPastEvent = invitation.status === 'past';
 
@@ -194,12 +196,12 @@ export function InvitationDetails({ invitation, onBack, onNavigateToEventGuests 
   const hasGuests = guests !== undefined && guests.length > 0;
 
   if (showAttendanceDetails) {
-    const attendedCount = hasGuests ? guests.filter(g => g.status === 'attended').length : 320;
+    const attendedCount = MOCK_CHECKINS.length;
     return (
       <AttendanceDetails
         onBack={() => setShowAttendanceDetails(false)}
         attendanceNumber={attendedCount}
-        employeeName={'Mohammed Khalid'} // mock employee name
+        employeeName={dir === 'ltr' ? 'Mohammed Khalid' : 'محمد خالد'} // mock employee name
       />
     );
   }
@@ -211,34 +213,17 @@ export function InvitationDetails({ invitation, onBack, onNavigateToEventGuests 
     return matchesSearch && matchesStatus;
   }) : [];
 
-  const getGuestStatusDisplay = (status: InvitationGuestStatus) => {
+  const getGuestStatusDisplay = (status: string) => {
     switch (status) {
-      case 'delivered': return { icon: CheckCircle2, label: t('delivered' as any) || 'Delivered', color: 'text-blue-500 bg-blue-50 ring-blue-500/20' };
-      case 'failed': return { icon: XCircle, label: t('failed' as any) || 'Failed', color: 'text-red-500 bg-red-50 ring-red-500/20' };
-      case 'read': return { icon: Eye, label: t('read' as any) || 'Read', color: 'text-indigo-500 bg-indigo-50 ring-indigo-500/20' };
-      case 'pending': return { icon: Clock, label: t('pending' as any) || 'Pending', color: 'text-amber-500 bg-amber-50 ring-amber-500/20' };
-      case 'accepted': return { icon: CheckCircle2, label: t('accepted' as any) || 'Accepted', color: 'text-emerald-500 bg-emerald-50 ring-emerald-500/20' };
-      case 'declined': return { icon: XCircle, label: t('declined' as any) || 'Declined', color: 'text-red-600 bg-red-50 ring-red-500/20' };
-      case 'link_delivered': return { icon: Send, label: t('linkDelivered' as any) || 'Link Delivered', color: 'text-blue-600 bg-blue-50 ring-blue-500/20' };
-      case 'link_clicked': return { icon: MousePointerClick, label: t('linkClicked' as any) || 'Link Clicked', color: 'text-purple-500 bg-purple-50 ring-purple-500/20' };
-      case 'attended': return { icon: CheckCircle2, label: t('attended' as any) || 'Attended', color: 'text-emerald-600 bg-emerald-50 ring-emerald-500/20' };
-      case 'not_attended': return { icon: XCircle, label: t('notAttended' as any) || 'Not Attended', color: 'text-gray-500 bg-gray-50 ring-gray-500/20' };
+      case 'pending': return { icon: Clock, label: t('pending' as any) || (dir === 'ltr' ? 'Pending' : 'قيد الانتظار'), color: 'text-amber-500 bg-amber-50 ring-amber-500/20' };
+      case 'accepted': return { icon: CheckCircle2, label: t('accepted' as any) || (dir === 'ltr' ? 'Accepted' : 'مقبول'), color: 'text-emerald-500 bg-emerald-50 ring-emerald-500/20' };
+      case 'declined': return { icon: XCircle, label: t('declined' as any) || (dir === 'ltr' ? 'Declined' : 'مرفوض'), color: 'text-red-600 bg-red-50 ring-red-500/20' };
       default: return { icon: MoreHorizontal, label: status, color: 'text-gray-500 bg-gray-50 ring-gray-500/20' };
     }
   };
 
-  const deliveryData = [
-    { name: t('delivered' as any) || 'Delivered', value: 400, color: '#3b82f6' },
-    { name: t('read' as any) || 'Read', value: 380, color: '#6366f1' },
-    { name: t('failed' as any) || 'Failed', value: 20, color: '#ef4444' },
-  ];
-
-  const responseData = [
-    { name: t('response' as any) || 'Response', Accepted: 350, Declined: 30, Pending: 40 }
-  ];
-
   const attendanceData = [
-    { name: t('attendance' as any) || 'Attendance', Attended: 320, NotAttended: 30 }
+    { name: t('attendance' as any) || (dir === 'ltr' ? 'Attendance' : 'الحضور'), Attended: 320, NotAttended: 30 }
   ];
 
   return (
@@ -266,7 +251,7 @@ export function InvitationDetails({ invitation, onBack, onNavigateToEventGuests 
         
         {!isPastEvent && (
           <button
-            onClick={() => setIsEditModalOpen(true)}
+            onClick={() => onEdit?.(invitation)}
             className="p-2 sm:p-2 bg-white text-yellow-500 border border-transparent hover:bg-yellow-50 hover:border-yellow-200 hover:text-yellow-600 hover:-translate-y-[2px] hover:scale-[1.03] hover:shadow-md active:scale-95 active:translate-y-0 rounded-xl transition-all duration-200 ease-out flex items-center justify-center cursor-pointer w-11 h-11 shrink-0"
           >
             <Edit2 className="w-5 h-5" />
@@ -282,7 +267,7 @@ export function InvitationDetails({ invitation, onBack, onNavigateToEventGuests 
             activeTab === 'info' ? "bg-white text-secondary shadow-sm" : "text-secondary/60 hover:text-secondary hover:bg-white/50"
           )}
         >
-          {t('invitationInfo' as any) || 'Invitation Info'}
+          {t('invitationInfo' as any) || (dir === 'ltr' ? 'Invitation Info' : 'معلومات الدعوة')}
         </button>
         <button
           onClick={() => setActiveTab('guests')}
@@ -291,7 +276,7 @@ export function InvitationDetails({ invitation, onBack, onNavigateToEventGuests 
             activeTab === 'guests' ? "bg-white text-secondary shadow-sm" : "text-secondary/60 hover:text-secondary hover:bg-white/50"
           )}
         >
-          {t('guests' as any) || 'Guests'}
+          {t('guests' as any) || (dir === 'ltr' ? 'Guests' : 'الضيوف')}
         </button>
       </div>
 
@@ -310,36 +295,39 @@ export function InvitationDetails({ invitation, onBack, onNavigateToEventGuests 
                 <div className="glass-panel p-6 rounded-3xl">
                   <h3 className="font-semibold text-secondary mb-4 flex items-center gap-2">
                     <Ticket className="w-5 h-5 text-primary" />
-                    {t('details' as any) || 'Details'}
+                    {t('details' as any) || (dir === 'ltr' ? 'Details' : 'التفاصيل')}
                   </h3>
                   <div className="space-y-4">
                     <div className="p-4 bg-white/40 rounded-2xl flex items-center justify-between border border-secondary/5">
                       <div className="flex items-center gap-3 text-secondary/60">
                         <Calendar className="w-5 h-5" />
-                        <span className="text-sm">{t('deadline' as any) || 'Deadline'}</span>
+                        <span className="text-sm">{t('deadline' as any) || (dir === 'ltr' ? 'Deadline' : 'الموعد النهائي')}</span>
                       </div>
                       <span className="font-medium text-secondary">{invitation.deadlineDate}</span>
                     </div>
                     <div className="p-4 bg-white/40 rounded-2xl flex items-center justify-between border border-secondary/5">
                       <div className="flex items-center gap-3 text-secondary/60">
                         <Users className="w-5 h-5" />
-                        <span className="text-sm">{t('numOfGuests' as any) || 'Num of Guests'}</span>
+                        <span className="text-sm">{t('numOfGuests' as any) || (dir === 'ltr' ? 'Num of Guests' : 'عدد الضيوف')}</span>
                       </div>
                       <span className="font-medium text-secondary">{invitation.guestsNumber}</span>
                     </div>
                     <div className="p-4 bg-white/40 rounded-2xl flex items-center justify-between border border-secondary/5">
                       <div className="flex items-center gap-3 text-secondary/60">
                         <Settings className="w-5 h-5" />
-                        <span className="text-sm">{t('logic' as any) || 'Logic'}</span>
+                        <span className="text-sm">{t('logic' as any) || (dir === 'ltr' ? 'Logic' : 'المنطق')}</span>
                       </div>
-                      <span className="font-medium text-secondary">{t('strictAction' as any) || 'Strict Action'}</span>
+                      <span className="font-medium text-secondary">{t('strictAction' as any) || (dir === 'ltr' ? 'Strict Action' : 'إجراء صارم')}</span>
                     </div>
                   </div>
                   
                   <div className="mt-6 flex flex-col gap-3">
-                     <button className="w-full py-4 rounded-2xl bg-gradient-to-r from-primary to-primary-light text-white font-medium shadow-xl shadow-primary/30 flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-[0.98] transition-all">
+                     <button 
+                       onClick={() => setShowSendConfirm(true)}
+                       className="w-full py-4 rounded-2xl bg-gradient-to-r from-primary to-primary-light text-white font-medium shadow-xl shadow-primary/30 flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer"
+                     >
                        <Send className="w-5 h-5" />
-                       {t('sendInvitation' as any) || 'Send Invitation'}
+                       {t('sendInvitation' as any) || (dir === 'ltr' ? 'Send Invitation' : 'إرسال الدعوة')}
                      </button>
                   </div>
                 </div>
@@ -347,7 +335,7 @@ export function InvitationDetails({ invitation, onBack, onNavigateToEventGuests 
                 <div className="glass-panel p-6 rounded-3xl hidden lg:block">
                   <h3 className="font-semibold text-secondary mb-4 flex items-center gap-2">
                     <ImageIcon className="w-5 h-5 text-primary" />
-                    {t('designImage' as any) || 'Design Image'}
+                    {t('designImage' as any) || (dir === 'ltr' ? 'Design Image' : 'صورة التصميم')}
                   </h3>
                   <div 
                     className="relative aspect-[3/4] rounded-2xl overflow-hidden shadow-inner group border-4 border-white/40"
@@ -359,7 +347,7 @@ export function InvitationDetails({ invitation, onBack, onNavigateToEventGuests 
                          <Ticket className="w-8 h-8 text-stone-400" />
                        </div>
                        <h4 className="text-2xl font-serif text-stone-800 mb-2">{invitation.eventName}</h4>
-                       <p className="text-stone-500 text-sm mb-8 font-medium">{t('youAreCordiallyInvited' as any) || 'You are cordially invited'}</p>
+                       <p className="text-stone-500 text-sm mb-8 font-medium">{t('youAreCordiallyInvited' as any) || (dir === 'ltr' ? 'You are cordially invited' : 'أنتم مدعوون بكل مودة')}</p>
                        <div className="mt-auto bg-white p-3 rounded-xl shadow-sm border border-stone-200">
                           <QrCode className="w-24 h-24 text-stone-800" />
                        </div>
@@ -375,7 +363,7 @@ export function InvitationDetails({ invitation, onBack, onNavigateToEventGuests 
                         >
                           <button className="px-5 py-2.5 bg-white text-secondary rounded-xl font-medium shadow-lg hover:scale-105 active:scale-95 transition-all flex items-center gap-2">
                             <UploadCloud className="w-4 h-4" />
-                            {t('replaceDesign' as any) || 'Replace Design'}
+                            {t('replaceDesign' as any) || (dir === 'ltr' ? 'Replace Design' : 'تغيير التصميم')}
                           </button>
                         </motion.div>
                       )}
@@ -386,77 +374,19 @@ export function InvitationDetails({ invitation, onBack, onNavigateToEventGuests 
 
               <div className="lg:col-span-2 space-y-6">
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                  <StatCard title={t('totalSent' as any) || 'Total Sent'} value={420} icon={Send} colorClass="bg-blue-100 text-blue-600" />
-                  <StatCard title={t('delivered' as any) || 'Delivered'} value={400} icon={CheckCircle2} colorClass="bg-emerald-100 text-emerald-600" subtitle="95%" />
-                  <StatCard title={t('read' as any) || 'Read'} value={380} icon={Eye} colorClass="bg-indigo-100 text-indigo-600" subtitle="95% of delivered" />
-                  <StatCard title={t('failed' as any) || 'Failed'} value={20} icon={XCircle} colorClass="bg-red-100 text-red-600" subtitle="5%" />
+                  <StatCard title={t('totalSent' as any) || (dir === 'ltr' ? 'Total Sent' : 'إجمالي المرسل')} value={420} icon={Send} colorClass="bg-blue-100 text-blue-600" />
+                  <StatCard title={t('accepted' as any) || (dir === 'ltr' ? 'Accepted' : 'مقبول')} value={280} icon={CheckCircle2} colorClass="bg-emerald-100 text-emerald-600" subtitle="66.6%" />
+                  <StatCard title={t('declined' as any) || (dir === 'ltr' ? 'Declined' : 'مرفوض')} value={40} icon={XCircle} colorClass="bg-red-100 text-red-600" subtitle="9.5%" />
+                  <StatCard title={t('pending' as any) || (dir === 'ltr' ? 'Pending' : 'قيد الانتظار')} value={60} icon={Clock} colorClass="bg-amber-100 text-amber-600" subtitle="14.2%" />
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Delivery Pie Chart */}
-                  <div className="glass-panel p-6 rounded-3xl h-[300px] flex flex-col">
-                    <h3 className="font-semibold text-secondary mb-2 flex items-center gap-2">
-                      <PieChartIcon className="w-5 h-5 text-primary" />
-                      {t('deliveryStatus' as any) || 'Delivery Status'}
-                    </h3>
-                    <div className="flex-1 relative min-h-0">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                          <Pie
-                            data={deliveryData}
-                            cx="50%"
-                            cy="50%"
-                            innerRadius={60}
-                            outerRadius={80}
-                            paddingAngle={5}
-                            dataKey="value"
-                            stroke="none"
-                          >
-                            {deliveryData.map((entry, index) => (
-                              <Cell key={`cell-${index}`} fill={entry.color} />
-                            ))}
-                          </Pie>
-                          <Tooltip 
-                            contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-                            itemStyle={{ color: '#475569', fontWeight: 500 }}
-                          />
-                          <Legend verticalAlign="bottom" height={36} iconType="circle" />
-                        </PieChart>
-                      </ResponsiveContainer>
-                    </div>
-                  </div>
-
-                  {/* Responses Bar Chart */}
-                  <div className="glass-panel p-6 rounded-3xl h-[300px] flex flex-col">
-                    <h3 className="font-semibold text-secondary mb-2 flex items-center gap-2">
-                      <BarChart3 className="w-5 h-5 text-primary" />
-                      {t('guestResponses' as any) || 'Guest Responses'}
-                    </h3>
-                    <div className="flex-1 relative min-h-0">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={responseData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                          <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 12 }} />
-                          <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 12 }} />
-                          <Tooltip
-                            cursor={{ fill: '#f8fafc' }}
-                            contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-                          />
-                          <Legend verticalAlign="bottom" height={36} iconType="circle" />
-                          <Bar dataKey="Accepted" stackId="a" fill="#10b981" radius={[0, 0, 4, 4]} barSize={40} name={t('accepted' as any) || 'Accepted'} />
-                          <Bar dataKey="Pending" stackId="a" fill="#f59e0b" name={t('pending' as any) || 'Pending'} />
-                          <Bar dataKey="Declined" stackId="a" fill="#ef4444" radius={[4, 4, 0, 0]} name={t('declined' as any) || 'Declined'} />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
-                  </div>
-
                   {/* Attendance Bar Chart */}
                   <div className="glass-panel p-6 rounded-3xl h-[300px] flex flex-col md:col-span-2">
                     <div className="flex justify-between items-center mb-2">
                       <h3 className="font-semibold text-secondary flex items-center gap-2">
                         <BarChart3 className="w-5 h-5 text-primary" />
-                        {t('eventAttendance' as any) || 'Event Attendance'}
+                        {t('eventAttendance' as any) || (dir === 'ltr' ? 'Event Attendance' : 'حضور الحفل')}
                       </h3>
                       {isPastEvent && (
                         <button
@@ -464,7 +394,7 @@ export function InvitationDetails({ invitation, onBack, onNavigateToEventGuests 
                           className="flex items-center gap-1.5 px-3 py-1.5 bg-white/40 hover:bg-white/60 transition-colors rounded-lg text-xs font-medium text-secondary shadow-sm ring-1 ring-secondary/5 cursor-pointer"
                         >
                           <QrCode className="w-3.5 h-3.5" />
-                          {t('qrCheckIns' as any) || 'QR Check-ins'}
+                          {t('qrCheckIns' as any) || (dir === 'ltr' ? 'QR Check-ins' : 'تسجيلات الحضور عبر مسح الرمز')}
                         </button>
                       )}
                     </div>
@@ -480,15 +410,15 @@ export function InvitationDetails({ invitation, onBack, onNavigateToEventGuests 
                               contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
                             />
                             <Legend verticalAlign="bottom" height={36} iconType="circle" />
-                            <Bar dataKey="Attended" fill="#10b981" radius={[4, 4, 0, 0]} barSize={80} name={t('attended' as any) || 'Attended'} />
-                            <Bar dataKey="NotAttended" fill="#94a3b8" radius={[4, 4, 0, 0]} barSize={80} name={t('didntAttend' as any) || "Didn't Attend"} />
+                            <Bar dataKey="Attended" fill="#10b981" radius={[4, 4, 0, 0]} barSize={80} name={t('attended' as any) || (dir === 'ltr' ? 'Attended' : 'حضر')} />
+                            <Bar dataKey="NotAttended" fill="#94a3b8" radius={[4, 4, 0, 0]} barSize={80} name={t('didntAttend' as any) || (dir === 'ltr' ? "Didn't Attend" : "لم يحضر")} />
                           </BarChart>
                         </ResponsiveContainer>
                       </div>
                     ) : (
                       <div className="flex-1 flex flex-col items-center justify-center text-center p-6 border-2 border-dashed border-secondary/10 rounded-2xl bg-white/30">
                         <Calendar className="w-12 h-12 text-secondary/30 mb-3" />
-                        <p className="text-secondary/60 font-medium">{t('statsAvailableAfterEvent' as any) || 'Stats will be available after the event'}</p>
+                        <p className="text-secondary/60 font-medium">{t('statsAvailableAfterEvent' as any) || (dir === 'ltr' ? 'Stats will be available after the event' : 'ستتوفر الإحصائيات بعد الحفل')}</p>
                       </div>
                     )}
                   </div>
@@ -510,15 +440,15 @@ export function InvitationDetails({ invitation, onBack, onNavigateToEventGuests 
                  <div className="w-20 h-20 rounded-full bg-amber-50 text-amber-500 mb-6 flex items-center justify-center shadow-inner">
                    <AlertCircle className="w-10 h-10" />
                  </div>
-                 <h3 className="text-xl font-bold text-secondary mb-3">{t('noGuestsFound' as any) || 'No Guests Found'}</h3>
+                 <h3 className="text-xl font-bold text-secondary mb-3">{t('noGuestsFound' as any) || (dir === 'ltr' ? 'No Guests Found' : 'لم يتم العثور على ضيوف')}</h3>
                  <p className="text-secondary/60 max-w-sm mb-8">
-                   {t('noGuestsFoundMsg' as any) || 'You haven\'t uploaded any guests to this event yet. Please navigate to the event details to add guests.'}
+                   {t('noGuestsFoundMsg' as any) || (dir === 'ltr' ? 'You haven\'t uploaded any guests to this event yet. Please navigate to the event details to add guests.' : 'لم تقم بإضافة أي ضيوف لهذا الحفل بعد. يرجى التوجه لتفاصيل الحفل لإضافة الضيوف.')}
                  </p>
                  <button 
                   onClick={() => onNavigateToEventGuests?.(invitation.eventId)}
                   className="px-6 py-3 bg-primary text-white rounded-xl font-medium shadow-md shadow-primary/20 hover:bg-primary-dark transition-all active:scale-95 cursor-pointer"
                  >
-                   {t('goToEventGuests' as any) || 'Go to Event Guests'}
+                   {t('goToEventGuests' as any) || (dir === 'ltr' ? 'Go to Event Guests' : 'الذهاب لضيوف الحفل')}
                  </button>
               </div>
             ) : (
@@ -528,7 +458,7 @@ export function InvitationDetails({ invitation, onBack, onNavigateToEventGuests 
                     <Search className={cn("absolute top-1/2 -translate-y-1/2 w-4 h-4 text-secondary/40", dir === 'ltr' ? 'left-4' : 'right-4')} />
                     <input
                       type="text"
-                      placeholder={t('searchByGuestNamePhone' as any) || "Search by name or phone..."}
+                      placeholder={t('searchByGuestNamePhone' as any) || (dir === 'ltr' ? "Search by name or phone..." : "البحث بالاسم أو رقم الهاتف...")}
                       value={guestSearch}
                       onChange={(e) => setGuestSearch(e.target.value)}
                       className={cn(
@@ -547,17 +477,10 @@ export function InvitationDetails({ invitation, onBack, onNavigateToEventGuests 
                           dir === 'ltr' ? 'pl-4 pr-10' : 'pr-4 pl-10'
                         )}
                       >
-                        <option value="all">{t('allStatuses' as any) || 'All Statuses'}</option>
-                        <option value="delivered">{t('delivered' as any) || 'Delivered'}</option>
-                        <option value="failed">{t('failed' as any) || 'Failed'}</option>
-                        <option value="read">{t('read' as any) || 'Read'}</option>
-                        <option value="pending">{t('pending' as any) || 'Pending'}</option>
-                        <option value="accepted">{t('accepted' as any) || 'Accepted'}</option>
-                        <option value="declined">{t('declined' as any) || 'Declined'}</option>
-                        <option value="link_delivered">{t('linkDelivered' as any) || 'Link Delivered'}</option>
-                        <option value="link_clicked">{t('linkClicked' as any) || 'Link Clicked'}</option>
-                        <option value="attended">{t('attended' as any) || 'Attended'}</option>
-                        <option value="not_attended">{t('notAttended' as any) || 'Not Attended'}</option>
+                        <option value="all">{t('allStatuses' as any) || (dir === 'ltr' ? 'All Statuses' : 'جميع الحالات')}</option>
+                        <option value="accepted">{t('accepted' as any) || (dir === 'ltr' ? 'Accepted' : 'مقبول')}</option>
+                        <option value="declined">{t('declined' as any) || (dir === 'ltr' ? 'Declined' : 'مرفوض')}</option>
+                        <option value="pending">{t('pending' as any) || (dir === 'ltr' ? 'Pending' : 'قيد الانتظار')}</option>
                       </select>
                       <div className={cn("absolute top-1/2 -translate-y-1/2 pointer-events-none text-secondary/40", dir === 'ltr' ? 'right-4' : 'left-4')}>
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
@@ -591,7 +514,7 @@ export function InvitationDetails({ invitation, onBack, onNavigateToEventGuests 
                                <span className="text-xs font-semibold">{StatusInfo.label}</span>
                              </div>
                              <button 
-                               title="Contact via WhatsApp" 
+                               title={dir === 'ltr' ? "Contact via WhatsApp" : "تواصل عبر الواتساب"} 
                                onClick={(e) => {
                                  e.stopPropagation();
                                  if (guest.phone) {
@@ -611,7 +534,7 @@ export function InvitationDetails({ invitation, onBack, onNavigateToEventGuests 
                     })
                   ) : (
                     <div className="py-12 text-center text-secondary/40">
-                      {t('noGuestsMatch' as any) || 'No guests match your search criteria'}
+                      {t('noGuestsMatch' as any) || (dir === 'ltr' ? 'No guests match your search criteria' : 'لا يوجد ضيوف يطابقون معايير البحث المستعملة')}
                     </div>
                   )}
                 </div>
@@ -621,6 +544,19 @@ export function InvitationDetails({ invitation, onBack, onNavigateToEventGuests 
         )}
       </AnimatePresence>
     </div>
+    
+    <ConfirmModal
+      isOpen={showSendConfirm}
+      onClose={() => setShowSendConfirm(false)}
+      onConfirm={() => {
+        // Handle send invitation logic here
+        setShowSendConfirm(false);
+      }}
+      title={t('confirmSendInvitation' as any) || (dir === 'ltr' ? 'Send Invitation' : 'إرسال الدعوة')}
+      message={t('confirmSendInvitationMessage' as any) || (dir === 'ltr' ? 'Are you sure you want to send this invitation to all guests?' : 'هل أنت متأكد من رغبتك في إرسال هذه الدعوة لجميع الضيوف؟')}
+      confirmLabel={t('sendInvitation' as any) || (dir === 'ltr' ? 'Send Invitation' : 'إرسال الدعوة')}
+      confirmColor="bg-primary hover:bg-primary-dark"
+    />
     </>
   );
 }

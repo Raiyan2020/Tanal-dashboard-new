@@ -39,11 +39,6 @@ const MOCK_CLIENT_EVENTS: AppEvent[] = [
   { id: '1003', name: 'Ahmed Wedding', creationDate: 'Nov 05, 2026', guests: 300, invitationsCreated: true, status: 'installments', paymentFraction: '1/6' },
 ];
 
-const MOCK_CLIENT_TRANSACTIONS = [
-  { id: 'tx-1', eventName: 'Al Rajhi Ceremony', date: 'Oct 15, 2026', amount: 50000 },
-  { id: 'tx-1-1', eventName: 'Al Rajhi Ceremony', date: 'Oct 17, 2026', amount: 20000 },
-  { id: 'tx-2', eventName: 'Ahmed Wedding', date: 'Nov 05, 2026', amount: 15000 },
-];
 
 interface ClientEditFormProps {
   client: Client | null;
@@ -330,56 +325,22 @@ function ClientDetails({ client, onBack, onEdit, onDelete, onNavigateToEvent }: 
           </div>
         </div>
 
-        {/* Transactions Table */}
-        <div className="glass-panel rounded-3xl p-6">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className={cn("text-lg font-semibold text-secondary", dir === 'ltr' ? 'font-serif' : 'font-arabic font-bold')}>
-              {t('transactions' as any)}
-            </h3>
-            <button className="flex items-center gap-1.5 px-3 py-1.5 bg-white/40 hover:bg-white/60 transition-colors rounded-lg text-xs font-medium text-secondary shadow-sm ring-1 ring-secondary/5 cursor-pointer">
-              <Download className="w-3.5 h-3.5" />
-              {dir === 'ltr' ? 'Download PDF' : 'تحميل PDF'}
-            </button>
-          </div>
-          <div className="flex flex-col gap-3">
-            {MOCK_CLIENT_TRANSACTIONS.length > 0 ? (
-              MOCK_CLIENT_TRANSACTIONS.map(tx => (
-                <div key={tx.id} className="p-3 rounded-2xl bg-white/40 border border-secondary/5 flex justify-between items-center gap-4">
-                  <div className="flex-1 min-w-0">
-                    <h4 className="font-medium text-secondary text-sm truncate">{tx.eventName}</h4>
-                    <span className="text-xs text-secondary/60 block mt-0.5">{tx.date}</span>
-                  </div>
-                  <div className="text-right shrink-0">
-                    <div className="font-semibold text-emerald-600 font-mono text-sm">
-                      {tx.amount.toLocaleString()} {t('sar' as any)}
-                    </div>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className="py-6 text-center text-secondary/40 text-sm">
-                No transactions found for this client.
+        {client.notes && (
+          <div className="glass-panel rounded-3xl p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center shrink-0">
+                <FileText className="w-5 h-5" />
               </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {client.notes && (
-        <div className="glass-panel rounded-3xl p-6">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center shrink-0">
-              <FileText className="w-5 h-5" />
+              <h3 className={cn("text-lg font-semibold text-secondary", dir === 'ltr' ? 'font-serif' : 'font-arabic font-bold')}>
+                {dir === 'ltr' ? 'Notes' : 'الملاحظات'}
+              </h3>
             </div>
-            <h3 className={cn("text-lg font-semibold text-secondary", dir === 'ltr' ? 'font-serif' : 'font-arabic font-bold')}>
-              {dir === 'ltr' ? 'Notes' : 'الملاحظات'}
-            </h3>
+            <div className="p-4 rounded-2xl bg-white/40 border border-secondary/5 text-secondary/80 whitespace-pre-wrap text-sm leading-relaxed">
+              {client.notes}
+            </div>
           </div>
-          <div className="p-4 rounded-2xl bg-white/40 border border-secondary/5 text-secondary/80 whitespace-pre-wrap text-sm leading-relaxed">
-            {client.notes}
-          </div>
-        </div>
-      )}
+        )}
+      </div>
     </motion.div>
   );
 }

@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { useLanguage } from '@/lib/i18n';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '@/lib/utils';
 import Image from 'next/image';
 import { 
@@ -47,7 +47,7 @@ const mockEvent = {
 
 export default function ClientPortal() {
   const { t, language, setLanguage, dir } = useLanguage();
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
   const toggleSidebar = () => setSidebarOpen(!sidebarOpen);
   const toggleLanguage = () => setLanguage(language === 'en' ? 'ar' : 'en');
@@ -73,32 +73,33 @@ export default function ClientPortal() {
 
   return (
     <div className="flex h-screen luxury-gradient overflow-hidden font-sans text-secondary pb-12">
-      {/* Sidebar Overlay */}
-      {sidebarOpen && (
-        <div 
-          className="fixed inset-0 z-40 bg-secondary/20 backdrop-blur-sm lg:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
+      <AnimatePresence>
+        {sidebarOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setSidebarOpen(false)}
+            className="fixed inset-0 z-40 bg-secondary/20 backdrop-blur-sm lg:hidden"
+          />
+        )}
+      </AnimatePresence>
 
       {/* Sidebar */}
-      <aside
+      <motion.aside
+        initial={false}
+        animate={{ 
+          width: sidebarOpen ? 280 : 88,
+          x: sidebarOpen ? 0 : (dir === 'rtl' ? (typeof window !== 'undefined' && window.innerWidth < 1024 ? 280 : 0) : (typeof window !== 'undefined' && window.innerWidth < 1024 ? -280 : 0))
+        }}
         className={cn(
-          "fixed top-0 bottom-0 z-50 w-72 flex flex-col pt-6 pb-4 transition-transform lg:relative lg:translate-x-0",
+          "fixed top-0 bottom-0 z-50 flex flex-col pt-6 pb-4 transition-transform lg:relative lg:translate-x-0",
           "glass-panel border-r-0 lg:border-r border-white/60",
           dir === 'rtl' ? 'right-0 border-l border-white/60 lg:border-r-0 lg:border-l' : 'left-0 border-r border-white/60 lg:border-r',
           !sidebarOpen && "max-lg:-translate-x-full max-lg:rtl:translate-x-full"
         )}
       >
         <div className="flex items-center px-6 mb-8 mt-2 overflow-hidden justify-between w-full h-8 relative">
-          <button 
-            className="lg:hidden absolute top-0 p-2 text-secondary/60 hover:text-secondary rounded-xl bg-white/40 cursor-pointer"
-            style={{ [dir === 'rtl' ? 'left' : 'right']: '1rem' }}
-            onClick={toggleSidebar}
-          >
-            <X className="w-5 h-5" />
-          </button>
-          
           <div className="flex items-center gap-3">
             <Image
               src="https://raiyansoft.com/wp-content/uploads/2026/05/logo-2.png"
@@ -108,34 +109,49 @@ export default function ClientPortal() {
               className="shrink-0 object-contain drop-shadow-sm w-[30px] h-10"
               referrerPolicy="no-referrer"
             />
-            <span className={cn("whitespace-nowrap text-xl font-medium tracking-wide text-primary-dark", dir === 'ltr' ? 'font-serif' : 'font-arabic')}>
+            <motion.span 
+              animate={{ opacity: sidebarOpen ? 1 : 0, width: sidebarOpen ? "auto" : 0 }}
+              className={cn("whitespace-nowrap text-xl font-medium tracking-wide text-primary-dark", dir === 'ltr' ? 'font-serif' : 'font-arabic')}
+            >
               {t('tanal')}
-            </span>
+            </motion.span>
           </div>
         </div>
 
-        <nav className="flex-1 px-4 space-y-2 py-2">
+        <nav className="flex-1 px-4 space-y-2 overflow-y-auto overflow-x-hidden scrollbar-hide py-2">
           {navItems.map((item, idx) => (
             <button
               key={idx}
-              className="flex items-center w-full gap-4 px-3 py-3 rounded-2xl transition-all duration-300 text-secondary hover:bg-white/30 group cursor-pointer"
+              className="flex items-center w-full gap-4 px-3 py-3 rounded-2xl transition-all duration-300 text-secondary hover:bg-white/30 group cursor-pointer relative overflow-hidden"
+              title={!sidebarOpen ? (dir === 'ltr' ? item.labelEn : item.labelAr) : undefined}
             >
-              <item.icon className="w-5 h-5 shrink-0 text-secondary/60 group-hover:text-primary" strokeWidth={1.5} />
-              <span className="font-medium text-sm text-secondary/80">{dir === 'ltr' ? item.labelEn : item.labelAr}</span>
+              <item.icon className="w-5 h-5 shrink-0 z-10" strokeWidth={1.5} />
+              <motion.span 
+                animate={{ opacity: sidebarOpen ? 1 : 0, width: sidebarOpen ? "auto" : 0 }}
+                className="font-medium text-sm text-secondary/80 whitespace-nowrap z-10 text-left rtl:text-right"
+              >
+                {dir === 'ltr' ? item.labelEn : item.labelAr}
+              </motion.span>
             </button>
           ))}
-
-          <div className="h-px bg-secondary/10 my-4 mx-4"></div>
-
+        </nav>
+        
+        <div className="px-4 mt-auto pt-4 border-t border-secondary/5 mx-4">
           <button
             onClick={toggleLanguage}
-            className="flex items-center w-full gap-4 px-3 py-3 rounded-2xl transition-all duration-300 text-secondary hover:bg-white/30 group cursor-pointer"
+            className="flex items-center w-full gap-4 px-3 py-3 rounded-2xl transition-all duration-300 text-secondary hover:bg-white/30 group cursor-pointer relative overflow-hidden"
+            title={!sidebarOpen ? (dir === 'ltr' ? 'العربية' : 'English') : undefined}
           >
-            <Globe className="w-5 h-5 shrink-0 text-secondary/60 group-hover:text-primary" strokeWidth={1.5} />
-            <span className="font-medium text-sm text-secondary/80">{dir === 'ltr' ? 'العربية' : 'English'}</span>
+            <Globe className="w-5 h-5 shrink-0 z-10" strokeWidth={1.5} />
+            <motion.span 
+              animate={{ opacity: sidebarOpen ? 1 : 0, width: sidebarOpen ? "auto" : 0 }}
+              className="font-medium text-sm text-secondary/80 whitespace-nowrap z-10 text-left rtl:text-right"
+            >
+              {dir === 'ltr' ? 'العربية' : 'English'}
+            </motion.span>
           </button>
-        </nav>
-      </aside>
+        </div>
+      </motion.aside>
 
       {/* Main Content View */}
       <div className="flex-1 flex flex-col h-full overflow-hidden relative">
@@ -143,13 +159,24 @@ export default function ClientPortal() {
         <div className="absolute top-0 right-0 w-[800px] h-[800px] bg-primary/5 rounded-full blur-[120px] -z-10 pointer-events-none mix-blend-multiply" />
         <div className="absolute bottom-[-20%] left-[-10%] w-[600px] h-[600px] bg-accent/20 rounded-full blur-[100px] -z-10 pointer-events-none mix-blend-multiply" />
         
-        <header className="h-20 shrink-0 px-6 flex items-center lg:hidden">
-          <button 
-            onClick={toggleSidebar}
-            className="p-2.5 rounded-2xl text-secondary bg-white shadow-sm ring-1 ring-secondary/5 mb-2 border border-secondary/5 cursor-pointer"
-          >
-            <Menu className="w-5 h-5" />
-          </button>
+        <header className="h-20 lg:h-24 px-6 lg:px-10 flex items-center justify-between shrink-0 z-10">
+          <div className="flex items-center gap-4">
+            <button 
+              onClick={toggleSidebar}
+              className="p-2.5 rounded-2xl text-secondary bg-white/40 hover:bg-white/60 transition-colors shadow-[0_4px_12px_rgba(54,45,35,0.02)] ring-1 ring-white/60 focus:outline-none cursor-pointer"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+          </div>
+          <div className="flex items-center gap-3">
+             <Image
+               src="https://raiyansoft.com/wp-content/uploads/2026/05/logo-2.png"
+               alt="Tanal Logo"
+               width={40}
+               height={40}
+               className="object-contain"
+             />
+          </div>
         </header>
 
         <main className="flex-1 overflow-auto p-4 sm:p-6 lg:p-10 lg:pl-12 rtl:lg:pl-10 rtl:lg:pr-12">
@@ -237,10 +264,18 @@ export default function ClientPortal() {
                 </div>
 
                 {mockEvent.payment.status === 'installments' && (
-                  <div className="mt-4 pt-4 border-t border-secondary/5 flex justify-between items-center px-2">
-                    <span className="text-sm text-secondary/60">{dir === 'ltr' ? 'Installments Left' : 'الأقساط المتبقية'}</span>
-                    <span className="font-medium text-lg text-primary-dark">{mockEvent.payment.installmentsLeft}</span>
-                  </div>
+                  <>
+                    <div className="mt-4 pt-4 border-t border-secondary/5 flex justify-between items-center px-2">
+                      <span className="text-sm text-secondary/60">{dir === 'ltr' ? 'Installments Left' : 'الأقساط المتبقية'}</span>
+                      <span className="font-medium text-lg text-primary-dark">{mockEvent.payment.installmentsLeft}</span>
+                    </div>
+                    <div className="mt-4">
+                      <button className="w-full py-3 px-4 bg-primary hover:bg-primary/90 text-white rounded-xl font-medium shadow-sm transition-colors flex items-center justify-center gap-2 cursor-pointer">
+                        <CreditCard className="w-5 h-5" />
+                        {dir === 'ltr' ? 'Pay Next Payment' : 'دفع القسط التالي'}
+                      </button>
+                    </div>
+                  </>
                 )}
               </div>
 

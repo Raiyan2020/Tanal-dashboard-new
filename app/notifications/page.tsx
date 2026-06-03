@@ -92,8 +92,10 @@ export default function NotificationsContent() {
   const [notifications, setNotifications] = React.useState<AppNotification[]>(language === 'ar' ? MOCK_NOTIFICATIONS_AR : MOCK_NOTIFICATIONS_EN);
 
   React.useEffect(() => {
+    // Only run this when language changes
+    const currentList = language === 'ar' ? MOCK_NOTIFICATIONS_AR : MOCK_NOTIFICATIONS_EN;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setNotifications(prev => {
-      const currentList = language === 'ar' ? MOCK_NOTIFICATIONS_AR : MOCK_NOTIFICATIONS_EN;
       return currentList.map(mock => ({
         ...mock,
         isRead: prev.find(p => p.id === mock.id)?.isRead ?? mock.isRead

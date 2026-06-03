@@ -41,8 +41,11 @@ export function AssignEventsModal({ isOpen, onClose, assignedEventIds, currentEm
 
   useEffect(() => {
     if (isOpen) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSelectedIds(new Set(assignedEventIds));
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSearchTerm('');
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setWarningEventId(null);
     }
   }, [isOpen, assignedEventIds]);
