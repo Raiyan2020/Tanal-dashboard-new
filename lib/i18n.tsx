@@ -1,0 +1,313 @@
+'use client';
+
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+
+type Language = 'en' | 'ar';
+type Direction = 'ltr' | 'rtl';
+
+interface LanguageContextType {
+  language: Language;
+  setLanguage: (lang: Language) => void;
+  dir: Direction;
+  t: (key: string) => string;
+}
+
+const translations: Record<Language, Record<string, string>> = {
+  en: {
+    dashboard: 'Dashboard',
+    admins: 'Admins',
+    events: 'Events',
+    addAdmin: 'Add Admin',
+    editAdmin: 'Edit Admin',
+    adminDetails: 'Admin Details',
+    role: 'Role',
+    superAdmin: 'Super Admin',
+    regularAdmin: 'Admin',
+    active: 'Active',
+    inactive: 'Inactive',
+    status: 'Status',
+    copy: 'Copy',
+    copied: 'Copied!',
+    deleteAdminTitle: 'Delete Admin',
+    deleteAdminMessage: 'Are you sure you want to delete this admin?',
+    searchAdmins: 'Search admins...',
+    clients: 'Clients',
+    employees: 'Employees',
+    invitations: 'Invitations',
+    qrCheckIn: 'QR Check-ins',
+    financial: 'Financial',
+    reports: 'Reports & Analytics',
+    settings: 'Settings',
+    logout: 'Logout',
+    welcomeBack: 'Welcome to Tanal',
+    luxuryExperience: 'Premium Wedding & Event Management',
+    addEvent: 'Create Event',
+    totalClients: 'Total Clients',
+    upcomingEvents: 'Upcoming Events',
+    monthlyProfit: 'Monthly Profit',
+    qrCheckInsToday: 'QR Check-ins Today',
+    revenue: 'Revenue Overview',
+    viewAll: 'View All',
+    recentActivity: 'Recent Activity',
+    pending: 'Pending',
+    approved: 'Approved',
+    tanal: 'Tanal',
+    landingPage: 'Landing Page',
+    toggleLanguage: 'عربي',
+    notifications: 'Notifications',
+    addClient: 'Add Client',
+    searchClients: 'Search clients...',
+    view: 'View',
+    edit: 'Edit',
+    remove: 'Remove',
+    guests: 'Guests',
+    viewInvitations: 'View Invitations',
+    notCreated: 'Not Created',
+    allStatuses: 'All',
+    completed: 'Completed',
+    paid: 'Paid',
+    installments: 'Installments',
+    unpaid: 'Unpaid',
+    canceled: 'Canceled',
+    manageInvitations: 'Manage Invitations',
+    createInvitation: 'Create Invitation',
+    addInvitation: 'Add Invitation',
+    searchInvitations: 'Search invitations...',
+    all: 'All',
+    upcoming: 'Upcoming',
+    past: 'Past',
+    sent: 'Sent',
+    unsent: 'Unsent',
+    deadline: 'Deadline',
+    confirmDeleteInvitation: 'Delete Invitation',
+    confirmDeleteInvitationMessage: 'Are you sure you want to delete this invitation?',
+    noDataFound: 'No data found',
+    addEmployee: 'Add Employee',
+    eventsResponsible: 'events responsible',
+    deleteClientTitle: 'Delete Client',
+    deleteClientMessage: 'Are you sure you want to delete this client? This action cannot be undone.',
+    cancel: 'Cancel',
+    confirmDeleteEmployee: 'Delete Employee',
+    confirmDeleteEmployeeMessage: 'Are you sure you want to delete this employee?',
+    searchFinancial: 'Search by event, client or phone...',
+    downloadPdf: 'Download PDF',
+    filters: 'Filters',
+    sortDescending: 'Sort Descending',
+    sortAscending: 'Sort Ascending',
+    filterByDate: 'Filter by Date',
+    eventName: 'Event Name',
+    allEvents: 'All Events',
+    client: 'Client',
+    allClients: 'All Clients',
+    clear: 'Clear',
+    amountKWD: 'Amount KWD',
+    heroSection: 'Hero Section',
+    heroDesc: 'Manage the main hero banner, title, subtext, and call to action.',
+    featuresSection: 'Features',
+    featuresDesc: 'Edit the key features and services offered.',
+    portfolioSection: 'Portfolio',
+    portfolioDesc: 'Update the gallery and portfolio of past events.',
+    contactSection: 'Contact',
+    contactDesc: 'Manage contact information, map location, and social links.',
+    unread: 'unread',
+    markAllAsRead: 'Mark all as read',
+    noNotifications: 'No new notifications',
+    profile: 'Profile',
+    security: 'Security',
+    preferences: 'Preferences',
+    settingsSaved: 'Saved!',
+    saveChanges: 'Save Changes',
+    privacyPolicyEn: 'Privacy Policy (English)',
+    privacyPolicyAr: 'Privacy Policy (Arabic)',
+    termsConditionsEn: 'Terms & Conditions (English)',
+    termsConditionsAr: 'Terms & Conditions (Arabic)',
+    aboutUsEn: 'About Us (English)',
+    aboutUsAr: 'About Us (Arabic)',
+    back: 'Back',
+    editClient: 'Edit Client',
+    fullName: 'Full Name',
+    phoneNumber: 'Phone Number',
+    phoneMustHaveWhatsapp: 'Phone number must have WhatsApp',
+    emailOptional: 'Email (Optional)',
+    notesOptional: 'Notes (Optional)',
+    transactions: 'Transactions',
+    sar: 'SAR',
+    enterDetails: 'Enter your details to securely access your dashboard.',
+    email: 'Email Address',
+    password: 'Password',
+    signIn: 'Sign In',
+  },
+  ar: {
+    dashboard: 'لوحة التحكم',
+    admins: 'المشرفين',
+    events: 'المناسبات',
+    addAdmin: 'إضافة مشرف',
+    editAdmin: 'تعديل المشرف',
+    adminDetails: 'تفاصيل المشرف',
+    role: 'الدور',
+    superAdmin: 'مشرف رئيسي',
+    regularAdmin: 'مشرف',
+    active: 'نشط',
+    inactive: 'غير نشط',
+    status: 'الحالة',
+    copy: 'نسخ',
+    copied: 'تم النسخ!',
+    deleteAdminTitle: 'حذف المشرف',
+    deleteAdminMessage: 'هل أنت متأكد من حذف هذا المشرف؟',
+    searchAdmins: 'البحث عن المشرفين...',
+    clients: 'العملاء',
+    employees: 'الموظفين',
+    invitations: 'الدعوات',
+    qrCheckIn: 'الدخول بالباركود',
+    financial: 'المالية',
+    reports: 'التقارير والإحصائيات',
+    settings: 'الإعدادات',
+    logout: 'تسجيل الخروج',
+    welcomeBack: 'مرحباً بك في تنال',
+    luxuryExperience: 'إدارة فاخرة لحفلات الزفاف والمناسبات',
+    addEvent: 'إنشاء مناسبة',
+    totalClients: 'إجمالي العملاء',
+    upcomingEvents: 'المناسبات القادمة',
+    monthlyProfit: 'الأرباح الشهرية',
+    qrCheckInsToday: 'مسح الباركود اليوم',
+    revenue: 'نظرة عامة على الإيرادات',
+    viewAll: 'عرض الكل',
+    recentActivity: 'أحدث النشاطات',
+    pending: 'قيد الانتظار',
+    approved: 'مكتمل',
+    tanal: 'تنال',
+    landingPage: 'صفحة الهبوط',
+    toggleLanguage: 'English',
+    notifications: 'الإشعارات',
+    addClient: 'إضافة عميل',
+    searchClients: 'البحث عن عملاء...',
+    view: 'عرض',
+    edit: 'تعديل',
+    remove: 'حذف',
+    guests: 'ضيوف',
+    viewInvitations: 'عرض الدعوات',
+    notCreated: 'لم يتم الإنشاء',
+    allStatuses: 'الكل',
+    completed: 'مكتمل',
+    paid: 'مدفوع',
+    installments: 'أقساط',
+    unpaid: 'غير مدفوع',
+    canceled: 'ملغى',
+    manageInvitations: 'إدارة الدعوات',
+    createInvitation: 'إنشاء دعوة',
+    addInvitation: 'إضافة دعوة',
+    searchInvitations: 'البحث عن دعوات...',
+    all: 'الكل',
+    upcoming: 'قادم',
+    past: 'سابق',
+    sent: 'مرسل',
+    unsent: 'غير مرسل',
+    deadline: 'الموعد النهائي',
+    confirmDeleteInvitation: 'حذف الدعوة',
+    confirmDeleteInvitationMessage: 'هل أنت متأكد من حذف هذه الدعوة؟',
+    noDataFound: 'لم يتم العثور على بيانات',
+    addEmployee: 'إضافة موظف',
+    eventsResponsible: 'مناسبة مسؤول عنها',
+    deleteClientTitle: 'حذف العميل',
+    deleteClientMessage: 'هل أنت متأكد أنك تريد حذف هذا العميل؟ لا يمكن التراجع عن هذا الإجراء.',
+    cancel: 'إلغاء',
+    confirmDeleteEmployee: 'حذف الموظف',
+    confirmDeleteEmployeeMessage: 'هل أنت متأكد من حذف هذا الموظف؟',
+    searchFinancial: 'البحث عن طريق المناسبة، العميل أو رقم الهاتف...',
+    downloadPdf: 'تحميل PDF',
+    filters: 'تصفية',
+    sortDescending: 'ترتيب تنازلي',
+    sortAscending: 'ترتيب تصاعدي',
+    filterByDate: 'تصفية حسب التاريخ',
+    eventName: 'اسم المناسبة',
+    allEvents: 'كل المناسبات',
+    client: 'العميل',
+    allClients: 'كل العملاء',
+    clear: 'مسح',
+    amountKWD: 'المبلغ دينار كويتي',
+    heroSection: 'القسم الرئيسي',
+    heroDesc: 'إدارة الصورة الرئيسية والعنوان والنص الفرعي.',
+    featuresSection: 'المميزات',
+    featuresDesc: 'تعديل المميزات والخدمات الرئيسية.',
+    portfolioSection: 'معرض الأعمال',
+    portfolioDesc: 'تحديث معرض الصور والأعمال السابقة.',
+    contactSection: 'تواصل معنا',
+    contactDesc: 'إدارة معلومات التواصل والموقع الجغرافي وروابط التواصل الاجتماعي.',
+    unread: 'غير مقروء',
+    markAllAsRead: 'تحديد الكل كمقروء',
+    noNotifications: 'لا توجد إشعارات جديدة',
+    profile: 'الملف الشخصي',
+    security: 'الأمان',
+    preferences: 'التفضيلات',
+    settingsSaved: 'تم الحفظ!',
+    saveChanges: 'حفظ التغييرات',
+    privacyPolicyEn: 'سياسة الخصوصية (إنجليزي)',
+    privacyPolicyAr: 'سياسة الخصوصية (عربي)',
+    termsConditionsEn: 'الشروط والأحكام (إنجليزي)',
+    termsConditionsAr: 'الشروط والأحكام (عربي)',
+    aboutUsEn: 'من نحن (إنجليزي)',
+    aboutUsAr: 'من نحن (عربي)',
+    back: 'رجوع',
+    editClient: 'تعديل العميل',
+    fullName: 'الاسم الكامل',
+    phoneNumber: 'رقم الهاتف',
+    phoneMustHaveWhatsapp: 'يجب أن يكون رقم الهاتف مرتبطاً بـ واتساب',
+    emailOptional: 'البريد الإلكتروني (اختياري)',
+    notesOptional: 'ملاحظات (اختياري)',
+    transactions: 'المعاملات',
+    sar: 'ر.س',
+    enterDetails: 'أدخل بياناتك للوصول الآمن إلى لوحة التحكم.',
+    email: 'البريد الإلكتروني',
+    password: 'كلمة المرور',
+    signIn: 'تسجيل الدخول',
+  }
+};
+
+const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
+
+export function LanguageProvider({ children }: { children: ReactNode }) {
+  const [language, setLanguage] = useState<Language>('en');
+
+  useEffect(() => {
+    const saved = localStorage.getItem('tanal_lang') as Language;
+    if (saved && (saved === 'en' || saved === 'ar')) {
+      requestAnimationFrame(() => {
+        setLanguage(saved);
+        document.documentElement.lang = saved;
+        document.documentElement.dir = saved === 'ar' ? 'rtl' : 'ltr';
+      });
+    } else {
+      document.documentElement.lang = 'en';
+      document.documentElement.dir = 'ltr';
+    }
+  }, []);
+
+  const changeLanguage = (lang: Language) => {
+    setLanguage(lang);
+    localStorage.setItem('tanal_lang', lang);
+    document.documentElement.lang = lang;
+    document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
+  };
+
+  const dir = language === 'ar' ? 'rtl' : 'ltr';
+
+  const t = (key: string) => {
+    return translations[language][key] || key;
+  };
+
+  return (
+    <LanguageContext.Provider value={{ language, setLanguage: changeLanguage, dir, t }}>
+      <div dir={dir} className={language === 'ar' ? 'font-arabic' : 'font-sans'}>
+        {children}
+      </div>
+    </LanguageContext.Provider>
+  );
+}
+
+export function useLanguage() {
+  const context = useContext(LanguageContext);
+  if (context === undefined) {
+    throw new Error('useLanguage must be used within a LanguageProvider');
+  }
+  return context;
+}
