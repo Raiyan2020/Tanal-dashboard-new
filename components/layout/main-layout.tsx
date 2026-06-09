@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, Suspense } from 'react';
 import { useLanguage } from '@/lib/i18n';
 import { motion, AnimatePresence } from 'motion/react';
 import {
@@ -43,7 +43,7 @@ const NAV_ROUTES: Record<string, string> = {
   services: '/landingPage?s=services',
 };
 
-export function MainLayout({ children }: { children: React.ReactNode }) {
+function MainLayoutContent({ children }: { children: React.ReactNode }) {
   const { t, language, setLanguage, dir } = useLanguage();
   const pathname = usePathname();
   const router = useRouter();
@@ -70,20 +70,6 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
   const toggleSidebar = () => setSidebarOpen(!sidebarOpen);
   const toggleLanguage = () => setLanguage(language === 'en' ? 'ar' : 'en');
   const logout = () => router.push('/login');
-
-  if (
-    pathname === '/login' ||
-    pathname.startsWith('/client-portal') ||
-    pathname.startsWith('/guest-view') ||
-    pathname.startsWith('/order-client') ||
-    pathname.startsWith('/order-employee')
-  ) {
-    return (
-      <div className="font-sans text-secondary min-h-screen selection:bg-primary/20 selection:text-primary-dark">
-        {children}
-      </div>
-    );
-  }
 
   return (
     <div className="flex h-screen overflow-hidden luxury-gradient font-sans text-secondary">
@@ -303,5 +289,33 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
         </main>
       </div>
     </div>
+  );
+}
+
+export function MainLayout({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+
+  if (
+    pathname === '/login' ||
+    pathname.startsWith('/client-portal') ||
+    pathname.startsWith('/guest-view') ||
+    pathname.startsWith('/order-client') ||
+    pathname.startsWith('/order-employee')
+  ) {
+    return (
+      <div className="font-sans text-secondary min-h-screen selection:bg-primary/20 selection:text-primary-dark">
+        {children}
+      </div>
+    );
+  }
+
+  return (
+    <Suspense fallback={
+      <div className="flex h-screen overflow-hidden luxury-gradient justify-center items-center font-sans">
+        <div className="animate-pulse text-stone-400 text-sm">Loading Tanal...</div>
+      </div>
+    }>
+      <MainLayoutContent>{children}</MainLayoutContent>
+    </Suspense>
   );
 }

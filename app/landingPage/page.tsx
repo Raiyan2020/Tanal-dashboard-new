@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useLanguage } from '@/lib/i18n';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '@/lib/utils';
@@ -144,9 +145,11 @@ const INITIAL_CONTACT: ContactState = {
   socials: []
 };
 
-export default function LandingPageContent() {
+function LandingPageContent() {
   const { t, dir } = useLanguage();
-  const [activeSection, setActiveSection] = useState<string | null>(null);
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const activeSection = searchParams.get('s');
 
   const [hero, setHero] = useState(INITIAL_HERO);
   const [features, setFeatures] = useState(INITIAL_FEATURES);
@@ -238,7 +241,7 @@ export default function LandingPageContent() {
                 initial={{ opacity: 0, scale: 0.8 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.8 }}
-                onClick={() => setActiveSection(null)}
+                onClick={() => router.push('/landingPage')}
                 className="p-2.5 rounded-xl bg-white/40 hover:bg-white/60 shadow-sm transition-colors text-secondary cursor-pointer shrink-0"
               >
                 <BackIcon className="w-5 h-5" />
@@ -284,7 +287,7 @@ export default function LandingPageContent() {
             {sections.map((section, index) => (
               <motion.button
                 key={section.id}
-                onClick={() => setActiveSection(section.id)}
+                onClick={() => router.push(`/landingPage?s=${section.id}`)}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.1, duration: 0.5 }}
@@ -946,5 +949,17 @@ export default function LandingPageContent() {
         )}
       </AnimatePresence>
     </div>
+  );
+}
+
+export default function LandingPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex h-[60vh] justify-center items-center font-sans">
+        <div className="animate-pulse text-stone-400 text-sm">Loading...</div>
+      </div>
+    }>
+      <LandingPageContent />
+    </Suspense>
   );
 }

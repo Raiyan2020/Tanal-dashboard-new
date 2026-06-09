@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, Suspense } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'motion/react';
 import { Calendar, Clock, MapPin, User, Briefcase, CheckCircle2, XCircle, Loader2, ChevronRight, ChevronLeft } from 'lucide-react';
@@ -32,7 +32,7 @@ const getFormattedTime = (timeStr: string, lang: string) => {
   }
 };
 
-export default function EmployeeOrderPage() {
+function EmployeeOrderPageContent() {
   const { id } = useParams<{ id: string }>();
   const searchParams = useSearchParams();
   const itemIdParam = searchParams.get('itemId');
@@ -414,5 +414,17 @@ export default function EmployeeOrderPage() {
         </p>
       </div>
     </div>
+  );
+}
+
+export default function EmployeeOrderPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <Loader2 className="w-8 h-8 animate-spin text-slate-300" />
+      </div>
+    }>
+      <EmployeeOrderPageContent />
+    </Suspense>
   );
 }

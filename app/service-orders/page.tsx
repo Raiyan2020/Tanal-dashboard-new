@@ -491,14 +491,7 @@ export default function ServiceOrdersPage() {
             <div className="space-y-4 border-t border-secondary/10 pt-4">
               <div className="flex justify-between items-center">
                 <h3 className="text-base font-bold text-secondary">{t('services')}</h3>
-                <button
-                  type="button"
-                  onClick={() => setForm({ ...form, services: [...form.services, createEmptyServiceItem()] })}
-                  className="text-xs font-bold text-primary hover:text-primary-dark flex items-center gap-1 cursor-pointer"
-                >
-                  <Plus className="w-4 h-4" />
-                  {language === 'ar' ? 'إضافة خدمة أخرى' : 'Add Service'}
-                </button>
+
               </div>
 
               {form.services.map((svc, index) => {
@@ -657,6 +650,15 @@ export default function ServiceOrdersPage() {
                   </div>
                 );
               })}
+
+              <button
+                type="button"
+                onClick={() => setForm({ ...form, services: [...form.services, createEmptyServiceItem()] })}
+                className="text-xs font-bold text-primary hover:text-primary-dark flex items-center gap-1 cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                {language === 'ar' ? 'إضافة خدمة أخرى' : 'Add Service'}
+              </button>
             </div>
 
             {/* Description */}
