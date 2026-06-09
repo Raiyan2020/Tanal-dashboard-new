@@ -5,12 +5,12 @@ import { useLanguage } from '@/lib/i18n';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '@/lib/utils';
 import Image from 'next/image';
-import { 
-  Info, 
-  ShieldCheck, 
-  FileText, 
-  Phone, 
-  Globe, 
+import {
+  Info,
+  ShieldCheck,
+  FileText,
+  Phone,
+  Globe,
   Menu,
   X,
   CreditCard,
@@ -54,7 +54,7 @@ export default function ClientPortal() {
 
   const eName = dir === 'ltr' ? mockEvent.nameEn : mockEvent.nameAr;
   const eLocation = dir === 'ltr' ? mockEvent.locationEn : mockEvent.locationAr;
-  
+
   const paymentStatusMap = {
     paid: dir === 'ltr' ? 'Fully Paid' : 'مدفوع بالكامل',
     unpaid: dir === 'ltr' ? 'Unpaid' : 'غير مدفوع',
@@ -88,7 +88,7 @@ export default function ClientPortal() {
       {/* Sidebar */}
       <motion.aside
         initial={false}
-        animate={{ 
+        animate={{
           width: sidebarOpen ? 280 : 88,
           x: sidebarOpen ? 0 : (dir === 'rtl' ? (typeof window !== 'undefined' && window.innerWidth < 1024 ? 280 : 0) : (typeof window !== 'undefined' && window.innerWidth < 1024 ? -280 : 0))
         }}
@@ -109,7 +109,7 @@ export default function ClientPortal() {
               className="shrink-0 object-contain drop-shadow-sm w-[30px] h-10"
               referrerPolicy="no-referrer"
             />
-            <motion.span 
+            <motion.span
               animate={{ opacity: sidebarOpen ? 1 : 0, width: sidebarOpen ? "auto" : 0 }}
               className={cn("whitespace-nowrap text-xl font-medium tracking-wide text-primary-dark", dir === 'ltr' ? 'font-serif' : 'font-arabic')}
             >
@@ -126,7 +126,7 @@ export default function ClientPortal() {
               title={!sidebarOpen ? (dir === 'ltr' ? item.labelEn : item.labelAr) : undefined}
             >
               <item.icon className="w-5 h-5 shrink-0 z-10" strokeWidth={1.5} />
-              <motion.span 
+              <motion.span
                 animate={{ opacity: sidebarOpen ? 1 : 0, width: sidebarOpen ? "auto" : 0 }}
                 className="font-medium text-sm text-secondary/80 whitespace-nowrap z-10 text-left rtl:text-right"
               >
@@ -135,7 +135,7 @@ export default function ClientPortal() {
             </button>
           ))}
         </nav>
-        
+
         <div className="px-4 mt-auto pt-4 border-t border-secondary/5 mx-4">
           <button
             onClick={toggleLanguage}
@@ -143,7 +143,7 @@ export default function ClientPortal() {
             title={!sidebarOpen ? (dir === 'ltr' ? 'العربية' : 'English') : undefined}
           >
             <Globe className="w-5 h-5 shrink-0 z-10" strokeWidth={1.5} />
-            <motion.span 
+            <motion.span
               animate={{ opacity: sidebarOpen ? 1 : 0, width: sidebarOpen ? "auto" : 0 }}
               className="font-medium text-sm text-secondary/80 whitespace-nowrap z-10 text-left rtl:text-right"
             >
@@ -158,10 +158,10 @@ export default function ClientPortal() {
         {/* Decorative background elements */}
         <div className="absolute top-0 right-0 w-[800px] h-[800px] bg-primary/5 rounded-full blur-[120px] -z-10 pointer-events-none mix-blend-multiply" />
         <div className="absolute bottom-[-20%] left-[-10%] w-[600px] h-[600px] bg-accent/20 rounded-full blur-[100px] -z-10 pointer-events-none mix-blend-multiply" />
-        
+
         <header className="h-20 lg:h-24 px-6 lg:px-10 flex items-center justify-between shrink-0 z-10">
           <div className="flex items-center gap-4">
-            <button 
+            <button
               onClick={toggleSidebar}
               className="p-2.5 rounded-2xl text-secondary bg-white/40 hover:bg-white/60 transition-colors shadow-[0_4px_12px_rgba(54,45,35,0.02)] ring-1 ring-white/60 focus:outline-none cursor-pointer"
             >
@@ -169,23 +169,23 @@ export default function ClientPortal() {
             </button>
           </div>
           <div className="flex items-center gap-3">
-             <Image
-               src="https://raiyansoft.com/wp-content/uploads/2026/05/logo-2.png"
-               alt="Tanal Logo"
-               width={40}
-               height={40}
-               className="object-contain"
-             />
+            <Image
+              src="https://raiyansoft.com/wp-content/uploads/2026/05/logo-2.png"
+              alt="Tanal Logo"
+              width={40}
+              height={40}
+              className="object-contain"
+            />
           </div>
         </header>
 
         <main className="flex-1 overflow-auto p-4 sm:p-6 lg:p-10 lg:pl-12 rtl:lg:pl-10 rtl:lg:pr-12">
           <div className="max-w-4xl mx-auto space-y-8 pb-12">
-            
+
             {/* Event Header Card */}
             <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-[0_4px_24px_rgba(54,45,35,0.03)] border border-secondary/5 relative overflow-hidden">
               <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-primary/5 rounded-full blur-[80px] pointer-events-none" />
-              
+
               <div className="relative z-10 flex flex-col sm:flex-row justify-between items-start gap-4">
                 <div>
                   <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 text-primary-dark text-sm font-medium mb-4">
@@ -197,7 +197,7 @@ export default function ClientPortal() {
                   </h1>
                 </div>
               </div>
-              
+
               <div className="relative z-10 grid grid-cols-1 sm:grid-cols-2 gap-4 mt-6 pt-6 border-t border-secondary/5">
                 <div className="flex items-center gap-3 text-secondary/80">
                   <div className="w-10 h-10 rounded-full bg-[#F3EBE1] flex items-center justify-center shrink-0">
@@ -222,7 +222,7 @@ export default function ClientPortal() {
 
             {/* Grid Layout for Payment and Attendance */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              
+
               {/* Payment Details Card */}
               <div className="bg-white rounded-3xl p-6 shadow-[0_4px_24px_rgba(54,45,35,0.03)] border border-secondary/5">
                 <div className="flex items-center justify-between mb-6">
@@ -245,21 +245,21 @@ export default function ClientPortal() {
                       <Wallet className="w-4 h-4" />
                       <span className="text-sm font-medium">{dir === 'ltr' ? 'Total Amount' : 'المبلغ الإجمالي'}</span>
                     </div>
-                    <span className="font-bold text-secondary">SAR {mockEvent.payment.totalAmount.toLocaleString()}</span>
+                    <span className="font-bold text-secondary">KD {mockEvent.payment.totalAmount.toLocaleString()}</span>
                   </div>
                   <div className="flex justify-between items-center p-4 rounded-2xl bg-green-50/50 border border-green-100/50">
                     <div className="flex items-center gap-3 text-green-700/70">
                       <CheckCircle2 className="w-4 h-4" />
                       <span className="text-sm font-medium">{dir === 'ltr' ? 'Paid Amount' : 'المبلغ المدفوع'}</span>
                     </div>
-                    <span className="font-bold text-green-700">SAR {mockEvent.payment.paidAmount.toLocaleString()}</span>
+                    <span className="font-bold text-green-700">KD {mockEvent.payment.paidAmount.toLocaleString()}</span>
                   </div>
                   <div className="flex justify-between items-center p-4 rounded-2xl bg-orange-50/50 border border-orange-100/50">
                     <div className="flex items-center gap-3 text-orange-700/70">
                       <Clock className="w-4 h-4" />
                       <span className="text-sm font-medium">{dir === 'ltr' ? 'Remaining Amount' : 'المبلغ المتبقي'}</span>
                     </div>
-                    <span className="font-bold text-orange-700">SAR {mockEvent.payment.remainingAmount.toLocaleString()}</span>
+                    <span className="font-bold text-orange-700">KD {mockEvent.payment.remainingAmount.toLocaleString()}</span>
                   </div>
                 </div>
 
@@ -296,7 +296,7 @@ export default function ClientPortal() {
                     <span className="text-secondary">{responded} / {mockEvent.attendance.total}</span>
                   </div>
                   <div className="h-3 bg-secondary/5 rounded-full overflow-hidden w-full relative">
-                    <motion.div 
+                    <motion.div
                       initial={{ width: 0 }}
                       animate={{ width: `${progressPercent}%` }}
                       transition={{ duration: 1, ease: 'easeOut' }}
@@ -325,7 +325,7 @@ export default function ClientPortal() {
                 </div>
 
               </div>
-              
+
             </div>
           </div>
         </main>

@@ -15,11 +15,13 @@ import {
   Menu,
   Bell,
   LogOut,
-  Wallet
+  Wallet,
+  ShoppingBag,
+  Layers,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Image from 'next/image';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
 const navItems = [
   { icon: LayoutDashboard, id: 'dashboard' },
@@ -27,12 +29,19 @@ const navItems = [
   { icon: Users, id: 'clients' },
   { icon: CalendarDays, id: 'events' },
   { icon: MailPlus, id: 'invitations' },
+  { icon: Layers, id: 'services' },
+  { icon: ShoppingBag, id: 'serviceOrders' },
   { icon: Briefcase, id: 'employees' },
   { icon: Wallet, id: 'financial' },
   { icon: Globe, id: 'landingPage' },
   { icon: Settings, id: 'settings' },
-
 ];
+
+// Map nav ids that differ from their URL segment
+const NAV_ROUTES: Record<string, string> = {
+  serviceOrders: '/service-orders',
+  services: '/landingPage?s=services',
+};
 
 export function MainLayout({ children }: { children: React.ReactNode }) {
   const { t, language, setLanguage, dir } = useLanguage();
@@ -42,18 +51,33 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [profileOpen, setProfileOpen] = useState(false);
 
-  // Extract module name from pathname, default to 'dashboard' if '/'
-  const activeItem = pathname === '/' ? 'dashboard' : (pathname.replace('/', '') || 'dashboard');
+  const searchParams = useSearchParams();
+
+  // Extract active nav item from pathname + search params
+  const activeItem = pathname === '/'
+    ? 'dashboard'
+    : pathname.startsWith('/service-orders')
+      ? 'serviceOrders'
+      : pathname === '/landingPage' && searchParams.get('s') === 'services'
+        ? 'services'
+        : (pathname.replace('/', '').split('/')[0] || 'dashboard');
 
   const setActiveItem = (id: string) => {
-    router.push(id === 'dashboard' ? '/' : `/${id}`);
+    if (id === 'dashboard') { router.push('/'); return; }
+    router.push(NAV_ROUTES[id] ?? `/${id}`);
   };
 
   const toggleSidebar = () => setSidebarOpen(!sidebarOpen);
   const toggleLanguage = () => setLanguage(language === 'en' ? 'ar' : 'en');
   const logout = () => router.push('/login');
 
-  if (pathname === '/login' || pathname.startsWith('/client-portal') || pathname.startsWith('/guest-view')) {
+  if (
+    pathname === '/login' ||
+    pathname.startsWith('/client-portal') ||
+    pathname.startsWith('/guest-view') ||
+    pathname.startsWith('/order-client') ||
+    pathname.startsWith('/order-employee')
+  ) {
     return (
       <div className="font-sans text-secondary min-h-screen selection:bg-primary/20 selection:text-primary-dark">
         {children}
