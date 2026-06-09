@@ -20,6 +20,7 @@ const initialClients: Client[] = [
   { id: '1002', name: 'Mohammed Al Rajhi', phone: '+966 55 987 6543', email: 'm.alrajhi@example.com' },
   { id: '1003', name: 'Sara Al Olayan', phone: '+966 53 456 7890', email: 's.alolayan@example.com', notes: 'Event dates are usually inflexible. Follow up regarding pending installments.' },
   { id: '1004', name: 'Fahad Al Jasser', phone: '+966 56 111 2222', email: 'f.aljasser@example.com' },
+  { id: '1005', name: 'Ahmed Abdullah', phone: '+201013633154', email: 'f.aljasser@example.com' },
 ];
 
 type EventStatus = 'canceled' | 'completed' | 'paid' | 'unpaid' | 'installments';
@@ -73,7 +74,7 @@ function ClientEditForm({ client, onBack, onSave }: ClientEditFormProps) {
       className="space-y-6 pb-10 w-full"
     >
       <div className="flex items-center justify-start mb-2">
-        <button 
+        <button
           onClick={onBack}
           className="flex items-center gap-2 text-secondary/60 hover:text-secondary transition-colors cursor-pointer group"
         >
@@ -87,17 +88,17 @@ function ClientEditForm({ client, onBack, onSave }: ClientEditFormProps) {
       </div>
 
       <div className="glass-panel p-6 sm:p-8 rounded-[2rem] border border-secondary/5 shadow-sm w-full max-w-2xl mx-auto crystal-accent">
-         <h2 className={cn("text-2xl font-medium text-secondary mb-8", dir === 'ltr' ? 'font-serif' : 'font-arabic font-bold')}>
-            {client ? t('editClient' as any) : t('addClient' as any)}
-         </h2>
+        <h2 className={cn("text-2xl font-medium text-secondary mb-8", dir === 'ltr' ? 'font-serif' : 'font-arabic font-bold')}>
+          {client ? t('editClient' as any) : t('addClient' as any)}
+        </h2>
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="space-y-2">
             <label className="text-sm font-medium text-secondary/80 ml-1 rtl:mr-1 rtl:ml-0">
               {t('fullName' as any) || 'Full Name'} <span className="text-red-500">*</span>
             </label>
-            <input 
-              type="text" 
+            <input
+              type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
               required
@@ -112,19 +113,19 @@ function ClientEditForm({ client, onBack, onSave }: ClientEditFormProps) {
             </label>
             <div className="flex gap-2">
               <div className="relative shrink-0 w-[120px]">
-                 <select 
-                   value={phoneExt}
-                   onChange={e => setPhoneExt(e.target.value)}
-                   className="w-full appearance-none bg-white/50 border border-white/60 focus:border-primary/50 focus:ring-2 focus:ring-primary/20 rounded-xl py-3 pl-4 pr-10 rtl:pr-4 rtl:pl-10 transition-all outline-none text-secondary text-sm font-medium h-full"
-                 >
-                   <option>SA +966</option>
-                 </select>
-                 <div className="absolute inset-y-0 right-0 rtl:left-0 rtl:right-auto flex items-center pr-3 rtl:pl-3 pointer-events-none text-secondary/50">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>
-                 </div>
+                <select
+                  value={phoneExt}
+                  onChange={e => setPhoneExt(e.target.value)}
+                  className="w-full appearance-none bg-white/50 border border-white/60 focus:border-primary/50 focus:ring-2 focus:ring-primary/20 rounded-xl py-3 pl-4 pr-10 rtl:pr-4 rtl:pl-10 transition-all outline-none text-secondary text-sm font-medium h-full"
+                >
+                  <option>SA +966</option>
+                </select>
+                <div className="absolute inset-y-0 right-0 rtl:left-0 rtl:right-auto flex items-center pr-3 rtl:pl-3 pointer-events-none text-secondary/50">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>
+                </div>
               </div>
-              <input 
-                type="tel" 
+              <input
+                type="tel"
                 value={phoneStr}
                 onChange={(e) => setPhoneStr(e.target.value)}
                 required
@@ -143,8 +144,8 @@ function ClientEditForm({ client, onBack, onSave }: ClientEditFormProps) {
             <label className="text-sm font-medium text-secondary/80 ml-1 rtl:mr-1 rtl:ml-0">
               {t('emailOptional' as any) || 'Email (Optional)'}
             </label>
-            <input 
-              type="email" 
+            <input
+              type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="w-full bg-white/50 border border-white/60 focus:border-primary/50 focus:ring-2 focus:ring-primary/20 rounded-xl py-3 px-4 transition-all outline-none text-secondary"
@@ -157,7 +158,7 @@ function ClientEditForm({ client, onBack, onSave }: ClientEditFormProps) {
             <label className="text-sm font-medium text-secondary/80 ml-1 rtl:mr-1 rtl:ml-0">
               {t('notesOptional' as any) || 'Notes (Optional)'}
             </label>
-            <textarea 
+            <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               className="w-full bg-white/50 border border-white/60 focus:border-primary/50 focus:ring-2 focus:ring-primary/20 rounded-xl py-3 px-4 transition-all outline-none text-secondary resize-none"
@@ -165,7 +166,7 @@ function ClientEditForm({ client, onBack, onSave }: ClientEditFormProps) {
             />
           </div>
 
-          <button 
+          <button
             type="submit"
             className="w-full mt-6 bg-primary hover:bg-primary-dark text-white rounded-xl py-3.5 font-medium transition-all shadow-md hover:shadow-lg flex justify-center items-center gap-2 group cursor-pointer"
           >
@@ -215,7 +216,7 @@ function ClientDetails({ client, onBack, onEdit, onDelete, onNavigateToEvent }: 
       className="space-y-6 pb-10 w-full"
     >
       <div className="flex items-center justify-between">
-        <button 
+        <button
           onClick={onBack}
           className="flex items-center gap-2 text-secondary/60 hover:text-secondary transition-colors cursor-pointer group"
         >
@@ -226,7 +227,7 @@ function ClientDetails({ client, onBack, onEdit, onDelete, onNavigateToEvent }: 
           )}
           <span className="font-medium">{t('back' as any)}</span>
         </button>
-        
+
         <div className="flex items-center gap-2">
           <button
             onClick={onEdit}
@@ -295,8 +296,8 @@ function ClientDetails({ client, onBack, onEdit, onDelete, onNavigateToEvent }: 
                 const statusInfo = getStatusDisplay(event.status, event.paymentFraction);
                 const StatusIcon = statusInfo.icon;
                 return (
-                  <div 
-                    key={event.id} 
+                  <div
+                    key={event.id}
                     className="p-3 rounded-2xl bg-white/40 border border-secondary/5 flex flex-col gap-2 cursor-pointer hover:bg-white/60 transition-colors"
                     onClick={() => onNavigateToEvent && onNavigateToEvent(event.id)}
                   >
@@ -398,17 +399,17 @@ function ClientDeleteModal({ isOpen, onClose, onConfirm }: ClientDeleteModalProp
 
 export default function ClientsPage() {
   const { t, dir } = useLanguage();
-  
+
   const [clients, setClients] = useState<Client[]>(initialClients);
   const [searchTerm, setSearchTerm] = useState('');
-  
+
   const [isEditing, setIsEditing] = useState(false);
   const [clientToEdit, setClientToEdit] = useState<Client | null>(null);
   const [clientToView, setClientToView] = useState<Client | null>(null);
   const [clientToDelete, setClientToDelete] = useState<string | null>(null);
 
   const filteredClients = useMemo(() => {
-    return clients.filter(client => 
+    return clients.filter(client =>
       client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       client.phone.includes(searchTerm) ||
       client.email.toLowerCase().includes(searchTerm.toLowerCase())
@@ -419,7 +420,7 @@ export default function ClientsPage() {
     if (clientToEdit) {
       setClients(clients.map(c => c.id === newClient.id ? newClient : c));
       if (clientToView?.id === newClient.id) {
-          setClientToView(newClient);
+        setClientToView(newClient);
       }
     } else {
       setClients([newClient, ...clients]);
@@ -445,13 +446,13 @@ export default function ClientsPage() {
           />
         )}
       </AnimatePresence>
-      
+
       {isEditing ? (
-        <ClientEditForm 
+        <ClientEditForm
           client={clientToEdit}
           onBack={() => {
-             setIsEditing(false);
-             setClientToEdit(null);
+            setIsEditing(false);
+            setClientToEdit(null);
           }}
           onSave={handleSaveClient}
         />
@@ -470,105 +471,105 @@ export default function ClientsPage() {
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div className="flex items-center gap-3">
               <h2 className={cn("text-2xl font-medium text-secondary", dir === 'ltr' ? 'font-serif' : 'font-arabic font-bold')}>
-              {t('clients')}
-            </h2>
-            <span className="px-2.5 py-0.5 rounded-full bg-primary/10 text-primary text-sm font-semibold">
-              {clients.length}
-            </span>
-          </div>
-          
-          <button 
-            onClick={() => { setClientToEdit(null); setIsEditing(true); }}
-            className="bg-primary hover:bg-primary-dark text-white px-5 py-2.5 rounded-xl font-medium transition-all shadow-md hover:shadow-lg flex items-center gap-2 cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            {t('addClient' as any)}
-          </button>
-        </div>
-
-        <div className="glass-panel rounded-3xl p-3 sm:p-6 w-full mx-auto overflow-hidden">
-          <div className="mb-4 sm:mb-6 relative w-full">
-            <div className="absolute inset-y-0 left-0 rtl:right-0 rtl:left-auto flex items-center px-3 sm:px-4 pointer-events-none text-secondary/40">
-              <Search className="w-4 h-4 sm:w-5 sm:h-5" />
+                {t('clients')}
+              </h2>
+              <span className="px-2.5 py-0.5 rounded-full bg-primary/10 text-primary text-sm font-semibold">
+                {clients.length}
+              </span>
             </div>
-            <input
-              type="text"
-              placeholder={t('searchClients')}
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full bg-white/50 border border-white/60 focus:border-primary/50 focus:ring-2 focus:ring-primary/20 rounded-xl py-2 sm:py-3 pl-10 pr-4 rtl:pr-10 rtl:pl-4 transition-all outline-none text-secondary text-sm sm:text-base"
-            />
+
+            <button
+              onClick={() => { setClientToEdit(null); setIsEditing(true); }}
+              className="bg-primary hover:bg-primary-dark text-white px-5 py-2.5 rounded-xl font-medium transition-all shadow-md hover:shadow-lg flex items-center gap-2 cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              {t('addClient' as any)}
+            </button>
           </div>
 
-          <div className="w-full">
-            {filteredClients.length > 0 ? (
-              <div className="flex flex-col gap-2 sm:gap-3 w-full">
-                <AnimatePresence>
-                  {filteredClients.map((client) => (
-                    <motion.div 
-                      key={client.id}
-                      initial={{ opacity: 0, y: -10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, scale: 0.95 }}
-                      transition={{ duration: 0.2 }}
-                      onClick={() => setClientToView(client)}
-                      className="p-3 sm:p-4 rounded-2xl bg-white/40 shadow-sm border border-secondary/5 flex flex-col md:flex-row md:items-center justify-between gap-3 group cursor-pointer hover:bg-white/60 transition-colors w-full"
-                    >
-                      <div className="flex-1 min-w-0 flex flex-col gap-1.5">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-mono bg-secondary/5 px-2 py-0.5 rounded text-secondary/60">#{client.id}</span>
-                          <h3 className="font-semibold text-secondary text-base truncate m-0">{client.name}</h3>
-                        </div>
-                        <div className="flex flex-col sm:flex-row sm:items-center text-sm text-secondary/60 gap-0.5 sm:gap-3">
-                           <span className="truncate max-w-full" dir="ltr">{client.phone}</span>
-                           <span className="hidden sm:block w-1 h-1 rounded-full bg-secondary/20 shrink-0" />
-                           <span className="truncate max-w-full">{client.email}</span>
-                        </div>
-                      </div>
-                      
-                      <div className="flex items-center gap-2 flex-wrap shrink-0 justify-end border-t border-secondary/5 md:border-none pt-2 md:pt-0 mt-1 md:mt-0">
-                        <button 
-                          title="WhatsApp"
-                          onClick={(e) => { e.stopPropagation(); window.open(`https://wa.me/${client.phone.replace(/\D/g, '')}`, '_blank'); }}
-                          className="p-2 sm:p-2.5 bg-white text-emerald-600 border border-transparent hover:bg-emerald-50 hover:border-emerald-200 hover:text-emerald-700 hover:-translate-y-[2px] hover:scale-[1.03] hover:shadow-md active:scale-95 active:translate-y-0 rounded-xl transition-all duration-200 ease-out flex items-center justify-center cursor-pointer"
-                        >
-                          <Image src="https://raiyansoft.com/wp-content/uploads/2026/05/whatsapp.png" alt="WhatsApp" width={18} height={18} className="object-contain" referrerPolicy="no-referrer" />
-                        </button>
-                        <button 
-                          title={t('view')} 
-                          onClick={(e) => { e.stopPropagation(); setClientToView(client); }}
-                          className="p-2 sm:p-2.5 bg-white text-secondary/60 border border-transparent hover:bg-gray-50 hover:border-gray-200 hover:text-gray-900 hover:-translate-y-[2px] hover:scale-[1.03] hover:shadow-md active:scale-95 active:translate-y-0 rounded-xl transition-all duration-200 ease-out flex items-center justify-center cursor-pointer"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
-                        <button 
-                          title={t('edit' as any)} 
-                          onClick={(e) => { e.stopPropagation(); setClientToEdit(client); setIsEditing(true); }}
-                          className="p-2 sm:p-2.5 bg-white text-yellow-500 border border-transparent hover:bg-yellow-50 hover:border-yellow-200 hover:text-yellow-600 hover:-translate-y-[2px] hover:scale-[1.03] hover:shadow-md active:scale-95 active:translate-y-0 rounded-xl transition-all duration-200 ease-out flex items-center justify-center cursor-pointer"
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </button>
-                        <button 
-                          title={t('remove')} 
-                          onClick={(e) => { e.stopPropagation(); setClientToDelete(client.id); }}
-                          className="p-2 sm:p-2.5 bg-white text-red-500 border border-transparent hover:bg-red-50 hover:border-red-200 hover:text-red-600 hover:-translate-y-[2px] hover:scale-[1.03] hover:shadow-md active:scale-95 active:translate-y-0 rounded-xl transition-all duration-200 ease-out flex items-center justify-center cursor-pointer"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </motion.div>
-                  ))}
-                </AnimatePresence>
+          <div className="glass-panel rounded-3xl p-3 sm:p-6 w-full mx-auto overflow-hidden">
+            <div className="mb-4 sm:mb-6 relative w-full">
+              <div className="absolute inset-y-0 left-0 rtl:right-0 rtl:left-auto flex items-center px-3 sm:px-4 pointer-events-none text-secondary/40">
+                <Search className="w-4 h-4 sm:w-5 sm:h-5" />
               </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center py-12 text-secondary/40 text-center px-4">
-                <UserSearch className="w-10 h-10 sm:w-12 sm:h-12 mb-3 sm:mb-4 opacity-50" />
-                <p className="text-sm sm:text-base">No clients found.</p>
-              </div>
-            )}
+              <input
+                type="text"
+                placeholder={t('searchClients')}
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full bg-white/50 border border-white/60 focus:border-primary/50 focus:ring-2 focus:ring-primary/20 rounded-xl py-2 sm:py-3 pl-10 pr-4 rtl:pr-10 rtl:pl-4 transition-all outline-none text-secondary text-sm sm:text-base"
+              />
+            </div>
+
+            <div className="w-full">
+              {filteredClients.length > 0 ? (
+                <div className="flex flex-col gap-2 sm:gap-3 w-full">
+                  <AnimatePresence>
+                    {filteredClients.map((client) => (
+                      <motion.div
+                        key={client.id}
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.95 }}
+                        transition={{ duration: 0.2 }}
+                        onClick={() => setClientToView(client)}
+                        className="p-3 sm:p-4 rounded-2xl bg-white/40 shadow-sm border border-secondary/5 flex flex-col md:flex-row md:items-center justify-between gap-3 group cursor-pointer hover:bg-white/60 transition-colors w-full"
+                      >
+                        <div className="flex-1 min-w-0 flex flex-col gap-1.5">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-mono bg-secondary/5 px-2 py-0.5 rounded text-secondary/60">#{client.id}</span>
+                            <h3 className="font-semibold text-secondary text-base truncate m-0">{client.name}</h3>
+                          </div>
+                          <div className="flex flex-col sm:flex-row sm:items-center text-sm text-secondary/60 gap-0.5 sm:gap-3">
+                            <span className="truncate max-w-full" dir="ltr">{client.phone}</span>
+                            <span className="hidden sm:block w-1 h-1 rounded-full bg-secondary/20 shrink-0" />
+                            <span className="truncate max-w-full">{client.email}</span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 flex-wrap shrink-0 justify-end border-t border-secondary/5 md:border-none pt-2 md:pt-0 mt-1 md:mt-0">
+                          <button
+                            title="WhatsApp"
+                            onClick={(e) => { e.stopPropagation(); window.open(`https://wa.me/${client.phone.replace(/\D/g, '')}`, '_blank'); }}
+                            className="p-2 sm:p-2.5 bg-white text-emerald-600 border border-transparent hover:bg-emerald-50 hover:border-emerald-200 hover:text-emerald-700 hover:-translate-y-[2px] hover:scale-[1.03] hover:shadow-md active:scale-95 active:translate-y-0 rounded-xl transition-all duration-200 ease-out flex items-center justify-center cursor-pointer"
+                          >
+                            <Image src="https://raiyansoft.com/wp-content/uploads/2026/05/whatsapp.png" alt="WhatsApp" width={18} height={18} className="object-contain" referrerPolicy="no-referrer" />
+                          </button>
+                          <button
+                            title={t('view')}
+                            onClick={(e) => { e.stopPropagation(); setClientToView(client); }}
+                            className="p-2 sm:p-2.5 bg-white text-secondary/60 border border-transparent hover:bg-gray-50 hover:border-gray-200 hover:text-gray-900 hover:-translate-y-[2px] hover:scale-[1.03] hover:shadow-md active:scale-95 active:translate-y-0 rounded-xl transition-all duration-200 ease-out flex items-center justify-center cursor-pointer"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+                          <button
+                            title={t('edit' as any)}
+                            onClick={(e) => { e.stopPropagation(); setClientToEdit(client); setIsEditing(true); }}
+                            className="p-2 sm:p-2.5 bg-white text-yellow-500 border border-transparent hover:bg-yellow-50 hover:border-yellow-200 hover:text-yellow-600 hover:-translate-y-[2px] hover:scale-[1.03] hover:shadow-md active:scale-95 active:translate-y-0 rounded-xl transition-all duration-200 ease-out flex items-center justify-center cursor-pointer"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                          <button
+                            title={t('remove')}
+                            onClick={(e) => { e.stopPropagation(); setClientToDelete(client.id); }}
+                            className="p-2 sm:p-2.5 bg-white text-red-500 border border-transparent hover:bg-red-50 hover:border-red-200 hover:text-red-600 hover:-translate-y-[2px] hover:scale-[1.03] hover:shadow-md active:scale-95 active:translate-y-0 rounded-xl transition-all duration-200 ease-out flex items-center justify-center cursor-pointer"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </motion.div>
+                    ))}
+                  </AnimatePresence>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-12 text-secondary/40 text-center px-4">
+                  <UserSearch className="w-10 h-10 sm:w-12 sm:h-12 mb-3 sm:mb-4 opacity-50" />
+                  <p className="text-sm sm:text-base">No clients found.</p>
+                </div>
+              )}
+            </div>
           </div>
         </div>
-      </div>
       )}
     </>
   );

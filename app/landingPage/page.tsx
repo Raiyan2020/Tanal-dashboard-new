@@ -745,13 +745,7 @@ export default function LandingPageContent() {
                                 <Upload className="w-6 h-6 mb-2 group-hover/upload:text-primary transition-colors" />
                                 <span className="text-sm font-medium group-hover/upload:text-primary transition-colors">{dir === 'rtl' ? 'انقر لرفع الصورة' : 'Click to upload image'}</span>
                                 <span className="text-xs mt-1 opacity-60">{dir === 'rtl' ? 'PNG, JPG, WebP' : 'PNG, JPG, WebP'}</span>
-                                <input
-                                  ref={imageInputRef}
-                                  type="file"
-                                  accept="image/*"
-                                  className="hidden"
-                                  onChange={handleImageUpload}
-                                />
+                                <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
                               </div>
                             )}
                           </div>

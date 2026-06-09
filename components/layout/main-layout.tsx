@@ -3,13 +3,13 @@
 import React, { useState } from 'react';
 import { useLanguage } from '@/lib/i18n';
 import { motion, AnimatePresence } from 'motion/react';
-import { 
-  LayoutDashboard, 
-  CalendarDays, 
-  Users, 
+import {
+  LayoutDashboard,
+  CalendarDays,
+  Users,
   UserCog,
-  Briefcase, 
-  MailPlus, 
+  Briefcase,
+  MailPlus,
   Settings,
   Globe,
   Menu,
@@ -31,13 +31,14 @@ const navItems = [
   { icon: Wallet, id: 'financial' },
   { icon: Globe, id: 'landingPage' },
   { icon: Settings, id: 'settings' },
+
 ];
 
 export function MainLayout({ children }: { children: React.ReactNode }) {
   const { t, language, setLanguage, dir } = useLanguage();
   const pathname = usePathname();
   const router = useRouter();
-  
+
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [profileOpen, setProfileOpen] = useState(false);
 
@@ -78,7 +79,7 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
       {/* Sidebar */}
       <motion.aside
         initial={false}
-        animate={{ 
+        animate={{
           width: sidebarOpen ? 280 : 88,
           x: sidebarOpen ? 0 : (dir === 'rtl' ? (typeof window !== 'undefined' && window.innerWidth < 1024 ? 280 : 0) : (typeof window !== 'undefined' && window.innerWidth < 1024 ? -280 : 0))
         }}
@@ -91,20 +92,20 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
       >
         <div className="flex items-center px-6 mb-8 mt-2 overflow-hidden justify-between w-full h-8">
           <div className="flex items-center gap-3">
-             <Image
-               src="https://raiyansoft.com/wp-content/uploads/2026/05/logo-2.png"
-               alt="Tanal Logo"
-               width={30}
-               height={40}
-               className="shrink-0 object-contain drop-shadow-sm w-[30px] h-10"
-               referrerPolicy="no-referrer"
-             />
-             <motion.span 
-               animate={{ opacity: sidebarOpen ? 1 : 0, width: sidebarOpen ? "auto" : 0 }}
-               className={cn("whitespace-nowrap text-xl font-medium tracking-wide text-primary-dark", dir === 'ltr' ? 'font-serif' : 'font-arabic')}
-             >
-               {t('tanal')}
-             </motion.span>
+            <Image
+              src="https://raiyansoft.com/wp-content/uploads/2026/05/logo-2.png"
+              alt="Tanal Logo"
+              width={30}
+              height={40}
+              className="shrink-0 object-contain drop-shadow-sm w-[30px] h-10"
+              referrerPolicy="no-referrer"
+            />
+            <motion.span
+              animate={{ opacity: sidebarOpen ? 1 : 0, width: sidebarOpen ? "auto" : 0 }}
+              className={cn("whitespace-nowrap text-xl font-medium tracking-wide text-primary-dark", dir === 'ltr' ? 'font-serif' : 'font-arabic')}
+            >
+              {t('tanal')}
+            </motion.span>
           </div>
         </div>
 
@@ -127,16 +128,16 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
                 title={!sidebarOpen ? t(item.id) : undefined}
               >
                 {isSelected && (
-                  <motion.div 
-                    layoutId="active-indicator" 
+                  <motion.div
+                    layoutId="active-indicator"
                     className="absolute inset-0 bg-white/50 border border-white rounded-2xl z-0"
                     initial={false}
                     transition={{ type: "spring", stiffness: 300, damping: 30 }}
                   />
                 )}
-                
+
                 <item.icon className={cn("w-5 h-5 shrink-0 z-10", isSelected ? "text-primary" : "")} strokeWidth={1.5} />
-                <motion.span 
+                <motion.span
                   animate={{ opacity: sidebarOpen ? 1 : 0, width: sidebarOpen ? "auto" : 0 }}
                   className="whitespace-nowrap z-10 text-sm font-normal"
                 >
@@ -146,20 +147,20 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
             )
           })}
         </nav>
-        
+
         <div className="px-4 mt-auto pt-4 border-t border-secondary/5 mx-4">
-           <button
-              onClick={logout}
-              className="flex items-center w-full gap-4 px-3 py-3 rounded-2xl transition-all duration-300 text-secondary hover:bg-red-50/50 hover:text-red-600/80 group cursor-pointer"
+          <button
+            onClick={logout}
+            className="flex items-center w-full gap-4 px-3 py-3 rounded-2xl transition-all duration-300 text-secondary hover:bg-red-50/50 hover:text-red-600/80 group cursor-pointer"
+          >
+            <LogOut className="w-5 h-5 shrink-0 z-10" strokeWidth={1.5} />
+            <motion.span
+              animate={{ opacity: sidebarOpen ? 1 : 0, width: sidebarOpen ? "auto" : 0 }}
+              className="whitespace-nowrap z-10 text-sm font-normal"
             >
-              <LogOut className="w-5 h-5 shrink-0 z-10" strokeWidth={1.5} />
-              <motion.span 
-                animate={{ opacity: sidebarOpen ? 1 : 0, width: sidebarOpen ? "auto" : 0 }}
-                className="whitespace-nowrap z-10 text-sm font-normal"
-              >
-                {t('logout')}
-              </motion.span>
-            </button>
+              {t('logout')}
+            </motion.span>
+          </button>
         </div>
       </motion.aside>
 
@@ -172,7 +173,7 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
         {/* Header */}
         <header className="h-20 lg:h-24 px-6 lg:px-10 flex items-center justify-between shrink-0 z-10">
           <div className="flex items-center gap-4">
-            <button 
+            <button
               onClick={toggleSidebar}
               className="p-2.5 rounded-2xl text-secondary bg-white/40 hover:bg-white/60 transition-colors shadow-[0_4px_12px_rgba(54,45,35,0.02)] ring-1 ring-white/60 focus:outline-none cursor-pointer"
             >
@@ -186,15 +187,15 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
           </div>
 
           <div className="flex items-center gap-2 sm:gap-4">
-            <button 
-               onClick={toggleLanguage}
-               className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/40 hover:bg-white/60 transition-colors shadow-sm ring-1 ring-white/60 group cursor-pointer"
+            <button
+              onClick={toggleLanguage}
+              className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/40 hover:bg-white/60 transition-colors shadow-sm ring-1 ring-white/60 group cursor-pointer"
             >
               <Globe className="w-4 h-4 text-primary" strokeWidth={1.5} />
               <span className="text-sm font-medium">{t('toggleLanguage')}</span>
             </button>
-            
-            <button 
+
+            <button
               onClick={() => setActiveItem('notifications')}
               className={cn(
                 "relative p-2.5 rounded-xl transition-colors shadow-sm ring-1 ring-white/60 cursor-pointer",
@@ -208,25 +209,25 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
             <div className="h-8 w-[1px] bg-secondary/10 mx-1 sm:mx-2" />
 
             <div className="relative">
-              <button 
+              <button
                 onClick={() => setProfileOpen(!profileOpen)}
                 className="flex items-center gap-3 p-1 pr-3 rounded-full bg-white/40 hover:bg-white/60 transition-colors shadow-sm ring-1 ring-white/60 border border-transparent cursor-pointer rtl:pl-3 rtl:pr-1"
               >
-                <Image 
-                  src="https://raiyansoft.com/wp-content/uploads/2026/06/Untitled-design.png" 
-                  alt="Profile" 
-                  width={36} 
-                  height={36} 
-                  className="rounded-full ring-2 ring-white object-cover pointer-events-none" 
+                <Image
+                  src="https://raiyansoft.com/wp-content/uploads/2026/06/Untitled-design.png"
+                  alt="Profile"
+                  width={36}
+                  height={36}
+                  className="rounded-full ring-2 ring-white object-cover pointer-events-none"
                   referrerPolicy="no-referrer"
                 />
                 <span className="hidden sm:block text-sm font-medium pointer-events-none">Admin</span>
               </button>
-              
+
               <AnimatePresence>
                 {profileOpen && (
                   <>
-                    <div 
+                    <div
                       className="fixed inset-0 z-40"
                       onClick={() => setProfileOpen(false)}
                     />
