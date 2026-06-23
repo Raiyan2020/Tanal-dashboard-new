@@ -1,6 +1,9 @@
 // ── Tanal Service Order Store ──
 // Shared types and localStorage CRUD used by admin, client, and employee pages.
 
+import type { OrderOptionValue } from './serviceOptionsStore';
+export type { OrderOptionValue };
+
 export interface OrderServiceItem {
   id: string; // unique item id
   serviceId: string;
@@ -13,6 +16,7 @@ export interface OrderServiceItem {
   employeeName: string;
   employeePhone: string;
   status: 'coming' | 'in-progress' | 'finished' | 'rejected';
+  optionValues?: OrderOptionValue[]; // filled service option values
 }
 
 export interface ServiceOrder {
@@ -48,11 +52,11 @@ export function getOverallStatus(order: ServiceOrder): OrderStatus {
 // ── Shared mock data (mirrors data in other pages) ──────────────────────────
 
 export const ORDER_MOCK_SERVICES = [
-  { id: 's1', nameEn: 'Wedding Planning', nameAr: 'تنظيم حفلات الزفاف', descriptionEn: 'Luxurious wedding ceremonies tailored to your vision.', descriptionAr: 'حفلات زفاف فاخرة مصممة وفق رؤيتك.', imageUrl: '' },
-  { id: 's2', nameEn: 'Corporate Events', nameAr: 'الفعاليات المؤسسية', descriptionEn: 'Professional corporate event planning and execution.', descriptionAr: 'تخطيط وتنفيذ احترافي للفعاليات المؤسسية.', imageUrl: '' },
-  { id: 's3', nameEn: 'Birthday Celebrations', nameAr: 'حفلات أعياد الميلاد', descriptionEn: 'Memorable birthday celebrations for all ages.', descriptionAr: 'احتفالات أعياد ميلاد لا تُنسى لجميع الأعمار.', imageUrl: '' },
-  { id: 's4', nameEn: 'Photobooth', nameAr: 'بوث التصوير', descriptionEn: 'Interactive photobooth with premium props and instant printing.', descriptionAr: 'بوث تصوير تفاعلي مع إكسسوارات فاخرة وطباعة فورية.', imageUrl: '' },
-  { id: 's5', nameEn: 'Luxury Catering', nameAr: 'تموين فاخر', descriptionEn: 'World-class culinary experience for your events.', descriptionAr: 'تجربة طهي عالمية المستوى لمناسباتك.', imageUrl: '' },
+  { id: 'ps1', nameEn: 'Photobooth',                     nameAr: 'الفوتوبوث',                      descriptionEn: 'Interactive photobooth with premium props and instant printing.',       descriptionAr: 'بوث تصوير تفاعلي مع إكسسوارات فاخرة وطباعة فورية.', imageUrl: '' },
+  { id: 'ps2', nameEn: 'Barcode',                        nameAr: 'الباركود',                       descriptionEn: 'Digital barcode check-in system for events.',                          descriptionAr: 'نظام تسجيل الحضور الرقمي عبر الباركود.',            imageUrl: '' },
+  { id: 'ps3', nameEn: 'Photography Cover',              nameAr: 'كفرات منع التصوير',              descriptionEn: 'Photography covers to manage camera-free zones at events.',              descriptionAr: 'كفرات منع التصوير لإدارة المناطق الخاصة في الحفلات.',  imageUrl: '' },
+  { id: 'ps4', nameEn: 'Coat & Abaya Hanging Service',   nameAr: 'خدمة تعليق العبايات والمعاطف',   descriptionEn: 'Professional coat and abaya hanging service for event guests.',          descriptionAr: 'خدمة تعليق العبايات والمعاطف للضيوف بشكل احترافي.',  imageUrl: '' },
+  { id: 'ps5', nameEn: 'Welcoming & Cheering Service',   nameAr: 'خدمة التهليل والترحيب',          descriptionEn: 'Elegant welcoming and cheering service for your event guests.',          descriptionAr: 'خدمة ترحيب وتهليل أنيقة لضيوف مناسباتك.',           imageUrl: '' },
 ];
 
 export const ORDER_MOCK_CLIENTS = [

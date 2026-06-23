@@ -147,6 +147,14 @@ function DeleteModal({ order, onClose, onConfirm }: { order: ServiceOrder; onClo
 
 // ── Form state interfaces ──────────────────────────────────────────────────────
 
+interface ServiceEmployee {
+  uid: string;
+  mode: 'existing' | 'new';
+  id?: string;
+  name: string;
+  phone: string;
+}
+
 interface FormServiceItem {
   id: string; // temp unique key
   serviceId: string;
@@ -156,10 +164,8 @@ interface FormServiceItem {
   serviceDescription: string;
   serviceDescriptionAr: string;
   price: string;
-  employeeMode: 'existing' | 'new';
-  employeeId: string;
-  employeeName: string;
-  employeePhone: string;
+  description: string;
+  employees: ServiceEmployee[];
 }
 
 const EMPTY_FORM = {
@@ -173,6 +179,14 @@ const EMPTY_FORM = {
 };
 type FormState = typeof EMPTY_FORM;
 
+const createEmptyEmployee = (): ServiceEmployee => ({
+  uid: Math.random().toString(),
+  mode: 'existing',
+  id: undefined,
+  name: '',
+  phone: '',
+});
+
 const createEmptyServiceItem = (): FormServiceItem => ({
   id: Math.random().toString(),
   serviceId: '',
@@ -182,10 +196,8 @@ const createEmptyServiceItem = (): FormServiceItem => ({
   serviceDescription: '',
   serviceDescriptionAr: '',
   price: '',
-  employeeMode: 'existing',
-  employeeId: '',
-  employeeName: '',
-  employeePhone: '',
+  description: '',
+  employees: [createEmptyEmployee()],
 });
 
 // ── Main page ─────────────────────────────────────────────────────────────────
@@ -244,10 +256,12 @@ export default function ServiceOrdersPage() {
         serviceDescription: s.serviceDescription,
         serviceDescriptionAr: s.serviceDescriptionAr,
         price: s.price.toString(),
-        employeeMode: 'existing',
-        employeeId: ORDER_MOCK_EMPLOYEES.find(e => e.name === s.employeeName)?.id.toString() ?? '',
-        employeeName: s.employeeName,
-        employeePhone: s.employeePhone,
+        description: (s as any).description ?? '',
+        employees: ((s as any).employees as ServiceEmployee[] | undefined)?.length
+          ? (s as any).employees as ServiceEmployee[]
+          : s.employeeName
+            ? [{ uid: Math.random().toString(), mode: 'existing' as const, id: ORDER_MOCK_EMPLOYEES.find(e => e.name === s.employeeName)?.id.toString(), name: s.employeeName, phone: s.employeePhone }]
+            : [],
       })),
       description: order.description,
       date: order.date,
@@ -275,8 +289,11 @@ export default function ServiceOrdersPage() {
       serviceDescription: s.serviceDescription,
       serviceDescriptionAr: s.serviceDescriptionAr,
       price: parseFloat(s.price) || 0,
-      employeeName: s.employeeName,
-      employeePhone: s.employeePhone,
+      description: s.description,
+      employees: s.employees.map(e => ({ id: e.id, name: e.name, phone: e.phone })),
+      // keep first employee flat for backwards compatibility with existing ServiceOrder type
+      employeeName: s.employees[0]?.name ?? '',
+      employeePhone: s.employees[0]?.phone ?? '',
       status: (editing?.services.find(item => item.id === s.id)?.status) ?? 'coming',
     }));
 
@@ -498,7 +515,6 @@ export default function ServiceOrdersPage() {
                 const svcDropdownValue = svc.serviceName
                   ? `${language === 'ar' ? (svc.serviceNameAr || svc.serviceName) : svc.serviceName}${svc.serviceNameAr && language !== 'ar' ? ` / ${svc.serviceNameAr}` : ''}${svc.serviceName && language === 'ar' && svc.serviceNameAr !== svc.serviceName ? ` / ${svc.serviceName}` : ''}`
                   : '';
-                const empDropdownValue = svc.employeeName ? svc.employeeName : '';
 
                 return (
                   <div key={svc.id} className="p-5 bg-secondary/5 rounded-2xl border border-secondary/10 relative space-y-4">
@@ -574,78 +590,132 @@ export default function ServiceOrdersPage() {
                       </div>
                     </div>
 
-                    {/* Assign Employee to this service */}
+                    {/* Employees for this service */}
                     <div className="space-y-3">
                       <div className="flex items-center justify-between">
                         <label className="flex items-center gap-2 text-sm font-medium text-secondary/80">
                           <UserPlus className="w-4 h-4 text-secondary/40" /> {t('assignEmployee')}
                         </label>
-                        <div className="flex bg-secondary/5 rounded-lg p-0.5 gap-0.5">
-                          {(['existing', 'new'] as const).map(mode => (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const copy = [...form.services];
+                            copy[index] = { ...copy[index], employees: [...copy[index].employees, createEmptyEmployee()] };
+                            setForm({ ...form, services: copy });
+                          }}
+                          className="flex items-center gap-1 text-[11px] font-semibold text-primary hover:text-primary-dark transition-colors cursor-pointer"
+                        >
+                          <Plus className="w-3 h-3" />
+                          {language === 'ar' ? 'إضافة موظف' : 'Add Employee'}
+                        </button>
+                      </div>
+
+
+
+                      {svc.employees.map((emp, empIdx) => (
+                        <div key={emp.uid} className="p-3 bg-white/40 rounded-xl border border-white/60 space-y-2">
+                          {/* Employee mode toggle + delete */}
+                          <div className="flex items-center justify-between">
+                            <div className="flex bg-secondary/5 rounded-lg p-0.5 gap-0.5">
+                              {(['existing', 'new'] as const).map(mode => (
+                                <button
+                                  key={mode}
+                                  type="button"
+                                  onClick={() => {
+                                    const copy = [...form.services];
+                                    const empCopy = [...copy[index].employees];
+                                    empCopy[empIdx] = { ...empCopy[empIdx], mode, id: undefined, name: '', phone: '' };
+                                    copy[index] = { ...copy[index], employees: empCopy };
+                                    setForm({ ...form, services: copy });
+                                  }}
+                                  className={cn('px-2.5 py-1 rounded-md text-[11px] font-semibold transition-all cursor-pointer',
+                                    emp.mode === mode ? 'bg-white text-secondary shadow-sm' : 'text-secondary/50 hover:text-secondary')}
+                                >
+                                  {mode === 'existing' ? t('existingEmployee') : t('addNewEmployee')}
+                                </button>
+                              ))}
+                            </div>
                             <button
-                              key={mode}
                               type="button"
                               onClick={() => {
                                 const copy = [...form.services];
-                                copy[index] = {
-                                  ...copy[index],
-                                  employeeMode: mode,
-                                  employeeId: '',
-                                  employeeName: '',
-                                  employeePhone: '',
-                                };
+                                copy[index] = { ...copy[index], employees: copy[index].employees.filter((_, i) => i !== empIdx) };
                                 setForm({ ...form, services: copy });
                               }}
-                              className={cn('px-2.5 py-1 rounded-md text-[11px] font-semibold transition-all cursor-pointer',
-                                svc.employeeMode === mode ? 'bg-white text-secondary shadow-sm' : 'text-secondary/50 hover:text-secondary')}
+                              className="text-red-400 hover:text-red-600 transition-colors cursor-pointer"
                             >
-                              {mode === 'existing' ? t('existingEmployee') : t('addNewEmployee')}
+                              <Trash2 className="w-3.5 h-3.5" />
                             </button>
-                          ))}
-                        </div>
-                      </div>
+                          </div>
 
-                      {svc.employeeMode === 'existing' ? (
-                        <Dropdown
-                          value={empDropdownValue}
-                          placeholder={t('chooseEmployeePlaceholder')}
-                          items={ORDER_MOCK_EMPLOYEES.map(e => ({ ...e, id: e.id.toString() }))}
-                          filterFn={(e, q) => e.name.toLowerCase().includes(q.toLowerCase()) || e.phone.includes(q)}
-                          label={e => e.name}
-                          sublabel={e => <span dir="ltr">{e.phone}</span>}
-                          onSelect={e => {
-                            const copy = [...form.services];
-                            copy[index] = { ...copy[index], employeeId: e.id, employeeName: e.name, employeePhone: e.phone };
-                            setForm({ ...form, services: copy });
-                          }}
-                        />
-                      ) : (
-                        <div className="grid grid-cols-2 gap-3">
-                          <input
-                            type="text"
-                            placeholder={t('employeeNamePlaceholder')}
-                            value={svc.employeeName}
-                            onChange={e => {
-                              const copy = [...form.services];
-                              copy[index] = { ...copy[index], employeeName: e.target.value };
-                              setForm({ ...form, services: copy });
-                            }}
-                            className="w-full px-4 py-3 rounded-xl bg-white/50 border border-white/60 focus:border-primary/50 focus:ring-2 focus:ring-primary/20 outline-none text-secondary text-sm"
-                          />
-                          <input
-                            type="tel"
-                            placeholder={t('phoneNumber')}
-                            value={svc.employeePhone}
-                            dir="ltr"
-                            onChange={e => {
-                              const copy = [...form.services];
-                              copy[index] = { ...copy[index], employeePhone: e.target.value };
-                              setForm({ ...form, services: copy });
-                            }}
-                            className="w-full px-4 py-3 rounded-xl bg-white/50 border border-white/60 focus:border-primary/50 focus:ring-2 focus:ring-primary/20 outline-none text-secondary text-sm"
-                          />
+                          {/* Employee input */}
+                          {emp.mode === 'existing' ? (
+                            <Dropdown
+                              value={emp.name}
+                              placeholder={t('chooseEmployeePlaceholder')}
+                              items={ORDER_MOCK_EMPLOYEES.map(e => ({ ...e, id: e.id.toString() }))}
+                              filterFn={(e, q) => e.name.toLowerCase().includes(q.toLowerCase()) || e.phone.includes(q)}
+                              label={e => e.name}
+                              sublabel={e => <span dir="ltr">{e.phone}</span>}
+                              onSelect={e => {
+                                const copy = [...form.services];
+                                const empCopy = [...copy[index].employees];
+                                empCopy[empIdx] = { ...empCopy[empIdx], id: e.id, name: e.name, phone: e.phone };
+                                copy[index] = { ...copy[index], employees: empCopy };
+                                setForm({ ...form, services: copy });
+                              }}
+                            />
+                          ) : (
+                            <div className="grid grid-cols-2 gap-2">
+                              <input
+                                type="text"
+                                placeholder={t('employeeNamePlaceholder')}
+                                value={emp.name}
+                                onChange={e => {
+                                  const copy = [...form.services];
+                                  const empCopy = [...copy[index].employees];
+                                  empCopy[empIdx] = { ...empCopy[empIdx], name: e.target.value };
+                                  copy[index] = { ...copy[index], employees: empCopy };
+                                  setForm({ ...form, services: copy });
+                                }}
+                                className="w-full px-3 py-2 rounded-lg bg-white/50 border border-white/60 focus:border-primary/50 focus:ring-2 focus:ring-primary/20 outline-none text-secondary text-sm"
+                              />
+                              <input
+                                type="tel"
+                                placeholder={t('phoneNumber')}
+                                value={emp.phone}
+                                dir="ltr"
+                                onChange={e => {
+                                  const copy = [...form.services];
+                                  const empCopy = [...copy[index].employees];
+                                  empCopy[empIdx] = { ...empCopy[empIdx], phone: e.target.value };
+                                  copy[index] = { ...copy[index], employees: empCopy };
+                                  setForm({ ...form, services: copy });
+                                }}
+                                className="w-full px-3 py-2 rounded-lg bg-white/50 border border-white/60 focus:border-primary/50 focus:ring-2 focus:ring-primary/20 outline-none text-secondary text-sm"
+                              />
+                            </div>
+                          )}
                         </div>
-                      )}
+                      ))}
+                    </div>
+
+                    {/* Per-service description */}
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium text-secondary/80">
+                        {t('otherDetails')} <span className="text-xs text-secondary/40">({t('optional')})</span>
+                      </label>
+                      <textarea
+                        rows={3}
+                        placeholder={t('detailsPlaceholder')}
+                        value={svc.description}
+                        onChange={e => {
+                          const copy = [...form.services];
+                          copy[index] = { ...copy[index], description: e.target.value };
+                          setForm({ ...form, services: copy });
+                        }}
+                        className="w-full px-4 py-3 rounded-xl bg-white/50 border border-white/60 focus:border-primary/50 focus:ring-2 focus:ring-primary/20 outline-none text-secondary text-sm resize-none"
+                      />
                     </div>
                   </div>
                 );
@@ -654,21 +724,11 @@ export default function ServiceOrdersPage() {
               <button
                 type="button"
                 onClick={() => setForm({ ...form, services: [...form.services, createEmptyServiceItem()] })}
-                className="text-xs font-bold text-primary hover:text-primary-dark flex items-center gap-1 cursor-pointer"
+                className="w-full text-xs font-bold text-white bg-primary hover:bg-primary-dark flex items-center gap-1 justify-center py-2 rounded cursor-pointer"
               >
                 <Plus className="w-4 h-4" />
                 {language === 'ar' ? 'إضافة خدمة أخرى' : 'Add Service'}
               </button>
-            </div>
-
-            {/* Description */}
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium text-secondary/80">
-                {t('otherDetails')} <span className="text-xs text-secondary/40">({t('optional')})</span>
-              </label>
-              <textarea rows={4} placeholder={t('detailsPlaceholder')} value={form.description}
-                onChange={e => setForm({ ...form, description: e.target.value })}
-                className="w-full px-4 py-3 rounded-xl bg-white/50 border border-white/60 focus:border-primary/50 focus:ring-2 focus:ring-primary/20 outline-none text-secondary text-sm resize-none" />
             </div>
 
             {/* Total readout */}

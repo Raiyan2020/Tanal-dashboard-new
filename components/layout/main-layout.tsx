@@ -18,6 +18,7 @@ import {
   Wallet,
   ShoppingBag,
   Layers,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Image from 'next/image';
@@ -31,6 +32,7 @@ const navItems = [
   { icon: MailPlus, id: 'invitations' },
   { icon: Layers, id: 'services' },
   { icon: ShoppingBag, id: 'serviceOrders' },
+  { icon: SlidersHorizontal, id: 'serviceOptions' },
   { icon: Briefcase, id: 'employees' },
   { icon: Wallet, id: 'financial' },
   { icon: Globe, id: 'landingPage' },
@@ -40,6 +42,7 @@ const navItems = [
 // Map nav ids that differ from their URL segment
 const NAV_ROUTES: Record<string, string> = {
   serviceOrders: '/service-orders',
+  serviceOptions: '/service-options',
   services: '/landingPage?s=services',
 };
 
@@ -58,9 +61,11 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
     ? 'dashboard'
     : pathname.startsWith('/service-orders')
       ? 'serviceOrders'
-      : pathname === '/landingPage' && searchParams.get('s') === 'services'
-        ? 'services'
-        : (pathname.replace('/', '').split('/')[0] || 'dashboard');
+      : pathname.startsWith('/service-options')
+        ? 'serviceOptions'
+        : pathname === '/landingPage' && searchParams.get('s') === 'services'
+          ? 'services'
+          : (pathname.replace('/', '').split('/')[0] || 'dashboard');
 
   const setActiveItem = (id: string) => {
     if (id === 'dashboard') { router.push('/'); return; }
