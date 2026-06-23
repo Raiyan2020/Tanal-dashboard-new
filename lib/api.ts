@@ -139,3 +139,56 @@ export async function updateProfile(
     token,
   });
 }
+
+/* ─── Dashboard Data Types & Request ────────────────────────── */
+export interface DashboardStat {
+  value: number;
+  growth: number;
+  trend: 'up' | 'down';
+  currency?: string;
+  formatted?: string;
+}
+
+export interface DashboardStats {
+  total_clients: DashboardStat;
+  upcoming_events: DashboardStat;
+  monthly_revenue: DashboardStat;
+  today_scans: DashboardStat;
+}
+
+export interface DashboardRevenueChart {
+  period: string;
+  currency: string;
+  labels: string[];
+  series: Array<{
+    name: string;
+    data: number[];
+  }>;
+  total: number;
+}
+
+export interface DashboardUpcomingEvent {
+  id: number;
+  event_date: string;
+  guest_count: number;
+  price: string;
+  status: string;
+  status_label: string;
+}
+
+export interface DashboardData {
+  stats: DashboardStats;
+  revenue_chart: DashboardRevenueChart;
+  upcoming_events: DashboardUpcomingEvent[];
+}
+
+/** GET /admin/dashboard — fetch dashboard stats/charts/events */
+export async function getDashboardData(
+  period: 'this_year' | 'this_month' | 'last_12_months' | 'last_6months' | 'all_time',
+  token: string
+): Promise<ApiResponse<DashboardData>> {
+  return apiRequest<DashboardData>(`/admin/dashboard?period=${period}`, {
+    method: 'GET',
+    token,
+  });
+}
