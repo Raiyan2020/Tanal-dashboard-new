@@ -15,14 +15,20 @@ import {
   Menu,
   Bell,
   LogOut,
+  Loader2,
   Wallet,
   ShoppingBag,
   Layers,
   SlidersHorizontal,
+  UserPen,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Image from 'next/image';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { clearAuth, getAdmin, getToken } from '@/lib/auth';
+import { logoutAdmin } from '@/lib/api';
+import type { Admin } from '@/lib/api';
+import { ProfileEditDialog } from './profile-edit-dialog';
 
 const navItems = [
   { icon: LayoutDashboard, id: 'dashboard' },
@@ -53,6 +59,11 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
 
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
+  const [profileEditOpen, setProfileEditOpen] = useState(false);
+
+  // Admin state — starts from localStorage, can be refreshed on profile update
+  const [admin, setAdmin] = useState<Admin | null>(() => getAdmin<Admin>());
 
   const searchParams = useSearchParams();
 
@@ -74,9 +85,23 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
 
   const toggleSidebar = () => setSidebarOpen(!sidebarOpen);
   const toggleLanguage = () => setLanguage(language === 'en' ? 'ar' : 'en');
-  const logout = () => router.push('/login');
+
+  const logout = async () => {
+    if (loggingOut) return;
+    setLoggingOut(true);
+    try {
+      const token = getToken();
+      if (token) await logoutAdmin(token);
+    } catch {
+      // swallow — always clear locally regardless
+    } finally {
+      clearAuth();
+      router.push('/login');
+    }
+  };
 
   return (
+    <>
     <div className="flex h-screen overflow-hidden luxury-gradient font-sans text-secondary">
       {/* Sidebar background overlay for mobile */}
       <AnimatePresence>
@@ -90,7 +115,6 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
           />
         )}
       </AnimatePresence>
-
       {/* Sidebar */}
       <motion.aside
         initial={false}
@@ -166,9 +190,12 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
         <div className="px-4 mt-auto pt-4 border-t border-secondary/5 mx-4">
           <button
             onClick={logout}
-            className="flex items-center w-full gap-4 px-3 py-3 rounded-2xl transition-all duration-300 text-secondary hover:bg-red-50/50 hover:text-red-600/80 group cursor-pointer"
+            disabled={loggingOut}
+            className="flex items-center w-full gap-4 px-3 py-3 rounded-2xl transition-all duration-300 text-secondary hover:bg-red-50/50 hover:text-red-600/80 group cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            <LogOut className="w-5 h-5 shrink-0 z-10" strokeWidth={1.5} />
+            {loggingOut
+              ? <Loader2 className="w-5 h-5 shrink-0 z-10 animate-spin" />
+              : <LogOut className="w-5 h-5 shrink-0 z-10" strokeWidth={1.5} />}
             <motion.span
               animate={{ opacity: sidebarOpen ? 1 : 0, width: sidebarOpen ? "auto" : 0 }}
               className="whitespace-nowrap z-10 text-sm font-normal"
@@ -229,14 +256,14 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
                 className="flex items-center gap-3 p-1 pr-3 rounded-full bg-white/40 hover:bg-white/60 transition-colors shadow-sm ring-1 ring-white/60 border border-transparent cursor-pointer rtl:pl-3 rtl:pr-1"
               >
                 <Image
-                  src="https://raiyansoft.com/wp-content/uploads/2026/06/Untitled-design.png"
+                  src={admin?.image ?? 'https://raiyansoft.com/wp-content/uploads/2026/06/Untitled-design.png'}
                   alt="Profile"
                   width={36}
                   height={36}
                   className="rounded-full ring-2 ring-white object-cover pointer-events-none"
                   referrerPolicy="no-referrer"
                 />
-                <span className="hidden sm:block text-sm font-medium pointer-events-none">Admin</span>
+                <span className="hidden sm:block text-sm font-medium pointer-events-none">{admin?.name ?? 'Admin'}</span>
               </button>
 
               <AnimatePresence>
@@ -256,15 +283,34 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
                         dir === 'rtl' ? 'left-0' : 'right-0'
                       )}
                     >
+                      {/* Edit Profile */}
+                      <button
+                        onClick={() => {
+                          setProfileOpen(false);
+                          setProfileEditOpen(true);
+                        }}
+                        className="w-full flex items-center gap-3 px-3 py-2 text-sm text-secondary hover:bg-secondary/8 rounded-xl transition-colors shrink-0 rtl:text-right cursor-pointer font-medium"
+                        dir={dir}
+                      >
+                        <UserPen className="w-4 h-4 shrink-0 text-primary" />
+                        {dir === 'rtl' ? 'تعديل الملف الشخصي' : 'Edit Profile'}
+                      </button>
+
+                      <div className="my-1 h-px bg-secondary/8" />
+
+                      {/* Logout */}
                       <button
                         onClick={() => {
                           setProfileOpen(false);
                           logout();
                         }}
-                        className="w-full flex items-center gap-3 px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-xl transition-colors shrink-0 rtl:text-right cursor-pointer font-medium"
+                        disabled={loggingOut}
+                        className="w-full flex items-center gap-3 px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-xl transition-colors shrink-0 rtl:text-right cursor-pointer font-medium disabled:opacity-60 disabled:cursor-not-allowed"
                         dir={dir}
                       >
-                        <LogOut className="w-4 h-4 shrink-0" />
+                        {loggingOut
+                          ? <Loader2 className="w-4 h-4 shrink-0 animate-spin" />
+                          : <LogOut className="w-4 h-4 shrink-0" />}
                         {t('logout' as any) || 'Logout'}
                       </button>
                     </motion.div>
@@ -294,7 +340,15 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
         </main>
       </div>
     </div>
-  );
+    {/* Profile Edit Dialog — rendered via portal to document.body */}
+    <ProfileEditDialog
+      open={profileEditOpen}
+      onClose={() => setProfileEditOpen(false)}
+      admin={admin}
+      onSuccess={(updated) => setAdmin(updated)}
+    />
+  </>
+);
 }
 
 export function MainLayout({ children }: { children: React.ReactNode }) {

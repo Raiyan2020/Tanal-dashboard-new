@@ -20,10 +20,10 @@ export default function GuestViewPage() {
   const dateAr = "السبت، ١٥ يونيو ٢٠٢٦";
   const timeEn = "8:00 PM";
   const timeAr = "٨:٠٠ مساءً";
-  const guestNameEn = "Mr. John Doe";
-  const guestNameAr = "السيد جون دو";
+  const guestNameEn = "Ahmed";
+  const guestNameAr = "أحمد";
   const guestPhone = "+965 1234 5678";
-  
+
   const hostPhone = "+965 9876 5432";
   const hostEmail = "host@example.com";
 
@@ -32,7 +32,7 @@ export default function GuestViewPage() {
       {/* Warning Popup */}
       {showWarning && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-xl ring-1 ring-black/5"
@@ -44,13 +44,13 @@ export default function GuestViewPage() {
               {dir === 'ltr' ? 'Please confirm that you cannot make it to the event.' : 'يرجى تأكيد عدم تمكنك من الحضور للحفل.'}
             </p>
             <div className="flex gap-3">
-              <button 
+              <button
                 onClick={() => setShowWarning(false)}
                 className="flex-1 py-3 px-4 rounded-xl border border-secondary/10 bg-secondary/5 font-medium hover:bg-secondary/10 transition-colors cursor-pointer"
               >
                 {dir === 'ltr' ? 'Cancel' : 'إلغاء'}
               </button>
-              <button 
+              <button
                 onClick={() => {
                   setShowWarning(false);
                   setHasDeclined(true);
@@ -67,10 +67,10 @@ export default function GuestViewPage() {
       {/* Decorative Background Elements */}
       <div className="fixed top-[-10%] right-[-5%] w-[600px] h-[600px] bg-primary/5 rounded-full blur-[100px] pointer-events-none mix-blend-multiply" />
       <div className="fixed bottom-[-10%] left-[-5%] w-[500px] h-[500px] bg-accent/10 rounded-full blur-[100px] pointer-events-none mix-blend-multiply" />
-      
+
       {/* Top Navigation */}
       <div className="p-4 sm:p-6 w-full flex items-start justify-between z-20 relative max-w-5xl mx-auto">
-        <button 
+        <button
           onClick={() => setLanguage(language === 'en' ? 'ar' : 'en')}
           className="px-4 py-2 bg-white/90 backdrop-blur-sm rounded-full shadow-sm ring-1 ring-black/5 flex items-center gap-2 hover:bg-white transition-colors cursor-pointer"
           title={dir === 'ltr' ? 'العربية' : 'English'}
@@ -78,7 +78,7 @@ export default function GuestViewPage() {
           <span className="font-medium text-sm text-secondary-dark">{dir === 'ltr' ? 'العربية' : 'English'}</span>
           <Globe className="w-4 h-4 text-secondary-dark/70" />
         </button>
-        
+
         <div className="absolute left-1/2 -translate-x-1/2 top-4 sm:top-6 pt-1 sm:pt-0">
           <Image
             src="https://raiyansoft.com/wp-content/uploads/2026/05/logo-2.png"
@@ -95,7 +95,7 @@ export default function GuestViewPage() {
 
       <div className="w-full max-w-md mx-auto px-4 z-10 relative">
         {hasDeclined ? (
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             className="text-center mt-12 bg-white/40 backdrop-blur-sm p-8 rounded-3xl ring-1 ring-white/50 shadow-sm border border-white/60"
@@ -106,12 +106,12 @@ export default function GuestViewPage() {
             <p className="text-secondary/80 text-lg mb-8 leading-relaxed">
               {dir === 'ltr' ? "We're sorry that you can't make it." : "نأسف لعدم تمكنك من الحضور للحفل."}
             </p>
-            
+
             <div className="bg-white/50 p-6 rounded-2xl ring-1 ring-white/50 border border-white/60">
               <p className="text-sm font-medium text-secondary/70 mb-5 leading-relaxed">
                 {dir === 'ltr' ? "If you change your mind, don't hesitate to contact us:" : "إذا غيرت رأيك، لا تتردد في التواصل معنا:"}
               </p>
-              
+
               <div className="flex justify-center">
                 <div className="flex items-center gap-3 bg-white/80 backdrop-blur-sm px-6 py-3 rounded-full shadow-sm ring-1 ring-black/5 hover:bg-white transition-colors cursor-pointer">
                   <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
@@ -125,7 +125,7 @@ export default function GuestViewPage() {
         ) : (
           <>
             {/* Header Section */}
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6 }}
@@ -137,14 +137,14 @@ export default function GuestViewPage() {
                   {dir === 'ltr' ? `Welcome, ${guestNameEn}` : `أهلاً بك، ${guestNameAr}`}
                 </p>
               </div>
-              
+
               <div className="inline-block px-4 py-1.5 rounded-full bg-primary/10 text-primary-dark text-sm font-medium mb-4">
                 {dir === 'ltr' ? "You're Invited" : "أنت مدعو"}
               </div>
               <h1 className={cn("text-3xl sm:text-4xl font-medium text-primary-dark mb-4", dir === 'ltr' ? 'font-serif' : 'font-arabic font-bold')}>
                 {dir === 'ltr' ? eventNameEn : eventNameAr}
               </h1>
-              
+
               <div className="flex flex-col gap-3 text-secondary/80 mt-8 items-center bg-white/30 p-5 rounded-3xl ring-1 ring-white/50 shadow-sm border border-white/60">
                 <div className="flex items-center gap-3">
                   <Calendar className="w-5 h-5 text-primary/70 shrink-0" />
@@ -192,7 +192,7 @@ export default function GuestViewPage() {
                 />
               </motion.div>
             </div>
-            
+
             {/* Guest Information Box */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -203,8 +203,8 @@ export default function GuestViewPage() {
               <p className="text-secondary/60 text-xs uppercase tracking-wider mb-3 font-medium">{dir === 'ltr' ? 'Guest Info' : 'معلومات الضيف'}</p>
               <p className={cn("text-xl font-semibold text-secondary-dark", dir === 'ltr' ? 'font-serif' : 'font-arabic')}>{dir === 'ltr' ? guestNameEn : guestNameAr}</p>
               <p className="text-secondary/70 mt-1 mb-6 font-mono text-sm" dir="ltr">{guestPhone}</p>
-              
-              <button 
+
+              <button
                 onClick={() => setShowWarning(true)}
                 className="w-full bg-red-50/80 hover:bg-red-100 text-red-600 border border-red-200/60 rounded-xl py-3 px-4 font-medium transition-colors shadow-sm cursor-pointer flex justify-center items-center gap-2"
               >
