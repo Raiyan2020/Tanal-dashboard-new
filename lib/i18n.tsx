@@ -16,6 +16,7 @@ const translations: Record<Language, Record<string, string>> = {
   en: {
     dashboard: 'Dashboard',
     admins: 'Admins',
+    roles: 'Roles & Permissions',
     events: 'Events',
     addAdmin: 'Add Admin',
     editAdmin: 'Edit Admin',
@@ -311,6 +312,7 @@ const translations: Record<Language, Record<string, string>> = {
   ar: {
     dashboard: 'لوحة التحكم',
     admins: 'المشرفين',
+    roles: 'الأدوار والصلاحيات',
     events: 'المناسبات',
     addAdmin: 'إضافة مشرف',
     editAdmin: 'تعديل المشرف',

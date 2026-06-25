@@ -3,6 +3,7 @@ import { Inter, Playfair_Display, Tajawal } from 'next/font/google';
 import './globals.css';
 import { LanguageProvider } from '@/lib/i18n';
 import { MainLayout } from '@/components/layout/main-layout';
+import { Toaster } from 'sonner';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -29,6 +30,7 @@ export default function RootLayout({children}: {children: React.ReactNode}) {
   return (
     <html lang="en" className={`${inter.variable} ${playfair.variable} ${tajawal.variable}`}>
       <body className="antialiased selection:bg-primary/20 selection:text-primary-dark" suppressHydrationWarning>
+        <Toaster position="top-center" richColors closeButton />
         <LanguageProvider>
           <MainLayout>
             {children}

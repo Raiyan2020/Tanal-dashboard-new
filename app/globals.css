@@ -84,3 +84,9 @@ body {
     -ms-overflow-style: none;
     scrollbar-width: none;
 }
+
+.rdp-root {
+  --rdp-accent-color: #857363;
+  --rdp-accent-background-color: rgba(133, 115, 99, 0.15);
+}
+
