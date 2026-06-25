@@ -1,36 +1,76 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   ArrowLeft, ArrowRight, Shield, Edit2, Trash2, 
   User, Phone, KeyRound, Copy, Calendar, 
-  QrCode, CheckCircle2, X
+  QrCode, CheckCircle2, X, Loader2, Plus
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useLanguage } from '@/lib/i18n';
 import { AssignEventsModal } from './AssignEventsModal';
 import { AttendanceDetails } from '../invitations/InvitationDetails';
+import { getEmployeeById, assignEmployeeEvents } from '@/lib/api';
+import type { ApiEmployeeDetail } from '@/lib/api';
+import { getToken } from '@/lib/auth';
+import { toast } from 'sonner';
 
-const MOCK_EVENTS = [
-  { id: '1001', name: 'Al Saud Royal Wedding', creationDate: 'Oct 24, 2026', guests: 850 },
-  { id: '1002', name: 'Al Rajhi Ceremony', creationDate: 'Nov 12, 2026', guests: 420 },
-  { id: '1003', name: 'Al Olayan Reception', creationDate: 'Dec 05, 2026', guests: 1200 },
-  { id: '1004', name: 'Al Jasser Wedding', creationDate: 'Jan 15, 2027', guests: 300 },
-  { id: '1005', name: 'Ahmad Wedding', creationDate: 'Aug 20, 2025', guests: 50 },
-];
+export function EmployeeDetails({ 
+  employee, 
+  onBack, 
+  onEdit, 
+  onDelete, 
+  onUpdate, 
+  onNavigateToEvent 
+}: { 
+  employee: any, 
+  onBack: () => void, 
+  onEdit: () => void, 
+  onDelete: () => void, 
+  onUpdate: () => void, 
+  onNavigateToEvent?: (id: string) => void 
+}) {
+  const { t, dir, language } = useLanguage();
+  const token = getToken() ?? '';
 
-export function EmployeeDetails({ employee, onBack, onEdit, onDelete, onUpdate, onNavigateToEvent }: { employee: any, onBack: () => void, onEdit: () => void, onDelete: () => void, onUpdate: (data: any) => void, onNavigateToEvent?: (id: string) => void }) {
-  const { t, dir } = useLanguage();
+  const [detail, setDetail] = useState<ApiEmployeeDetail | null>(null);
+  const [detailLoading, setDetailLoading] = useState(true);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [showAttendanceForEvent, setShowAttendanceForEvent] = useState<any | null>(null);
   const [activeEventTab, setActiveEventTab] = useState<'upcoming' | 'past'>('upcoming');
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
 
-  const assignedEventIds = employee.assignedEvents || [];
-  const allAssignedEvents = assignedEventIds.map((id: string) => MOCK_EVENTS.find(e => e.id === id)).filter(Boolean) as typeof MOCK_EVENTS;
-  
-  // Logic to separate past and upcoming. For mock purposes:
-  const upcomingEventsList = allAssignedEvents.filter(e => !e.id.endsWith('5'));
-  const pastEventsList = allAssignedEvents.filter(e => e.id.endsWith('5'));
+  const fetchDetail = useCallback(async () => {
+    if (!token || !employee.id) return;
+    setDetailLoading(true);
+    try {
+      const res = await getEmployeeById(employee.id, token);
+      setDetail(res.data);
+    } catch (err) {
+      toast.error((err as Error).message || 'فشل تحميل تفاصيل الموظف');
+    } finally {
+      setDetailLoading(false);
+    }
+  }, [token, employee.id]);
+
+  useEffect(() => {
+    fetchDetail();
+  }, [fetchDetail]);
+
+  const assignedEventIds = useMemo(() => {
+    if (!detail) return [];
+    const upcoming = detail.assigned_events?.upcoming || detail.upcomingEvents || [];
+    const past = detail.assigned_events?.past || detail.pastEvents || [];
+    return [...upcoming, ...past].map(e => String(e.id));
+  }, [detail]);
+
+  const upcomingEventsList = useMemo(() => {
+    return detail?.assigned_events?.upcoming || detail?.upcomingEvents || [];
+  }, [detail]);
+
+  const pastEventsList = useMemo(() => {
+    return detail?.assigned_events?.past || detail?.pastEvents || [];
+  }, [detail]);
+
   const displayedEventsList = activeEventTab === 'upcoming' ? upcomingEventsList : pastEventsList;
 
   useEffect(() => {
@@ -45,11 +85,42 @@ export function EmployeeDetails({ employee, onBack, onEdit, onDelete, onUpdate, 
     setToastMessage(`${type} copied to clipboard!`);
   };
 
+  const handleUnassign = async (eventId: number) => {
+    if (!token || !detail) return;
+    const saveToast = toast.loading(language === 'ar' ? 'جاري إلغاء التعيين...' : 'Unassigning event...');
+    try {
+      const updatedIds = assignedEventIds.map(Number).filter(id => id !== eventId);
+      await assignEmployeeEvents(detail.id, updatedIds, token);
+      toast.success(t('unassignEventSuccess' as any) || 'Event unassigned successfully');
+      fetchDetail();
+      onUpdate(); // refresh listing page
+    } catch (err) {
+      toast.error((err as Error).message || 'فشل إلغاء تعيين المناسبة');
+    } finally {
+      toast.dismiss(saveToast);
+    }
+  };
+
+  const handleAssignSubmit = async (selectedIds: number[]) => {
+    if (!token || !detail) return;
+    const saveToast = toast.loading(language === 'ar' ? 'جاري تعيين المناسبات...' : 'Assigning events...');
+    try {
+      await assignEmployeeEvents(detail.id, selectedIds, token);
+      toast.success(language === 'ar' ? 'تم تعيين المناسبات بنجاح' : 'Events assigned successfully');
+      fetchDetail();
+      onUpdate(); // refresh listing page
+    } catch (err) {
+      toast.error((err as Error).message || 'فشل تعيين المناسبات للموظف');
+    } finally {
+      toast.dismiss(saveToast);
+    }
+  };
+
   if (showAttendanceForEvent) {
     return (
       <AttendanceDetails
         onBack={() => setShowAttendanceForEvent(null)}
-        attendanceNumber={Math.floor(showAttendanceForEvent.guests * 0.85)}
+        attendanceNumber={Math.floor(showAttendanceForEvent.guests || 0 * 0.85)}
         employeeName={employee.name}
       />
     );
@@ -85,7 +156,7 @@ export function EmployeeDetails({ employee, onBack, onEdit, onDelete, onUpdate, 
           >
             {dir === 'ltr' ? <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" /> : <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5" />}
           </button>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 text-start">
             <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center border border-primary/20 shrink-0">
               <Shield className="w-5 h-5 text-primary" />
             </div>
@@ -93,7 +164,7 @@ export function EmployeeDetails({ employee, onBack, onEdit, onDelete, onUpdate, 
               <h2 className={cn("text-2xl font-medium text-secondary flex items-center gap-2", dir === 'ltr' ? 'font-serif' : 'font-arabic font-bold')}>
                 {employee.name}
               </h2>
-              <span className="text-sm text-secondary/60 font-mono">#{employee.id}</span>
+              <span className="text-sm text-secondary/60 font-mono">{employee.reference_label}</span>
             </div>
           </div>
         </div>
@@ -116,188 +187,168 @@ export function EmployeeDetails({ employee, onBack, onEdit, onDelete, onUpdate, 
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="space-y-6 md:col-span-1">
-          <div className="glass-panel p-6 rounded-3xl space-y-5">
-            <h3 className="font-semibold text-secondary flex items-center gap-2">
-              <User className="w-5 h-5 text-primary" />
-              Employee Details
-            </h3>
-            <div className="space-y-4">
-              <div className="flex items-center gap-3 p-3 rounded-2xl bg-white/50 border border-secondary/5">
-                <div className="w-10 h-10 rounded-xl bg-secondary/5 flex items-center justify-center shrink-0">
-                  <Phone className="w-5 h-5 text-secondary/60" />
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-xs font-medium text-secondary/60">{t('phone' as any) || 'Phone'}</span>
-                  <span className="text-sm font-semibold text-secondary" dir="ltr">{employee.phone}</span>
-                </div>
-              </div>
-              <div className="flex items-center justify-between gap-3 p-3 rounded-2xl bg-white/50 border border-secondary/5 group">
-                <div className="flex items-center gap-3">
+      {detailLoading ? (
+        <div className="flex justify-center items-center py-20">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      ) : detail ? (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="space-y-6 md:col-span-1">
+            <div className="glass-panel p-6 rounded-3xl space-y-5 text-start">
+              <h3 className="font-semibold text-secondary flex items-center gap-2">
+                <User className="w-5 h-5 text-primary" />
+                {language === 'ar' ? 'تفاصيل الموظف' : 'Employee Details'}
+              </h3>
+              <div className="space-y-4">
+                <div className="flex items-center gap-3 p-3 rounded-2xl bg-white/50 border border-secondary/5">
                   <div className="w-10 h-10 rounded-xl bg-secondary/5 flex items-center justify-center shrink-0">
-                    <User className="w-5 h-5 text-secondary/60" />
+                    <Phone className="w-5 h-5 text-secondary/60" />
                   </div>
                   <div className="flex flex-col">
-                    <span className="text-xs font-medium text-secondary/60">{t('username' as any) || 'Username'}</span>
-                    <span className="text-sm font-semibold text-secondary">{employee.username}</span>
+                    <span className="text-xs font-medium text-secondary/60">{t('phone' as any) || 'Phone'}</span>
+                    <span className="text-sm font-semibold text-secondary" dir="ltr">{detail.full_phone}</span>
                   </div>
                 </div>
-                <button
-                  onClick={() => handleCopy(employee.username, t('username' as any) || 'Username')}
-                  className="p-2 text-secondary/40 hover:text-primary hover:bg-primary/5 rounded-xl transition-all cursor-pointer"
-                  title="Copy"
-                >
-                  <Copy className="w-4 h-4" />
-                </button>
-              </div>
-              <div className="flex items-center justify-between gap-3 p-3 rounded-2xl bg-white/50 border border-secondary/5 group">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-secondary/5 flex items-center justify-center shrink-0">
-                    <KeyRound className="w-5 h-5 text-secondary/60" />
+                <div className="flex items-center justify-between gap-3 p-3 rounded-2xl bg-white/50 border border-secondary/5 group">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-secondary/5 flex items-center justify-center shrink-0">
+                      <User className="w-5 h-5 text-secondary/60" />
+                    </div>
+                    <div className="flex flex-col text-start">
+                      <span className="text-xs font-medium text-secondary/60">{t('username' as any) || 'Username'}</span>
+                      <span className="text-sm font-semibold text-secondary">@{detail.username}</span>
+                    </div>
                   </div>
-                  <div className="flex flex-col">
-                    <span className="text-xs font-medium text-secondary/60">{t('password' as any) || 'Password'}</span>
-                    <span className="text-sm font-semibold text-secondary">{employee.password}</span>
+                  <button
+                    onClick={() => handleCopy(detail.username, t('username' as any) || 'Username')}
+                    className="p-2 text-secondary/40 hover:text-primary hover:bg-primary/5 rounded-xl transition-all cursor-pointer"
+                    title="Copy"
+                  >
+                    <Copy className="w-4 h-4" />
+                  </button>
+                </div>
+                <div className="flex items-center justify-between gap-3 p-3 rounded-2xl bg-white/50 border border-secondary/5 group">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-secondary/5 flex items-center justify-center shrink-0">
+                      <KeyRound className="w-5 h-5 text-secondary/60" />
+                    </div>
+                    <div className="flex flex-col text-start">
+                      <span className="text-xs font-medium text-secondary/60">{t('password' as any) || 'Password'}</span>
+                      <span className="text-sm font-semibold text-secondary">••••••••</span>
+                    </div>
                   </div>
                 </div>
-                <button
-                  onClick={() => handleCopy(employee.password, t('password' as any) || 'Password')}
-                  className="p-2 text-secondary/40 hover:text-primary hover:bg-primary/5 rounded-xl transition-all cursor-pointer"
-                  title="Copy"
-                >
-                  <Copy className="w-4 h-4" />
-                </button>
               </div>
             </div>
           </div>
-        </div>
 
-        <div className="md:col-span-2 space-y-6">
-          <div className="glass-panel p-6 rounded-3xl">
-            <div className="flex flex-col gap-4 mb-6">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <h3 className="font-semibold text-secondary flex items-center gap-2">
-                  <Calendar className="w-5 h-5 text-primary" />
-                  {t('eventsResponsible' as any) || 'Events Responsible'}
-                  <span className="text-xs bg-secondary/10 px-2 py-0.5 rounded-full text-secondary/70">
-                    {allAssignedEvents.length}
-                  </span>
-                </h3>
-                <div className="flex items-center gap-2 bg-secondary/5 rounded-full p-1 border border-secondary/10 w-fit self-start sm:self-auto">
-                  <button
-                    onClick={() => setActiveEventTab('upcoming')}
-                    className={cn(
-                      "px-3 py-1.5 text-xs font-medium rounded-full transition-all cursor-pointer",
-                      activeEventTab === 'upcoming' ? "bg-white text-primary shadow-sm ring-1 ring-black/5" : "text-secondary/60 hover:text-secondary"
-                    )}
-                  >
-                    {t('upcomingEvents' as any) || 'Upcoming'}
-                    <span className="ml-1.5 text-[10px] opacity-70">({upcomingEventsList.length})</span>
-                  </button>
-                  <button
-                    onClick={() => setActiveEventTab('past')}
-                    className={cn(
-                      "px-3 py-1.5 text-xs font-medium rounded-full transition-all cursor-pointer",
-                      activeEventTab === 'past' ? "bg-white text-primary shadow-sm ring-1 ring-black/5" : "text-secondary/60 hover:text-secondary"
-                    )}
-                  >
-                    {t('pastEvents' as any) || 'Past'}
-                    <span className="ml-1.5 text-[10px] opacity-70">({pastEventsList.length})</span>
-                  </button>
+          <div className="md:col-span-2 space-y-6">
+            <div className="glass-panel p-6 rounded-3xl">
+              <div className="flex flex-col gap-4 mb-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <h3 className="font-semibold text-secondary flex items-center gap-2">
+                    <Calendar className="w-5 h-5 text-primary" />
+                    {t('eventsResponsible' as any) || 'Events Responsible'}
+                    <span className="text-xs bg-secondary/10 px-2 py-0.5 rounded-full text-secondary/70">
+                      {upcomingEventsList.length + pastEventsList.length}
+                    </span>
+                  </h3>
+                  <div className="flex items-center gap-2 bg-secondary/5 rounded-full p-1 border border-secondary/10 w-fit self-start sm:self-auto">
+                    <button
+                      onClick={() => setActiveEventTab('upcoming')}
+                      className={cn(
+                        "px-3 py-1.5 text-xs font-medium rounded-full transition-all cursor-pointer",
+                        activeEventTab === 'upcoming' ? "bg-white text-primary shadow-sm ring-1 ring-black/5" : "text-secondary/60 hover:text-secondary"
+                      )}
+                    >
+                      {t('upcomingEvents' as any) || 'Upcoming'}
+                      <span className="ml-1.5 text-[10px] opacity-70">({upcomingEventsList.length})</span>
+                    </button>
+                    <button
+                      onClick={() => setActiveEventTab('past')}
+                      className={cn(
+                        "px-3 py-1.5 text-xs font-medium rounded-full transition-all cursor-pointer",
+                        activeEventTab === 'past' ? "bg-white text-primary shadow-sm ring-1 ring-black/5" : "text-secondary/60 hover:text-secondary"
+                      )}
+                    >
+                      {t('pastEvents' as any) || 'Past'}
+                      <span className="ml-1.5 text-[10px] opacity-70">({pastEventsList.length})</span>
+                    </button>
+                  </div>
                 </div>
+                <button
+                  onClick={() => setIsAssignModalOpen(true)}
+                  className="w-full px-4 py-2.5 bg-primary hover:bg-primary-dark text-white rounded-xl text-sm font-medium transition-colors shadow-sm shadow-primary/20 flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  {language === 'ar' ? 'تعيين مناسبات' : 'Assign Events'}
+                </button>
               </div>
-              <button
-                onClick={() => setIsAssignModalOpen(true)}
-                className="w-full px-4 py-2.5 bg-primary hover:bg-primary-dark text-white rounded-xl text-sm font-medium transition-colors shadow-sm shadow-primary/20 flex items-center justify-center cursor-pointer"
-              >
-                Assign Events
-              </button>
-            </div>
 
-            {displayedEventsList.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-10 px-4 text-center">
-                <Calendar className="w-12 h-12 text-secondary/20 mb-3" />
-                <p className="text-secondary/60">No {activeEventTab} events assigned to this employee.</p>
-              </div>
-            ) : (
-              <div className="flex flex-col gap-3">
-                {displayedEventsList.map(event => (
-                  <div 
-                    key={event.id} 
-                    onClick={() => onNavigateToEvent && onNavigateToEvent(event.id)}
-                    className="p-4 rounded-2xl bg-white/40 border border-secondary/5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 group cursor-pointer hover:bg-white/60 hover:border-secondary/10 transition-all"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                        <Calendar className="w-5 h-5" />
-                      </div>
-                      <div className="flex flex-col min-w-0">
-                        <h4 className="font-medium text-secondary truncate">{event.name}</h4>
-                        <div className="flex flex-wrap items-center text-xs text-secondary/60 gap-1.5 mt-1">
-                          <span>{event.creationDate}</span>
-                          <span className="w-1 h-1 rounded-full bg-secondary/20" />
-                          <span className="font-mono">#{event.id}</span>
-                          {activeEventTab === 'past' && (
-                            <>
-                              <span className="w-1 h-1 rounded-full bg-secondary/20" />
-                              <span className="flex items-center gap-1 text-emerald-600 font-medium">
-                                <QrCode className="w-3.5 h-3.5" />
-                                {Math.floor(event.guests * 0.85)} {t('scansMade' as any) || 'Scans Made'}
-                              </span>
-                            </>
-                          )}
+              {displayedEventsList.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-10 px-4 text-center">
+                  <Calendar className="w-12 h-12 text-secondary/20 mb-3" />
+                  <p className="text-secondary/60">{language === 'ar' ? 'لا توجد مناسبات معينة لهذا الموظف.' : `No ${activeEventTab} events assigned to this employee.`}</p>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-3">
+                  {displayedEventsList.map(event => (
+                    <div 
+                      key={event.id} 
+                      onClick={() => onNavigateToEvent && onNavigateToEvent(String(event.id))}
+                      className="p-4 rounded-2xl bg-white/40 border border-secondary/5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 group cursor-pointer hover:bg-white/60 hover:border-secondary/10 transition-all text-start"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                          <Calendar className="w-5 h-5" />
+                        </div>
+                        <div className="flex flex-col min-w-0">
+                          <h4 className="font-medium text-secondary truncate">{event.name}</h4>
+                          <div className="flex flex-wrap items-center text-xs text-secondary/60 gap-1.5 mt-1">
+                            <span>{event.event_date}</span>
+                            <span className="w-1 h-1 rounded-full bg-secondary/20" />
+                            <span className="font-mono">{event.reference_label}</span>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                    <div className="flex items-center gap-2 mt-2 sm:mt-0 self-end sm:self-auto shrink-0">
-                      {activeEventTab === 'past' && (
+                      <div className="flex items-center gap-2 mt-2 sm:mt-0 self-end sm:self-auto shrink-0" onClick={e => e.stopPropagation()}>
                         <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setShowAttendanceForEvent(event);
-                          }}
-                          className="px-3 py-1.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 cursor-pointer"
-                          title="QR Check-ins"
+                          onClick={() => handleUnassign(event.id)}
+                          className="p-2 bg-red-50 text-red-500 hover:bg-red-100 hover:text-red-600 rounded-lg transition-colors flex items-center justify-center cursor-pointer"
+                          title={t('unassignEvent' as any) || 'Unassign'}
                         >
-                          <QrCode className="w-3.5 h-3.5" />
-                          {t('qrCheckIns' as any) || 'QR Check-ins'}
+                          <Trash2 className="w-4 h-4" />
                         </button>
-                      )}
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (onUpdate) {
-                            const updatedEvents = assignedEventIds.filter((id: string) => id !== event.id);
-                            onUpdate({ ...employee, assignedEvents: updatedEvents, eventsResponsible: updatedEvents.length });
-                            setToastMessage(t('unassignEventSuccess' as any) || 'Event unassigned successfully');
-                          }
-                        }}
-                        className="p-2 bg-red-50 text-red-500 hover:bg-red-100 hover:text-red-600 rounded-lg transition-colors flex items-center justify-center cursor-pointer"
-                        title={t('unassignEvent' as any) || 'Unassign'}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
-            )}
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
-      </div>
+      ) : (
+        <div className="flex flex-col items-center justify-center py-20 text-secondary/40 text-center">
+          <AlertCircle className="w-10 h-10 mb-3 opacity-50" />
+          <p className="text-sm">{language === 'ar' ? 'فشل تحميل البيانات.' : 'Error loading details.'}</p>
+        </div>
+      )}
 
-      <AssignEventsModal
-        isOpen={isAssignModalOpen}
-        onClose={() => setIsAssignModalOpen(false)}
-        assignedEventIds={assignedEventIds}
-        currentEmployeeId={employee.id}
-        onAssign={(selectedIds) => {
-          if (onUpdate) {
-            onUpdate({ ...employee, assignedEvents: selectedIds, eventsResponsible: selectedIds.length });
-          }
-        }}
-      />
+      {isAssignModalOpen && (
+        <AssignEventsModal
+          isOpen={isAssignModalOpen}
+          onClose={() => setIsAssignModalOpen(false)}
+          assignedEventIds={assignedEventIds}
+          currentEmployeeId={employee.id}
+          onAssign={handleAssignSubmit}
+        />
+      )}
     </div>
+  );
+}
+
+function AlertCircle({ className }: { className?: string }) {
+  return (
+    <svg className={className} width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" x2="12" y1="8" y2="12" /><line x1="12" x2="12.01" y1="16" y2="16" /></svg>
   );
 }

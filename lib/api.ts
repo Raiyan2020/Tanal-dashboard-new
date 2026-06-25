@@ -1047,6 +1047,7 @@ export interface ApiServiceOption {
   sort: number;
   requires_values: boolean;
   values: ApiServiceOptionValue[];
+  values_count?: number;
 }
 
 export interface ApiServiceDetail extends ApiService {
@@ -1146,6 +1147,190 @@ export async function deleteService(
 ): Promise<ApiResponse<unknown>> {
   return apiRequest(`/admin/services/${id}`, {
     method: 'DELETE',
+    token,
+  });
+}
+
+/* ─── Service Options ─── */
+
+export interface GetServiceOptionsParams {
+  page?: number;
+  per_page?: number;
+}
+
+/** GET /admin/services/:serviceId/options */
+export async function getServiceOptions(
+  serviceId: number,
+  params: GetServiceOptionsParams,
+  token: string
+): Promise<ApiResponse<PaginatedItems<ApiServiceOption>>> {
+  const query = new URLSearchParams();
+  if (params.page !== undefined) query.set('page', String(params.page));
+  if (params.per_page !== undefined) query.set('per_page', String(params.per_page));
+  const qs = query.toString();
+  return apiRequest<PaginatedItems<ApiServiceOption>>(
+    `/admin/services/1/options${qs ? `?${qs}` : ''}`,
+    { token }
+  );
+}
+
+/* ─── Employees CRUD ─── */
+
+export interface ApiEmployee {
+  id: number;
+  reference_number: number;
+  reference_label: string;
+  name: string;
+  username: string;
+  country_code: string;
+  phone: string;
+  full_phone: string;
+  assigned_events_count: number;
+  is_active?: boolean;
+}
+
+export interface ApiEmployeeEvent {
+  id: number;
+  reference_number: number;
+  reference_label: string;
+  name: string;
+  event_date: string;
+}
+
+export interface ApiEmployeeDetail extends ApiEmployee {
+  upcomingEvents?: ApiEmployeeEvent[];
+  pastEvents?: ApiEmployeeEvent[];
+  assigned_events?: {
+    upcoming: ApiEmployeeEvent[];
+    past: ApiEmployeeEvent[];
+    upcoming_count: number;
+    past_count: number;
+    total_count: number;
+  };
+}
+
+export interface ApiAssignableEvent {
+  id: number;
+  reference_number: number;
+  reference_label: string;
+  name: string;
+  event_date: string;
+  is_assigned: boolean;
+  other_staff?: { id: number; name: string }[];
+}
+
+export interface GetEmployeesParams {
+  page?: number;
+  per_page?: number;
+  keyword?: string;
+}
+
+export interface CreateEmployeePayload {
+  name: string;
+  username: string;
+  password?: string;
+  country_code: string;
+  phone: string;
+  is_active?: boolean;
+}
+
+/** GET /admin/employees */
+export async function getEmployees(
+  params: GetEmployeesParams,
+  token: string
+): Promise<ApiResponse<PaginatedItems<ApiEmployee>>> {
+  const query = new URLSearchParams();
+  if (params.page !== undefined) query.set('page', String(params.page));
+  if (params.per_page !== undefined) query.set('per_page', String(params.per_page));
+  if (params.keyword !== undefined && params.keyword !== '') {
+    query.set('filters[keyword]', params.keyword);
+  }
+  const qs = query.toString();
+  return apiRequest<PaginatedItems<ApiEmployee>>(`/admin/employees${qs ? `?${qs}` : ''}`, { token });
+}
+
+/** GET /admin/employees/:id */
+export async function getEmployeeById(
+  id: number,
+  token: string
+): Promise<ApiResponse<ApiEmployeeDetail>> {
+  return apiRequest<ApiEmployeeDetail>(`/admin/employees/${id}`, { token });
+}
+
+/** POST /admin/employees */
+export async function createEmployee(
+  payload: CreateEmployeePayload,
+  token: string
+): Promise<ApiResponse<ApiEmployee>> {
+  const formData = new FormData();
+  formData.append('name', payload.name);
+  formData.append('username', payload.username);
+  if (payload.password) {
+    formData.append('password', payload.password);
+  }
+  formData.append('country_code', payload.country_code);
+  formData.append('phone', payload.phone);
+  if (payload.is_active !== undefined) {
+    formData.append('is_active', payload.is_active ? '1' : '0');
+  }
+  return apiRequest<ApiEmployee>('/admin/employees', {
+    method: 'POST',
+    body: formData,
+    token,
+  });
+}
+
+/** POST /admin/employees/:id?_method=put */
+export async function updateEmployee(
+  id: number,
+  payload: CreateEmployeePayload,
+  token: string
+): Promise<ApiResponse<ApiEmployee>> {
+  const formData = new FormData();
+  formData.append('name', payload.name);
+  formData.append('username', payload.username);
+  if (payload.password) {
+    formData.append('password', payload.password);
+  }
+  formData.append('country_code', payload.country_code);
+  formData.append('phone', payload.phone);
+  return apiRequest<ApiEmployee>(`/admin/employees/${id}?_method=put`, {
+    method: 'POST',
+    body: formData,
+    token,
+  });
+}
+
+/** DELETE /admin/employees/:id */
+export async function deleteEmployee(
+  id: number,
+  token: string
+): Promise<ApiResponse<unknown>> {
+  return apiRequest(`/admin/employees/${id}`, {
+    method: 'DELETE',
+    token,
+  });
+}
+
+/** GET /admin/employees/:id/assignable-events */
+export async function getEmployeeAssignableEvents(
+  id: number,
+  token: string
+): Promise<ApiResponse<PaginatedItems<ApiAssignableEvent>>> {
+  return apiRequest<PaginatedItems<ApiAssignableEvent>>(`/admin/employees/${id}/assignable-events`, {
+    token,
+  });
+}
+
+/** PUT /admin/employees/:id/events */
+export async function assignEmployeeEvents(
+  id: number,
+  eventIds: number[],
+  token: string
+): Promise<ApiResponse<ApiEmployeeDetail>> {
+  return apiRequest<ApiEmployeeDetail>(`/admin/employees/${id}/events`, {
+    method: 'PUT',
+    body: { event_ids: eventIds },
     token,
   });
 }

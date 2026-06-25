@@ -431,14 +431,14 @@ export default function ServiceOptionsPage() {
   const serviceOptions = useMemo(() => {
     return serviceDetail?.options
       ? serviceDetail.options.map((opt) => ({
-          id: String(opt.id),
-          serviceId: String(opt.service_id),
-          nameEn: opt.name,
-          nameAr: opt.name,
-          type: apiToUiOptionType(opt.type),
-          required: opt.is_required,
-          order: opt.sort,
-        }))
+        id: String(opt.id),
+        serviceId: String(opt.service_id),
+        nameEn: opt.name,
+        nameAr: opt.name,
+        type: apiToUiOptionType(opt.type),
+        required: opt.is_required,
+        order: opt.sort,
+      }))
       : [];
   }, [serviceDetail]);
 
@@ -868,13 +868,7 @@ export default function ServiceOptionsPage() {
 
                   {/* Actions */}
                   <div className="flex items-center gap-1.5 shrink-0">
-                    <button
-                      onClick={() => openEdit(opt)}
-                      className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-primary bg-primary/10 hover:bg-primary/20 rounded-lg transition-colors cursor-pointer"
-                    >
-                      <Edit2 className="w-3.5 h-3.5" />
-                      {t('edit')}
-                    </button>
+
                     <button
                       onClick={() => setDeleteTarget(opt)}
                       className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-red-500 bg-red-50 hover:bg-red-100 rounded-lg transition-colors cursor-pointer"
@@ -898,14 +892,10 @@ export default function ServiceOptionsPage() {
           </span>
           <div className="flex gap-2 flex-wrap">
             {(Object.keys(OPTION_TYPE_LABELS) as OptionType[]).map(type => {
-              const cnt = serviceOptions.filter((o: any) => o.type === type).length;
-              if (cnt === 0) return null;
-              const Icon = TYPE_ICONS[type];
-              const meta = OPTION_TYPE_LABELS[type];
+
               return (
                 <span key={type} className={cn('flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold', TYPE_COLORS[type])}>
-                  {Icon && <Icon className="w-3 h-3" />}
-                  {language === 'ar' ? meta.ar : meta.en}: {cnt}
+                  {type}
                 </span>
               );
             })}

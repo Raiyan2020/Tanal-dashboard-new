@@ -11,25 +11,27 @@ interface EmployeeEditFormProps {
 }
 
 export function EmployeeEditForm({ employee, onBack, onSave }: EmployeeEditFormProps) {
-  const { t, dir } = useLanguage();
+  const { t, dir, language } = useLanguage();
   const [name, setName] = useState(employee?.name || '');
-  const [phoneExt, setPhoneExt] = useState('SA +966');
-  const [phoneStr, setPhoneStr] = useState(employee?.phone.replace(/^\+966\s*/, '') || '');
+  const [countryCode, setCountryCode] = useState(employee?.country_code || '+966');
+  const [phone, setPhone] = useState(employee?.phone || '');
   const [username, setUsername] = useState(employee?.username || '');
-  const [password, setPassword] = useState(employee?.password || '');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSave({
-      id: employee?.id || Math.floor(Math.random() * 10000),
+    const payload: any = {
       name,
-      phone: `+966 ${phoneStr}`,
       username,
-      password,
-      eventsResponsible: employee?.eventsResponsible || 0,
-      assignedEvents: employee?.assignedEvents || []
-    });
+      country_code: countryCode,
+      phone,
+    };
+    // Only send password if filled (especially on edit)
+    if (password.trim() !== '') {
+      payload.password = password;
+    }
+    onSave(payload);
   };
 
   return (
@@ -37,7 +39,7 @@ export function EmployeeEditForm({ employee, onBack, onSave }: EmployeeEditFormP
       initial={{ opacity: 0, x: dir === 'ltr' ? 20 : -20 }}
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: dir === 'ltr' ? -20 : 20 }}
-      className="space-y-6 pb-10 w-full"
+      className="space-y-6 pb-10 w-full text-start"
     >
       <div className="flex items-center justify-start mb-2">
         <button
@@ -59,6 +61,7 @@ export function EmployeeEditForm({ employee, onBack, onSave }: EmployeeEditFormP
         </h2>
 
         <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Full Name */}
           <div className="space-y-2">
             <label className="text-sm font-medium text-secondary/80 ml-1 flex items-center gap-2">
               {t('fullName' as any) || 'Full Name'} <span className="text-red-500">*</span>
@@ -72,18 +75,20 @@ export function EmployeeEditForm({ employee, onBack, onSave }: EmployeeEditFormP
             />
           </div>
 
+          {/* Phone Number */}
           <div className="space-y-2">
             <label className="text-sm font-medium text-secondary/80 ml-1 flex items-center gap-2">
               {t('phoneNumber' as any) || 'Phone Number'} <span className="text-red-500">*</span>
             </label>
             <div className="flex gap-2">
-              <div className="relative shrink-0 w-[120px]">
+              <div className="relative shrink-0 w-[140px]">
                 <select
-                  value={phoneExt}
-                  onChange={e => setPhoneExt(e.target.value)}
+                  value={countryCode}
+                  onChange={e => setCountryCode(e.target.value)}
                   className="w-full appearance-none bg-white/50 border border-secondary/20 focus:border-primary/50 focus:ring-2 focus:ring-primary/20 rounded-xl py-3 pl-4 pr-10 transition-all outline-none text-secondary text-sm font-medium h-full cursor-pointer"
                 >
-                  <option>SA +966</option>
+                  <option value="+966">SA (+966)</option>
+                  <option value="+965">KW (+965)</option>
                 </select>
                 <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-secondary/50">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>
@@ -91,15 +96,17 @@ export function EmployeeEditForm({ employee, onBack, onSave }: EmployeeEditFormP
               </div>
               <input
                 type="tel"
-                value={phoneStr}
-                onChange={(e) => setPhoneStr(e.target.value)}
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
                 required
                 dir="ltr"
+                placeholder="500000000"
                 className="flex-1 min-w-0 bg-white/50 border border-secondary/20 focus:border-primary/50 focus:ring-2 focus:ring-primary/20 rounded-xl py-3 px-4 transition-all outline-none text-secondary"
               />
             </div>
           </div>
 
+          {/* Username */}
           <div className="space-y-2">
             <label className="text-sm font-medium text-secondary/80 ml-1 flex items-center gap-2">
               {t('username' as any) || 'Username'} <span className="text-red-500">*</span>
@@ -113,17 +120,19 @@ export function EmployeeEditForm({ employee, onBack, onSave }: EmployeeEditFormP
             />
           </div>
 
+          {/* Password */}
           <div className="space-y-2">
             <label className="text-sm font-medium text-secondary/80 ml-1 flex items-center gap-2">
-              {t('password' as any) || 'Password'} <span className="text-red-500">*</span>
+              {t('password' as any) || 'Password'} {!employee && <span className="text-red-500">*</span>}
             </label>
             <div className="relative">
               <input
                 type={showPassword ? "text" : "password"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                required
-                className="w-full bg-white/50 border border-secondary/20 focus:border-primary/50 focus:ring-2 focus:ring-primary/20 rounded-xl py-3 px-4 pr-12 transition-all outline-none text-secondary tracking-widest font-mono"
+                required={!employee}
+                placeholder={employee ? (language === 'ar' ? 'اتركه فارغاً لإبقائه كما هو' : 'Leave empty to keep current') : ''}
+                className="w-full bg-white/50 border border-secondary/20 focus:border-primary/50 focus:ring-2 focus:ring-primary/20 rounded-xl py-3 px-4 pr-12 transition-all outline-none text-secondary font-mono"
               />
               <button
                 type="button"
@@ -135,6 +144,7 @@ export function EmployeeEditForm({ employee, onBack, onSave }: EmployeeEditFormP
             </div>
           </div>
 
+          {/* Form Actions */}
           <div className="pt-4 flex flex-col sm:flex-row items-center gap-3 border-t border-secondary/10 mt-8 w-full">
             <button
               type="button"
