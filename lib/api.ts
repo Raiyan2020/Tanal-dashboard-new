@@ -49,6 +49,7 @@ type RequestOptions = {
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   body?: Record<string, unknown> | FormData;
   token?: string;
+  headers?: Record<string, string>;
 };
 
 /**
@@ -62,7 +63,7 @@ async function apiRequestInternal<T = unknown>(
   path: string,
   options: RequestOptions = {}
 ): Promise<ApiResponse<T>> {
-  const { method = 'GET', body, token } = options;
+  const { method = 'GET', body, token, headers: customHeaders } = options;
 
   let storedLang = 'ar';
   if (typeof window !== 'undefined') {
@@ -73,6 +74,7 @@ async function apiRequestInternal<T = unknown>(
     Accept: 'application/json',
     'Accept-Language': storedLang,
     lang: storedLang,
+    ...customHeaders,
   };
 
   if (token) {
@@ -154,7 +156,8 @@ export async function apiRequest<T = unknown>(
 
   // Deduplicate active/pending GET requests to prevent duplicate client-side network calls
   if (method === 'GET') {
-    const key = `${path}::${token || ''}`;
+    const langHeader = options.headers?.['Accept-Language'] || '';
+    const key = `${path}::${token || ''}::${langHeader}`;
     if (pendingGetRequests.has(key)) {
       return pendingGetRequests.get(key)!;
     }
@@ -244,6 +247,7 @@ export interface DashboardUpcomingEvent {
   price: string;
   status: string;
   status_label: string;
+  event_name: string;
 }
 
 export interface DashboardData {
@@ -1013,6 +1017,135 @@ export async function sendInvitation(
 ): Promise<ApiResponse<CreateInvitationResponse>> {
   return apiRequest<CreateInvitationResponse>(`/admin/invitations/${id}/send`, {
     method: 'PATCH',
+    token,
+  });
+}
+
+export interface ApiService {
+  id: number;
+  name: string;
+  description: string;
+  image: string | null;
+  sort_order: number;
+  options_count: number;
+}
+
+export interface ApiServiceOptionValue {
+  id: number;
+  service_option_id: number;
+  value: string;
+  color_hex: string | null;
+  sort: number;
+}
+
+export interface ApiServiceOption {
+  id: number;
+  service_id: number;
+  name: string;
+  type: string;
+  is_required: boolean;
+  sort: number;
+  requires_values: boolean;
+  values: ApiServiceOptionValue[];
+}
+
+export interface ApiServiceDetail extends ApiService {
+  options: ApiServiceOption[];
+  option_types_summary: Record<string, number>;
+}
+
+export interface GetServicesParams {
+  page?: number;
+  per_page?: number;
+}
+
+/** GET /admin/services */
+export async function getServices(
+  params: GetServicesParams,
+  token: string
+): Promise<ApiResponse<PaginatedItems<ApiService>>> {
+  const query = new URLSearchParams();
+  if (params.page !== undefined) query.set('page', String(params.page));
+  if (params.per_page !== undefined) query.set('per_page', String(params.per_page));
+  const qs = query.toString();
+  return apiRequest<PaginatedItems<ApiService>>(`/admin/services${qs ? `?${qs}` : ''}`, { token });
+}
+
+/** GET /admin/services/:id */
+export async function getServiceById(
+  id: number,
+  token: string,
+  lang?: string
+): Promise<ApiResponse<ApiServiceDetail>> {
+  const options: RequestOptions = { token };
+  if (lang) {
+    options.headers = {
+      'Accept-Language': lang,
+      lang: lang,
+    };
+  }
+  return apiRequest<ApiServiceDetail>(`/admin/services/${id}`, options);
+}
+
+export interface CreateServicePayload {
+  name_ar: string;
+  name_en: string;
+  description_ar: string;
+  description_en: string;
+  sort_order: number;
+  image?: File | null;
+}
+
+/** POST /admin/services */
+export async function createService(
+  payload: CreateServicePayload,
+  token: string
+): Promise<ApiResponse<ApiService>> {
+  const formData = new FormData();
+  formData.append('name_ar', payload.name_ar);
+  formData.append('name_en', payload.name_en);
+  formData.append('description_ar', payload.description_ar);
+  formData.append('description_en', payload.description_en);
+  formData.append('sort_order', String(payload.sort_order));
+  if (payload.image) {
+    formData.append('image', payload.image);
+  }
+  return apiRequest<ApiService>('/admin/services', {
+    method: 'POST',
+    body: formData,
+    token,
+  });
+}
+
+/** PUT /admin/services/:id?_method=put */
+export async function updateService(
+  id: number,
+  payload: CreateServicePayload,
+  token: string
+): Promise<ApiResponse<ApiService>> {
+  const formData = new FormData();
+  formData.append('name_ar', payload.name_ar);
+  formData.append('name_en', payload.name_en);
+  formData.append('description_ar', payload.description_ar);
+  formData.append('description_en', payload.description_en);
+  formData.append('sort_order', String(payload.sort_order));
+  if (payload.image) {
+    formData.append('image', payload.image);
+  }
+  return apiRequest<ApiService>(`/admin/services/${id}?_method=put`, {
+    method: 'POST',
+    body: formData,
+    token,
+  });
+}
+
+/** DELETE /admin/services/:id */
+export async function deleteService(
+  id: number,
+  token: string
+): Promise<ApiResponse<unknown>> {
+  return apiRequest(`/admin/services/${id}`, {
+    method: 'DELETE',
     token,
   });
 }

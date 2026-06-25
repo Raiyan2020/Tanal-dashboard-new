@@ -95,9 +95,9 @@ export function DashboardContent({ onNavigate, onCreateEvent }: { onNavigate?: (
 
   const chartData = data?.revenue_chart
     ? data.revenue_chart.labels.map((label, index) => ({
-        name: label,
-        revenue: data.revenue_chart.series[0]?.data[index] ?? 0,
-      }))
+      name: label,
+      revenue: data.revenue_chart.series[0]?.data[index] ?? 0,
+    }))
     : [];
 
   if (loading && !data) {
@@ -305,7 +305,7 @@ export function DashboardContent({ onNavigate, onCreateEvent }: { onNavigate?: (
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 min-w-0 flex-1">
                   <div className="flex flex-col justify-center min-w-0">
                     <span className="font-semibold text-secondary text-sm sm:text-base line-clamp-2 leading-tight">
-                      {dir === 'rtl' ? `مناسبة #${event.id}` : `Event #${event.id}`}
+                      {event.event_name}
                     </span>
                     <div className="flex items-center flex-wrap gap-1.5 sm:gap-2 mt-1 sm:mt-1.5 text-xs sm:text-sm text-secondary/60 font-medium">
                       <span className="whitespace-nowrap">{event.event_date}</span>
@@ -324,8 +324,8 @@ export function DashboardContent({ onNavigate, onCreateEvent }: { onNavigate?: (
                     <span className={cn(
                       "px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-md text-[10px] sm:text-xs font-bold uppercase tracking-wider leading-none",
                       event.status === 'paid' ? "bg-emerald-100/60 text-emerald-700" :
-                      event.status === 'installments' ? "bg-blue-100/60 text-blue-700" :
-                      "bg-amber-100/60 text-amber-700"
+                        event.status === 'installments' ? "bg-blue-100/60 text-blue-700" :
+                          "bg-amber-100/60 text-amber-700"
                     )}>
                       {event.status_label}
                     </span>

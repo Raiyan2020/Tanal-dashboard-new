@@ -38,9 +38,8 @@ const navItems = [
   { icon: Users, id: 'clients' },
   { icon: CalendarDays, id: 'events' },
   { icon: MailPlus, id: 'invitations' },
-  { icon: Layers, id: 'services' },
   { icon: ShoppingBag, id: 'serviceOrders' },
-  { icon: SlidersHorizontal, id: 'serviceOptions' },
+  { icon: Layers, id: 'services' },
   { icon: Briefcase, id: 'employees' },
   { icon: Wallet, id: 'financial' },
   { icon: Globe, id: 'landingPage' },
@@ -50,8 +49,8 @@ const navItems = [
 // Map nav ids that differ from their URL segment
 const NAV_ROUTES: Record<string, string> = {
   serviceOrders: '/service-orders',
-  serviceOptions: '/service-options',
-  services: '/landingPage?s=services',
+  serviceOptions: '/services',
+  services: '/services',
 };
 
 function MainLayoutContent({ children }: { children: React.ReactNode }) {
@@ -74,11 +73,9 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
     ? 'dashboard'
     : pathname.startsWith('/service-orders')
       ? 'serviceOrders'
-      : pathname.startsWith('/service-options')
+      : pathname.startsWith('/services')
         ? 'serviceOptions'
-        : pathname === '/landingPage' && searchParams.get('s') === 'services'
-          ? 'services'
-          : (pathname.replace('/', '').split('/')[0] || 'dashboard');
+        : (pathname.replace('/', '').split('/')[0] || 'dashboard');
 
   const setActiveItem = (id: string) => {
     if (id === 'dashboard') { router.push('/'); return; }
@@ -153,6 +150,7 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
           <nav className="flex-1 px-4 space-y-2 overflow-y-auto overflow-x-hidden scrollbar-hide py-2">
             {navItems.map((item) => {
               const isSelected = activeItem === item.id;
+
               return (
                 <button
                   key={item.id}

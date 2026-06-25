@@ -119,6 +119,7 @@ export default function ClientPortal() {
         </div>
 
         <nav className="flex-1 px-4 space-y-2 overflow-y-auto overflow-x-hidden scrollbar-hide py-2">
+
           {navItems.map((item, idx) => (
             <button
               key={idx}
