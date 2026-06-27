@@ -9,16 +9,12 @@ import {
   GripVertical, Loader2, UploadCloud
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import {
-  ServiceOption, ServiceOptionSelectValue, OptionType,
-  getOptions, getSelectValues,
-  saveOption, deleteOption, generateOptionId,
-  saveSelectValuesForOption, generateSelectValueId,
-  OPTION_TYPE_LABELS,
-} from '@/lib/serviceOptionsStore';
+import { OptionType, OPTION_TYPE_LABELS, type ServiceOptionSelectValue } from '@/lib/serviceOptionsStore';
 import {
   getServices, getServiceById, createService, updateService, deleteService,
-  type ApiService, type ApiServiceOption, type ApiServiceDetail, type CreateServicePayload
+  getAdminServiceOptions, assignServiceOptions,
+  type ApiService, type ApiServiceOption, type ApiServiceDetail, type CreateServicePayload,
+  type ServiceOptionItem
 } from '@/lib/api';
 import { getToken } from '@/lib/auth';
 import { toast } from 'sonner';
@@ -54,47 +50,54 @@ interface OptionFormData {
 }
 
 function OptionModal({
-  mode, serviceId, initial, onClose, onSave, nextOrder, language, dir, t,
+  serviceId, currentOptionIds, onClose, onSave, language, dir, t, token,
 }: {
-  mode: 'add' | 'edit';
   serviceId: string;
-  initial?: OptionFormData;
+  currentOptionIds: number[];
   onClose: () => void;
-  onSave: (form: OptionFormData) => void;
-  nextOrder: number;
+  onSave: () => void;
   language: string;
   dir: string;
   t: (k: string) => string;
+  token: string;
 }) {
-  const [form, setForm] = useState<OptionFormData>(
-    initial ?? {
-      id: generateOptionId(),
-      nameEn: '',
-      nameAr: '',
-      type: 'text',
-      required: false,
-      order: nextOrder,
-      selectValues: [],
-    }
-  );
+  const [globalOptions, setGlobalOptions] = useState<ServiceOptionItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedIds, setSelectedIds] = useState<number[]>(currentOptionIds);
+  const [saving, setSaving] = useState(false);
 
-  const addSV = () => setForm(f => ({
-    ...f,
-    selectValues: [...f.selectValues, { id: generateSelectValueId(), labelEn: '', labelAr: '' }],
-  }));
+  useEffect(() => {
+    setLoading(true);
+    getAdminServiceOptions(token, { page: 1, per_page: 100 })
+      .then(res => {
+        setGlobalOptions(res.data.items || []);
+      })
+      .catch(err => {
+        toast.error((err as Error).message || 'فشل جلب خيارات الخدمة');
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+  }, [token]);
 
-  const removeSV = (idx: number) => setForm(f => ({
-    ...f,
-    selectValues: f.selectValues.filter((_, i) => i !== idx),
-  }));
-
-  const updateSV = (idx: number, field: 'labelEn' | 'labelAr', value: string) => {
-    const sv = [...form.selectValues];
-    sv[idx] = { ...sv[idx], [field]: value };
-    setForm(f => ({ ...f, selectValues: sv }));
+  const toggleOption = (id: number) => {
+    setSelectedIds(prev =>
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
   };
 
-  const canSave = form.nameEn.trim() || form.nameAr.trim();
+  const handleConfirmSave = async () => {
+    setSaving(true);
+    try {
+      await assignServiceOptions(Number(serviceId), selectedIds, token);
+      toast.success(language === 'ar' ? 'تم حفظ التغييرات بنجاح' : 'Changes saved successfully');
+      onSave();
+    } catch (err) {
+      toast.error((err as Error).message || 'فشل حفظ التغييرات');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <motion.div
@@ -116,8 +119,8 @@ function OptionModal({
             <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center">
               <SlidersHorizontal className="w-5 h-5 text-primary" />
             </div>
-            <h3 className="font-semibold text-secondary text-base">
-              {mode === 'add' ? t('addOption') : t('editOption')}
+            <h3 className="font-semibold text-secondary text-base text-start">
+              {language === 'ar' ? 'تعديل خيارات الخدمة' : 'Manage Service Options'}
             </h3>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-secondary/10 rounded-xl transition-colors cursor-pointer">
@@ -126,163 +129,46 @@ function OptionModal({
         </div>
 
         {/* Body */}
-        <div className="p-6 space-y-5 overflow-y-auto flex-1">
-          {/* Names */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-secondary/60 mb-1.5 uppercase tracking-wider">
-                {t('optionName')} (EN) <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text" dir="ltr" value={form.nameEn}
-                onChange={e => setForm(f => ({ ...f, nameEn: e.target.value }))}
-                placeholder="e.g. Cover Color"
-                className="w-full px-3 py-2.5 text-sm rounded-xl bg-secondary/5 border border-secondary/15 focus:border-primary focus:ring-1 focus:ring-primary/30 outline-none transition-all"
-              />
+        <div className="p-6 space-y-3 overflow-y-auto flex-1 text-start">
+          {loading ? (
+            <div className="flex justify-center items-center py-20">
+              <Loader2 className="w-8 h-8 animate-spin text-primary" />
             </div>
-            <div>
-              <label className="block text-xs font-semibold text-secondary/60 mb-1.5 uppercase tracking-wider">
-                {t('optionName')} (AR) <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text" dir="rtl" value={form.nameAr}
-                onChange={e => setForm(f => ({ ...f, nameAr: e.target.value }))}
-                placeholder="مثال: لون الكفر"
-                className="w-full px-3 py-2.5 text-sm rounded-xl bg-secondary/5 border border-secondary/15 focus:border-primary focus:ring-1 focus:ring-primary/30 outline-none font-arabic text-right transition-all"
-              />
-            </div>
-          </div>
-
-          {/* Type */}
-          <div>
-            <label className="block text-xs font-semibold text-secondary/60 mb-2 uppercase tracking-wider">
-              {t('optionType')}
-            </label>
-            <div className="grid grid-cols-5 gap-2">
-              {(Object.keys(OPTION_TYPE_LABELS) as OptionType[]).map(type => {
-                const meta = OPTION_TYPE_LABELS[type];
-                const Icon = TYPE_ICONS[type];
-                const isSelected = form.type === type;
+          ) : globalOptions.length === 0 ? (
+            <p className="text-sm text-secondary/50 text-center py-10">
+              {language === 'ar' ? 'لا توجد خيارات خدمة مضافة حالياً. يرجى إضافتها أولاً.' : 'No service options available yet.'}
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {globalOptions.map(opt => {
+                const isChecked = selectedIds.includes(opt.id);
                 return (
                   <button
-                    key={type}
+                    key={opt.id}
                     type="button"
-                    onClick={() => setForm(f => ({ ...f, type }))}
+                    onClick={() => toggleOption(opt.id)}
                     className={cn(
-                      'flex flex-col items-center gap-1.5 p-3 rounded-2xl border-2 transition-all cursor-pointer text-center',
-                      isSelected
-                        ? 'border-primary bg-primary/10 text-primary'
-                        : 'border-secondary/10 bg-white hover:bg-secondary/5 text-secondary/60'
+                      "w-full flex items-center justify-between p-4 rounded-2xl border transition-all text-start cursor-pointer",
+                      isChecked
+                        ? "border-primary bg-primary/5 text-secondary font-semibold"
+                        : "border-secondary/10 hover:bg-secondary/5 text-secondary/70"
                     )}
                   >
-                    <Icon className="w-5 h-5" />
-                    <span className="text-[10px] font-bold leading-tight">
-                      {language === 'ar' ? meta.ar : meta.en}
-                    </span>
-                    {isSelected && <Check className="w-3 h-3" />}
+                    <div className="flex flex-col">
+                      <span className="text-sm font-medium">{opt.name}</span>
+                      <span className="text-[10px] text-secondary/50 mt-1 uppercase font-semibold">
+                        {opt.type} • {opt.is_required ? t('optionRequired') : (language === 'ar' ? 'اختياري' : 'Optional')}
+                      </span>
+                    </div>
+                    <div className={cn(
+                      "w-5 h-5 rounded-md border flex items-center justify-center transition-colors",
+                      isChecked ? "bg-primary border-primary text-white" : "border-secondary/20 bg-white"
+                    )}>
+                      {isChecked && <Check className="w-3.5 h-3.5" />}
+                    </div>
                   </button>
                 );
               })}
-            </div>
-          </div>
-
-          {/* Required toggle */}
-          <label className="flex items-center gap-3 cursor-pointer group">
-            <div
-              onClick={() => setForm(f => ({ ...f, required: !f.required }))}
-              className={cn(
-                'w-11 h-6 rounded-full transition-colors relative cursor-pointer shrink-0',
-                form.required ? 'bg-primary' : 'bg-secondary/20'
-              )}
-            >
-              <div className={cn(
-                'absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform',
-                form.required ? (dir === 'rtl' ? '-translate-x-5' : 'translate-x-5') : 'translate-x-0.5'
-              )} />
-            </div>
-            <span className="text-sm font-medium text-secondary/80">{t('optionRequired')}</span>
-          </label>
-
-          {/* Select values (only for select/color types) */}
-          {(form.type === 'select' || form.type === 'color') && (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-semibold text-secondary/60 uppercase tracking-wider">
-                  {t('selectValues')}
-                </label>
-                <button
-                  type="button"
-                  onClick={addSV}
-                  className="flex items-center gap-1 text-xs font-semibold text-primary hover:text-primary-dark transition-colors cursor-pointer"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  {t('addSelectValue')}
-                </button>
-              </div>
-
-              <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                {form.selectValues.map((sv, idx) => (
-                  <div key={sv.id} className="flex items-center gap-2">
-                    <GripVertical className="w-4 h-4 text-secondary/30 shrink-0" />
-
-                    {form.type === 'color' ? (
-                      /* ── Color row: picker + hex display + Arabic name ── */
-                      <>
-                        {/* Color picker — value stored as hex in labelEn */}
-                        <div className="relative shrink-0 group/picker">
-                          <input
-                            type="color"
-                            value={sv.labelEn.startsWith('#') ? sv.labelEn : '#cccccc'}
-                            onChange={e => updateSV(idx, 'labelEn', e.target.value)}
-                            className="w-9 h-9 rounded-xl border-2 border-secondary/20 cursor-pointer p-0.5 bg-white hover:border-primary transition-colors shadow-sm"
-                            title="Pick color"
-                          />
-                        </div>
-                        {/* Hex readout */}
-                        <span className="text-xs font-mono text-secondary/50 w-16 shrink-0 select-all">
-                          {sv.labelEn.startsWith('#') ? sv.labelEn.toUpperCase() : '—'}
-                        </span>
-                        {/* Arabic display name */}
-                        <input
-                          type="text" dir="rtl" value={sv.labelAr}
-                          onChange={e => updateSV(idx, 'labelAr', e.target.value)}
-                          placeholder={t('optionValueAr')}
-                          className="flex-1 px-2.5 py-1.5 text-sm rounded-lg bg-secondary/5 border border-secondary/15 focus:border-primary outline-none font-arabic text-right"
-                        />
-                      </>
-                    ) : (
-                      /* ── Select row: EN + AR text inputs ── */
-                      <>
-                        <input
-                          type="text" dir="ltr" value={sv.labelEn}
-                          onChange={e => updateSV(idx, 'labelEn', e.target.value)}
-                          placeholder={t('optionValueEn')}
-                          className="flex-1 px-2.5 py-1.5 text-sm rounded-lg bg-secondary/5 border border-secondary/15 focus:border-primary outline-none"
-                        />
-                        <input
-                          type="text" dir="rtl" value={sv.labelAr}
-                          onChange={e => updateSV(idx, 'labelAr', e.target.value)}
-                          placeholder={t('optionValueAr')}
-                          className="flex-1 px-2.5 py-1.5 text-sm rounded-lg bg-secondary/5 border border-secondary/15 focus:border-primary outline-none font-arabic text-right"
-                        />
-                      </>
-                    )}
-
-                    <button
-                      type="button"
-                      onClick={() => removeSV(idx)}
-                      className="text-red-400 hover:text-red-600 transition-colors cursor-pointer shrink-0"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-                ))}
-                {form.selectValues.length === 0 && (
-                  <p className="text-center text-secondary/40 text-xs py-3">
-                    {language === 'ar' ? 'لا توجد قيم. اضغط + لإضافة.' : 'No values yet. Click + to add.'}
-                  </p>
-                )}
-              </div>
             </div>
           )}
         </div>
@@ -293,11 +179,12 @@ function OptionModal({
             {t('cancel')}
           </button>
           <button
-            disabled={!canSave}
-            onClick={() => onSave(form)}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-primary hover:bg-primary/90 disabled:opacity-50 rounded-xl transition-colors cursor-pointer shadow-sm shadow-primary/20"
+            type="button"
+            disabled={loading || saving}
+            onClick={handleConfirmSave}
+            className="flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-white bg-primary hover:bg-primary/90 disabled:opacity-50 rounded-xl transition-colors cursor-pointer shadow-sm shadow-primary/20"
           >
-            <Save className="w-4 h-4" />
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
             {t('saveChanges')}
           </button>
         </div>
@@ -373,8 +260,8 @@ export default function ServiceOptionsPage() {
   const [serviceToDelete, setServiceToDelete] = useState<ApiService | null>(null);
 
   // local option management states
-  const [optionModal, setOptionModal] = useState<{ mode: 'add' | 'edit'; data?: OptionFormData } | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<ServiceOption | null>(null);
+  const [showOptionModal, setShowOptionModal] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<any | null>(null);
 
   const fetchServices = useCallback(async () => {
     if (!token) return;
@@ -462,64 +349,45 @@ export default function ServiceOptionsPage() {
 
   const BackIcon = dir === 'ltr' ? ChevronLeft : ChevronRight;
 
-  const handleSaveOption = (form: OptionFormData) => {
-    const opt: ServiceOption = {
-      id: form.id,
-      serviceId: String(selectedServiceId!),
-      nameEn: form.nameEn.trim(),
-      nameAr: form.nameAr.trim(),
-      type: form.type,
-      required: form.required,
-      order: form.order,
-    };
-    saveOption(opt);
-    if (form.type === 'select' || form.type === 'color') {
-      const vals: ServiceOptionSelectValue[] = form.selectValues.map((sv: any) => ({
-        id: sv.id,
-        optionId: form.id,
-        labelEn: sv.labelEn,
-        labelAr: sv.labelAr,
-      }));
-      saveSelectValuesForOption(form.id, vals);
-    } else {
-      saveSelectValuesForOption(form.id, []);
+  const handleDelete = async () => {
+    if (!deleteTarget || selectedServiceId === null) return;
+    const remainingIds = serviceOptions
+      .filter(o => o.id !== deleteTarget.id)
+      .map(o => Number(o.id));
+
+    const loadToast = toast.loading(language === 'ar' ? 'جاري الحذف...' : 'Removing option...');
+    try {
+      await assignServiceOptions(selectedServiceId, remainingIds, token);
+      toast.success(language === 'ar' ? 'تم الحذف بنجاح' : 'Removed option successfully');
+      refresh();
+    } catch (err) {
+      toast.error((err as Error).message || 'فشل حذف الخيار');
+    } finally {
+      toast.dismiss(loadToast);
+      setDeleteTarget(null);
     }
-    refresh();
-    setOptionModal(null);
   };
 
-  const handleDelete = () => {
-    if (!deleteTarget) return;
-    deleteOption(deleteTarget.id);
-    refresh();
-    setDeleteTarget(null);
-  };
-
-  const openEdit = (opt: ServiceOption) => {
-    const svs = selectValues.filter((v: any) => v.optionId === opt.id);
-    setOptionModal({
-      mode: 'edit',
-      data: {
-        id: opt.id,
-        nameEn: opt.nameEn,
-        nameAr: opt.nameAr,
-        type: opt.type,
-        required: opt.required,
-        order: opt.order,
-        selectValues: svs.map((v: any) => ({ id: v.id, labelEn: v.labelEn, labelAr: v.labelAr })),
-      },
-    });
-  };
-
-  const moveOption = (idx: number, direction: 'up' | 'down') => {
+  const moveOption = async (idx: number, direction: 'up' | 'down') => {
     const sorted = [...serviceOptions];
     if (direction === 'up' && idx > 0) {
       [sorted[idx - 1], sorted[idx]] = [sorted[idx], sorted[idx - 1]];
     } else if (direction === 'down' && idx < sorted.length - 1) {
       [sorted[idx + 1], sorted[idx]] = [sorted[idx], sorted[idx + 1]];
     }
-    sorted.forEach((o, i) => saveOption({ ...o, order: i + 1 }));
-    refresh();
+
+    if (selectedServiceId === null) return;
+    const optionIds = sorted.map(o => Number(o.id));
+
+    const loadToast = toast.loading(language === 'ar' ? 'جاري ترتيب الخيارات...' : 'Reordering options...');
+    try {
+      await assignServiceOptions(selectedServiceId, optionIds, token);
+      refresh();
+    } catch (err) {
+      toast.error((err as Error).message || 'فشل إعادة ترتيب الخيارات');
+    } finally {
+      toast.dismiss(loadToast);
+    }
   };
 
   const handleSaveService = async (payload: CreateServicePayload) => {
@@ -729,18 +597,20 @@ export default function ServiceOptionsPage() {
   return (
     <div className="space-y-6 pb-10 text-start">
       <AnimatePresence>
-        {optionModal && (
+        {showOptionModal && (
           <OptionModal
             key="opt-modal"
-            mode={optionModal.mode}
             serviceId={String(selectedServiceId)}
-            initial={optionModal.data}
-            onClose={() => setOptionModal(null)}
-            onSave={handleSaveOption}
-            nextOrder={serviceOptions.length + 1}
+            currentOptionIds={serviceOptions.map(o => Number(o.id))}
+            onClose={() => setShowOptionModal(false)}
+            onSave={() => {
+              setShowOptionModal(false);
+              refresh();
+            }}
             language={language}
             dir={dir}
             t={t}
+            token={token}
           />
         )}
         {deleteTarget && (
@@ -775,7 +645,7 @@ export default function ServiceOptionsPage() {
           <Loader2 className="w-5 h-5 animate-spin text-primary" />
         ) : (
           <button
-            onClick={() => setOptionModal({ mode: 'add' })}
+            onClick={() => setShowOptionModal(true)}
             className="flex items-center gap-2 px-4 py-2.5 bg-primary text-white rounded-xl text-sm font-medium hover:bg-primary/90 transition-colors shadow-sm shadow-primary/20 cursor-pointer"
           >
             <Plus className="w-4 h-4" />
@@ -798,7 +668,7 @@ export default function ServiceOptionsPage() {
               <SlidersHorizontal className="w-12 h-12 opacity-30" />
               <p className="font-medium">{t('noOptionsYet')}</p>
               <button
-                onClick={() => setOptionModal({ mode: 'add' })}
+                onClick={() => setShowOptionModal(true)}
                 className="flex items-center gap-2 px-4 py-2 bg-primary/10 text-primary rounded-xl text-sm font-medium hover:bg-primary/20 transition-colors cursor-pointer"
               >
                 <Plus className="w-4 h-4" />

@@ -1335,6 +1335,239 @@ export async function assignEmployeeEvents(
   });
 }
 
+/* ─── Service Options CRUD ────────────────────────────────────────────── */
 
+export interface ServiceOptionItem {
+  id: number;
+  name: string;
+  type: 'text' | 'number' | 'color' | 'employee' | 'list';
+  is_required: boolean;
+}
 
+export interface ServiceOptionDetailItem {
+  id: number;
+  name?: string;
+  'name_ar'?: string;
+  'name_en'?: string;
+  type: 'text' | 'number' | 'color' | 'employee' | 'list';
+  is_required: boolean;
+  values?: Array<{ id: number; value_ar?: string; value_en?: string; value?: string; label_ar?: string; label_en?: string }>;
+  labels?: Array<{ id: number; label_ar?: string; label_en?: string }>;
+}
 
+export interface CreateServiceOptionPayload {
+  nameAr: string;
+  nameEn: string;
+  type: 'text' | 'number' | 'color' | 'employee' | 'list';
+  is_required: 0 | 1;
+  labels?: Array<{ label_ar: string; label_en: string }>;
+}
+
+export interface UpdateServiceOptionPayload {
+  nameAr: string;
+  nameEn: string;
+  type: 'text' | 'number' | 'color' | 'employee' | 'list';
+  is_required: 0 | 1;
+  labels?: Array<{ label_ar: string; label_en: string }>;
+}
+/** GET /admin/service-options */
+export async function getAdminServiceOptions(
+  token: string,
+  params?: { page?: number; per_page?: number }
+): Promise<ApiResponse<PaginatedItems<ServiceOptionItem>>> {
+  const query = new URLSearchParams();
+  if (params?.page !== undefined) query.set('page', String(params.page));
+  if (params?.per_page !== undefined) query.set('per_page', String(params.per_page));
+  const qs = query.toString();
+  return apiRequest<PaginatedItems<ServiceOptionItem>>(
+    `/admin/service-options${qs ? `?${qs}` : ''}`,
+    { token }
+  );
+}
+
+/** POST /admin/service-options */
+export async function createAdminServiceOption(
+  payload: CreateServiceOptionPayload,
+  token: string
+): Promise<ApiResponse<ServiceOptionItem>> {
+  const formData = new FormData();
+  formData.append('name[ar]', payload.nameAr);
+  formData.append('name[en]', payload.nameEn);
+  formData.append('type', payload.type);
+  formData.append('is_required', String(payload.is_required));
+
+  if (payload.labels && payload.labels.length > 0) {
+    payload.labels.forEach((label, i) => {
+      formData.append(`labels[${i}][label_ar]`, label.label_ar);
+      formData.append(`labels[${i}][label_en]`, label.label_en);
+    });
+  }
+
+  return apiRequest<ServiceOptionItem>('/admin/service-options', {
+    method: 'POST',
+    body: formData,
+    token,
+  });
+}
+
+/** POST /admin/service-options/:id?_method=put */
+export async function updateAdminServiceOption(
+  id: number,
+  payload: UpdateServiceOptionPayload,
+  token: string
+): Promise<ApiResponse<ServiceOptionItem>> {
+  const body = {
+    name: {
+      ar: payload.nameAr,
+      en: payload.nameEn,
+    },
+    type: payload.type,
+    is_required: payload.is_required,
+    labels: payload.labels,
+  };
+
+  return apiRequest<ServiceOptionItem>(`/admin/service-options/${id}?_method=put`, {
+    method: 'POST',
+    body,
+    token,
+  });
+}
+
+/** GET /admin/service-options/:id */
+export async function getAdminServiceOptionById(
+  id: number,
+  token: string
+): Promise<ApiResponse<ServiceOptionDetailItem>> {
+  return apiRequest<ServiceOptionDetailItem>(`/admin/service-options/${id}`, {
+    method: 'GET',
+    token,
+  });
+}
+
+/** DELETE /admin/service-options/:id */
+export async function deleteAdminServiceOption(
+  id: number,
+  token: string
+): Promise<ApiResponse<unknown>> {
+  return apiRequest(`/admin/service-options/${id}`, {
+    method: 'DELETE',
+    token,
+  });
+}
+
+/** POST /admin/services/:serviceId/options?_method=put */
+export async function assignServiceOptions(
+  serviceId: number,
+  optionIds: number[],
+  token: string
+): Promise<ApiResponse<unknown>> {
+  return apiRequest(`/admin/services/${serviceId}/options?_method=put`, {
+    method: 'POST',
+    body: { option_ids: optionIds },
+    token,
+  });
+}
+
+export interface ServiceOrderStatus {
+  value: string;
+  label: string;
+}
+
+export interface ApiServiceOrderItem {
+  id: number;
+  reference_number: number;
+  reference_label: string;
+  service_name: string;
+  client_name: string;
+  event_date: string;
+  total_amount: string;
+  currency: string;
+  statuses: ServiceOrderStatus[];
+  has_pending_second_payment: boolean;
+  whatsapp_url: string;
+}
+
+export interface ServiceOrdersResponse {
+  items: ApiServiceOrderItem[];
+  pagination: {
+    total: number;
+    per_page: number;
+    current_page: number;
+    last_page: number;
+    from: number;
+    to: number;
+  };
+  statuses: ServiceOrderStatus[];
+}
+
+export interface GetServiceOrdersParams {
+  page?: number;
+  per_page?: number;
+  keyword?: string;
+  order_by?: string;
+  order?: 'ASC' | 'DESC';
+}
+
+/** GET /admin/service-orders */
+export async function getAdminServiceOrders(
+  token: string,
+  params?: GetServiceOrdersParams
+): Promise<ApiResponse<ServiceOrdersResponse>> {
+  const query = new URLSearchParams();
+  if (params?.page !== undefined) query.set('page', String(params.page));
+  if (params?.per_page !== undefined) query.set('per_page', String(params.per_page));
+  if (params?.keyword !== undefined) query.set('filters[keyword]', params.keyword);
+  if (params?.order_by !== undefined) query.set('filters[order_by]', params.order_by);
+  if (params?.order !== undefined) query.set('filters[order]', params.order);
+
+  const qs = query.toString();
+  return apiRequest<ServiceOrdersResponse>(
+    `/admin/service-orders${qs ? `?${qs}` : ''}`,
+    { token }
+  );
+}
+
+export interface CreateServiceOrderItemOption {
+  service_option_id: number;
+  value?: any;
+  values?: any[];
+}
+
+export interface CreateServiceOrderItemEmployee {
+  type: 'employee' | 'freelancer';
+  employee_id?: number;
+  username?: string;
+  country_code?: string;
+  phone?: string;
+}
+
+export interface CreateServiceOrderItem {
+  service_id: number;
+  price: number;
+  options: CreateServiceOrderItemOption[];
+  employee?: CreateServiceOrderItemEmployee;
+}
+
+export interface CreateServiceOrderPayload {
+  client_id: number;
+  event_date: string;
+  event_time: string;
+  hall_name: string;
+  location_url?: string;
+  is_paid: 0 | 1;
+  payment_type: 'single' | 'two_installments';
+  first_installment_amount?: number;
+  items: CreateServiceOrderItem[];
+}
+
+/** POST /admin/service-orders */
+export async function createAdminServiceOrder(
+  payload: CreateServiceOrderPayload,
+  token: string
+): Promise<ApiResponse<any>> {
+  return apiRequest<any>('/admin/service-orders', {
+    method: 'POST',
+    body: payload as any,
+    token,
+  });
+}

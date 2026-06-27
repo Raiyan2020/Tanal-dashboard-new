@@ -40,6 +40,7 @@ const navItems = [
   { icon: MailPlus, id: 'invitations' },
   { icon: ShoppingBag, id: 'serviceOrders' },
   { icon: Layers, id: 'services' },
+  { icon: SlidersHorizontal, id: 'serviceOptions' },
   { icon: Briefcase, id: 'employees' },
   { icon: Wallet, id: 'financial' },
   { icon: Globe, id: 'landingPage' },
@@ -49,7 +50,7 @@ const navItems = [
 // Map nav ids that differ from their URL segment
 const NAV_ROUTES: Record<string, string> = {
   serviceOrders: '/service-orders',
-  serviceOptions: '/services',
+  serviceOptions: '/service-options',
   services: '/services',
 };
 
@@ -73,9 +74,11 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
     ? 'dashboard'
     : pathname.startsWith('/service-orders')
       ? 'serviceOrders'
-      : pathname.startsWith('/services')
+      : pathname.startsWith('/service-options')
         ? 'serviceOptions'
-        : (pathname.replace('/', '').split('/')[0] || 'dashboard');
+        : pathname.startsWith('/services')
+          ? 'services'
+          : (pathname.replace('/', '').split('/')[0] || 'dashboard');
 
   const setActiveItem = (id: string) => {
     if (id === 'dashboard') { router.push('/'); return; }
