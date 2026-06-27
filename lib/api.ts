@@ -1571,3 +1571,116 @@ export async function createAdminServiceOrder(
     token,
   });
 }
+
+export interface ApiFinancialRecordItem {
+  id: number;
+  reference_number: number;
+  reference_code: string;
+  client_id: number;
+  client_name: string;
+  client_phone: string;
+  event_id: number;
+  event_name: string;
+  amount: string;
+  paid_amount: string;
+  remaining_amount: string;
+  currency: string;
+  status: 'paid' | 'unpaid' | 'installments';
+  record_date: string;
+  record_date_label: string;
+}
+
+export interface ApiFinancialRecordDetail {
+  id: number;
+  reference_number: number;
+  reference_code: string;
+  amount: string;
+  paid_amount: string;
+  remaining_amount: string;
+  currency: string;
+  status: 'paid' | 'unpaid' | 'installments';
+  record_date: string;
+  notes: string | null;
+  client: {
+    id: number;
+    name: string;
+    phone: string;
+    full_phone: string;
+    email: string | null;
+  };
+  event: {
+    id: number;
+    reference_number: number;
+    reference_label: string;
+    name: string;
+    event_date: string;
+    event_time: string;
+    status: string;
+  };
+  transactions: any[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FinancialRecordsResponse {
+  items: ApiFinancialRecordItem[];
+  pagination: {
+    total: number;
+    per_page: number;
+    current_page: number;
+    last_page: number;
+    from: number;
+    to: number;
+  };
+}
+
+/** GET /admin/financial-records */
+export async function getAdminFinancialRecords(
+  token: string,
+  params?: { page?: number; per_page?: number; keyword?: string }
+): Promise<ApiResponse<FinancialRecordsResponse>> {
+  const query = new URLSearchParams();
+  if (params?.page !== undefined) query.set('page', String(params.page));
+  if (params?.per_page !== undefined) query.set('per_page', String(params.per_page));
+  if (params?.keyword !== undefined) query.set('filters[keyword]', params.keyword);
+
+  const qs = query.toString();
+  return apiRequest<FinancialRecordsResponse>(
+    `/admin/financial-records${qs ? `?${qs}` : ''}`,
+    { token }
+  );
+}
+
+/** GET /admin/financial-records/:id */
+export async function getFinancialRecordById(
+  id: number,
+  token: string
+): Promise<ApiResponse<ApiFinancialRecordDetail>> {
+  return apiRequest<ApiFinancialRecordDetail>(`/admin/financial-records/${id}`, { token });
+}
+
+/** GET /admin/financial-records/:id/pdf */
+export async function downloadFinancialRecordPdf(
+  id: number,
+  token: string
+): Promise<Blob> {
+  const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://portal.tanal.raiyan.cc/api'}/admin/financial-records/${id}/pdf`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: 'application/pdf',
+    },
+  });
+  if (!response.ok) throw new Error('فشل تحميل ملف PDF');
+  return response.blob();
+}
+
+/** POST /financial-records/:id/admin/settle?_method=patch */
+export async function settleFinancialRecord(
+  id: number,
+  token: string
+): Promise<ApiResponse<any>> {
+  return apiRequest<any>(`/admin/financial-records/${id}/settle?_method=patch`, {
+    method: 'POST',
+    token,
+  });
+}
