@@ -1,35 +1,34 @@
 'use client';
 
-import React, { useState, useRef, Suspense } from 'react';
+import React, { useState, useEffect, useRef, useCallback, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useLanguage } from '@/lib/i18n';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '@/lib/utils';
 import Image from 'next/image';
+import { toast } from 'sonner';
 import {
-  ImageIcon,
-  Sparkles,
-  LayoutGrid,
-  Phone,
-  ArrowLeft,
-  ArrowRight,
-  Save,
-  Upload,
-  Trash2,
-  Plus,
-  ArrowUp,
-  ArrowDown,
-  Instagram,
-  Twitter,
-  Facebook,
-  Linkedin,
-  Youtube,
-  Globe,
-  Briefcase,
-  Pencil,
-  X,
-  AlertTriangle
+  ImageIcon, Sparkles, LayoutGrid, Phone, ArrowLeft, ArrowRight,
+  Save, Upload, Trash2, Plus, ArrowUp, ArrowDown, Instagram, Twitter,
+  Facebook, Linkedin, Youtube, Globe, Pencil, X, Loader2, Link,
+  Footprints, CalendarDays, CheckCircle2, AlertTriangle, RefreshCw,
 } from 'lucide-react';
+import {
+  getLandingHero, updateLandingHero,
+  getLandingHowItWorks, createHowItWorksStep, updateHowItWorksStep, deleteHowItWorksStep, reorderHowItWorks,
+  getLandingFeatures, createFeature, updateFeature, deleteFeature, reorderFeatures,
+  getLandingPortfolio, createPortfolioItem, updatePortfolioItem, deletePortfolioItem, reorderPortfolio,
+  getLandingSocialLinks, createSocialLink, updateSocialLink, deleteSocialLink, reorderSocialLinks,
+  getLandingFooter, updateLandingFooter,
+  getLandingContact, updateLandingContact,
+  getLandingEventTypes, createEventType, updateEventType, deleteEventType, reorderEventTypes,
+  type LandingHero, type LandingHowItWorksStep, type LandingFeature,
+  type LandingPortfolioItem, type LandingSocialLink, type LandingFooter,
+  type LandingContact, type LandingEventType,
+} from '@/lib/api';
+import { getToken } from '@/lib/auth';
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 const SOCIAL_PLATFORMS = [
   { id: 'instagram', name: 'Instagram', icon: Instagram },
@@ -37,914 +36,1026 @@ const SOCIAL_PLATFORMS = [
   { id: 'facebook', name: 'Facebook', icon: Facebook },
   { id: 'linkedin', name: 'LinkedIn', icon: Linkedin },
   { id: 'youtube', name: 'YouTube', icon: Youtube },
+  { id: 'whatsapp', name: 'WhatsApp', icon: Phone },
   { id: 'custom', name: 'Website / Other', icon: Globe },
 ];
 
-const INITIAL_HERO = {
-  headlineEn: 'Welcome to Tanal',
-  headlineAr: 'مرحبا بكم في تنال',
-  subheadingEn: 'Premium luxury events.',
-  subheadingAr: 'مناسبات فاخرة ومميزة.',
-  imageUrl: ''
+const getSocialIcon = (platform: string) => {
+  const found = SOCIAL_PLATFORMS.find(p => p.id === platform?.toLowerCase());
+  return found ? found.icon : Globe;
 };
 
-const INITIAL_FEATURES = [
-  { id: '1', icon: '', textEn: 'Luxury Planning', textAr: 'تخطيط فاخر', descriptionEn: 'Best in class events', descriptionAr: 'أفضل المناسبات في فئتها' }
-];
+// ── Shared UI primitives ──────────────────────────────────────────────────────
 
-const INITIAL_PORTFOLIO = [
-  { id: '1', imageUrl: '', textEn: 'Royal Wedding', textAr: 'زفاف ملكي' }
-];
+const inputClass = 'w-full px-4 py-2.5 rounded-xl bg-white/50 border border-secondary/20 focus:border-primary focus:ring-1 focus:ring-primary/30 outline-none transition-all text-sm';
+const labelClass = 'block text-xs font-bold text-secondary/50 mb-1.5 uppercase tracking-wider';
+const BilingualField = ({ labelEn, labelAr, valueEn, valueAr, onChangeEn, onChangeAr, multiline, rows = 3 }:
+  { labelEn: string; labelAr: string; valueEn: string; valueAr: string; onChangeEn: (v: string) => void; onChangeAr: (v: string) => void; multiline?: boolean; rows?: number }) => (
+  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+    <div>
+      <label className={labelClass}>{labelEn}</label>
+      {multiline
+        ? <textarea value={valueEn} onChange={e => onChangeEn(e.target.value)} dir="ltr" rows={rows} className={cn(inputClass, 'resize-none text-left')} />
+        : <input type="text" value={valueEn} onChange={e => onChangeEn(e.target.value)} dir="ltr" className={cn(inputClass, 'text-left')} />}
+    </div>
+    <div>
+      <label className={labelClass}>{labelAr}</label>
+      {multiline
+        ? <textarea value={valueAr} onChange={e => onChangeAr(e.target.value)} dir="rtl" rows={rows} className={cn(inputClass, 'resize-none text-right font-arabic')} />
+        : <input type="text" value={valueAr} onChange={e => onChangeAr(e.target.value)} dir="rtl" className={cn(inputClass, 'text-right font-arabic')} />}
+    </div>
+  </div>
+);
 
-interface ServiceItem {
-  id: string;
-  nameEn: string;
-  nameAr: string;
-  descriptionEn: string;
-  descriptionAr: string;
-  imageUrl: string;
-}
-
-const INITIAL_SERVICES: ServiceItem[] = [
-  { id: '1', nameEn: 'Wedding Planning', nameAr: 'تنظيم حفلات الزفاف', descriptionEn: 'Luxurious wedding ceremonies tailored to your vision.', descriptionAr: 'حفلات زفاف فاخرة مصممة وفق رؤيتك.', imageUrl: '' }
-];
-
-interface SocialLink {
-  id: string;
-  platform: string;
-  url: string;
-}
-
-interface ContactState {
-  whatsapp: string;
-  addressEn: string;
-  addressAr: string;
-  mapUrl: string;
-  socials: SocialLink[];
-}
-
-const SocialPlatformSelect = ({ value, onChange, dir }: { value: string, onChange: (val: string) => void, dir: string }) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const selectedPlatform = SOCIAL_PLATFORMS.find(p => p.id === value?.toLowerCase()) || SOCIAL_PLATFORMS[0];
-  const Icon = selectedPlatform.icon;
-
+const ImageUploadBox = ({ url, onFile, onClear, aspect = 'aspect-video', label }: {
+  url: string | null; onFile: (f: File) => void; onClear: () => void; aspect?: string; label?: string;
+}) => {
+  const ref = useRef<HTMLInputElement>(null);
   return (
-    <div className="relative w-full">
-      <button
-        type="button"
-        onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between px-3 py-2 text-sm rounded-xl bg-white/50 border border-secondary/20 hover:border-primary outline-none transition-colors"
-      >
-        <div className="flex items-center gap-2">
-          <Icon className="w-4 h-4 text-secondary/70" />
-          <span className="text-secondary/90">{selectedPlatform.name}</span>
+    <div className="space-y-1.5">
+      {label && <label className={labelClass}>{label}</label>}
+      {url ? (
+        <div className={cn('relative rounded-2xl overflow-hidden bg-secondary/5 group', aspect)}>
+          <Image src={url} alt="upload" fill className="object-cover" />
+          <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
+            <button type="button" onClick={() => ref.current?.click()} className="px-3 py-1.5 bg-white text-sm font-medium rounded-xl shadow cursor-pointer hover:bg-secondary/10 transition-colors">
+              {label?.includes('صور') || label?.includes('إ') ? 'تغيير' : 'Replace'}
+            </button>
+            <button type="button" onClick={onClear} className="p-2 bg-red-500 text-white rounded-xl cursor-pointer hover:bg-red-600 transition-colors"><Trash2 className="w-4 h-4" /></button>
+          </div>
         </div>
-        <ArrowDown className="w-3 h-3 text-secondary/40" />
-      </button>
-
-      <AnimatePresence>
-        {isOpen && (
-          <>
-            <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
-            <motion.div
-              initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }}
-              className={cn(
-                "absolute top-full mt-1 w-full bg-white border border-secondary/10 rounded-xl shadow-lg z-50 overflow-hidden",
-                dir === 'rtl' ? 'right-0' : 'left-0'
-              )}
-            >
-              <div className="max-h-48 overflow-y-auto py-1">
-                {SOCIAL_PLATFORMS.map(p => {
-                  const PIcon = p.icon;
-                  return (
-                    <button
-                      key={p.id}
-                      type="button"
-                      onClick={() => { onChange(p.id); setIsOpen(false); }}
-                      className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-secondary/5 transition-colors text-left"
-                    >
-                      <PIcon className="w-4 h-4 text-secondary/70" />
-                      <span className="text-secondary/90">{p.name}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
+      ) : (
+        <div onClick={() => ref.current?.click()}
+          className={cn('rounded-2xl border-2 border-dashed border-secondary/20 flex flex-col items-center justify-center bg-white/30 text-secondary/50 hover:bg-primary/5 hover:border-primary/30 transition-colors cursor-pointer group', aspect)}>
+          <Upload className="w-6 h-6 mb-2 group-hover:text-primary transition-colors" />
+          <span className="text-sm font-medium group-hover:text-primary transition-colors">Upload Image</span>
+        </div>
+      )}
+      <input ref={ref} type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) onFile(f); e.target.value = ''; }} />
     </div>
   );
 };
 
-const INITIAL_CONTACT: ContactState = {
-  whatsapp: '+966500000000',
-  addressEn: 'Riyadh, SA',
-  addressAr: 'الرياض، السعودية',
-  mapUrl: '',
-  socials: []
-};
+const SectionSkeleton = () => (
+  <div className="space-y-4 animate-pulse">
+    {[1, 2, 3].map(i => <div key={i} className="h-16 bg-secondary/8 rounded-2xl" />)}
+  </div>
+);
 
-function LandingPageContent() {
-  const { t, dir } = useLanguage();
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const activeSection = searchParams.get('s');
+const DeleteConfirm = ({ label, onConfirm, onCancel, loading }: { label: string; onConfirm: () => void; onCancel: () => void; loading?: boolean }) => (
+  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+    className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/30 backdrop-blur-sm"
+    onClick={onCancel}>
+    <motion.div initial={{ y: 60, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 60, opacity: 0 }}
+      transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+      onClick={e => e.stopPropagation()}
+      className="bg-white rounded-3xl shadow-2xl p-6 w-full max-w-sm space-y-4">
+      <div className="w-12 h-12 bg-red-50 rounded-2xl flex items-center justify-center mx-auto">
+        <AlertTriangle className="w-6 h-6 text-red-500" />
+      </div>
+      <div className="text-center">
+        <h3 className="font-bold text-secondary text-lg">تأكيد الحذف</h3>
+        <p className="text-sm text-secondary/60 mt-1">هل أنت متأكد من حذف <span className="font-semibold text-secondary">{label}</span>؟</p>
+      </div>
+      <div className="flex gap-3">
+        <button onClick={onCancel} className="flex-1 py-2.5 rounded-xl bg-secondary/8 hover:bg-secondary/15 text-secondary text-sm font-semibold transition-colors cursor-pointer">إلغاء</button>
+        <button onClick={onConfirm} disabled={loading} className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm font-semibold transition-colors cursor-pointer disabled:opacity-60 flex items-center justify-center gap-2">
+          {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+          حذف
+        </button>
+      </div>
+    </motion.div>
+  </motion.div>
+);
 
-  const [hero, setHero] = useState(INITIAL_HERO);
-  const [features, setFeatures] = useState(INITIAL_FEATURES);
-  const [portfolio, setPortfolio] = useState(INITIAL_PORTFOLIO);
-  const [services, setServices] = useState<ServiceItem[]>(INITIAL_SERVICES);
-  const [contact, setContact] = useState<ContactState>(INITIAL_CONTACT);
+// ═════════════════════════════════════════════════════════════════════════════
+// SECTION: Hero
+// ═════════════════════════════════════════════════════════════════════════════
+function HeroSection({ token }: { token: string }) {
+  const [hero, setHero] = useState<LandingHero | null>(null);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
-  // Service modal state
-  type ServiceModal =
-    | { mode: 'add' }
-    | { mode: 'edit'; service: ServiceItem; index: number }
-    | { mode: 'delete'; service: ServiceItem; index: number }
-    | null;
-  const [serviceModal, setServiceModal] = useState<ServiceModal>(null);
-  const [serviceForm, setServiceForm] = useState<ServiceItem>({ id: '', nameEn: '', nameAr: '', descriptionEn: '', descriptionAr: '', imageUrl: '' });
+  useEffect(() => {
+    getLandingHero(token).then(r => { setHero(r.data?.data ?? null); }).catch(() => toast.error('فشل جلب بيانات Hero')).finally(() => setLoading(false));
+  }, [token]);
 
-  const openAdd = () => {
-    setServiceForm({ id: Date.now().toString(), nameEn: '', nameAr: '', descriptionEn: '', descriptionAr: '', imageUrl: '' });
-    setServiceModal({ mode: 'add' });
-  };
-  const openEdit = (service: ServiceItem, index: number) => {
-    setServiceForm({ ...service });
-    setServiceModal({ mode: 'edit', service, index });
-  };
-  const openDelete = (service: ServiceItem, index: number) => {
-    setServiceModal({ mode: 'delete', service, index });
-  };
-  const closeServiceModal = () => setServiceModal(null);
-
-  const saveServiceForm = () => {
-    if (serviceModal?.mode === 'add') {
-      setServices([...services, serviceForm]);
-    } else if (serviceModal?.mode === 'edit') {
-      const newS = [...services];
-      newS[serviceModal.index] = serviceForm;
-      setServices(newS);
-    }
-    closeServiceModal();
-  };
-  const confirmDeleteService = () => {
-    if (serviceModal?.mode === 'delete') {
-      setServices(services.filter((_, i) => i !== serviceModal.index));
-    }
-    closeServiceModal();
+  const handleSave = async () => {
+    if (!hero) return;
+    setSaving(true);
+    try {
+      await updateLandingHero({ title_ar: hero.title.ar, title_en: hero.title.en, subtitle_ar: hero.subtitle.ar, subtitle_en: hero.subtitle.en, primary_cta_label_ar: hero.primary_cta_label.ar, primary_cta_label_en: hero.primary_cta_label.en, primary_cta_url: hero.primary_cta_url, secondary_cta_label_ar: hero.secondary_cta_label.ar, secondary_cta_label_en: hero.secondary_cta_label.en, secondary_cta_url: hero.secondary_cta_url, image: imageFile }, token);
+      toast.success('تم تحديث Hero بنجاح');
+    } catch (e) { toast.error((e as Error).message); } finally { setSaving(false); }
   };
 
-  // Image upload
-  const imageInputRef = useRef<HTMLInputElement>(null);
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      setServiceForm((prev) => ({ ...prev, imageUrl: reader.result as string }));
-    };
-    reader.readAsDataURL(file);
-    // reset so the same file can be re-selected
-    e.target.value = '';
+  if (loading) return <SectionSkeleton />;
+  if (!hero) return null;
+
+  const handleImageFile = (f: File) => {
+    setImageFile(f);
+    const url = URL.createObjectURL(f);
+    setImagePreview(url);
   };
-
-  const sections = [
-    { id: 'hero', title: t('heroSection' as any) || 'Hero Section', icon: ImageIcon, description: t('heroDesc' as any) || 'Manage the main hero banner, title, subtext, and call to action.' },
-    { id: 'features', title: t('featuresSection' as any) || 'Features', icon: Sparkles, description: t('featuresDesc' as any) || 'Edit the key features and services offered.' },
-    { id: 'portfolio', title: t('portfolioSection' as any) || 'Portfolio', icon: LayoutGrid, description: t('portfolioDesc' as any) || 'Update the gallery and portfolio of past events.' },
-    { id: 'services', title: t('servicesSection' as any) || 'Services', icon: Briefcase, description: t('servicesDesc' as any) || 'Manage the services you offer with names, descriptions, and images.' },
-    { id: 'contact', title: t('contactSection' as any) || 'Contact', icon: Phone, description: t('contactDesc' as any) || 'Manage contact information, map location, and social links.' },
-  ];
-
-  const moveItem = <T,>(arr: T[], index: number, direction: 'up' | 'down'): T[] => {
-    const newArr = [...arr];
-    if (direction === 'up' && index > 0) {
-      [newArr[index - 1], newArr[index]] = [newArr[index], newArr[index - 1]];
-    } else if (direction === 'down' && index < newArr.length - 1) {
-      [newArr[index + 1], newArr[index]] = [newArr[index], newArr[index + 1]];
-    }
-    return newArr;
-  };
-
-  const currentSectionInfo = sections.find(s => s.id === activeSection);
-  const BackIcon = dir === 'ltr' ? ArrowLeft : ArrowRight;
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center px-2 gap-4">
-        <div className="flex items-center gap-4">
-          <AnimatePresence mode="wait">
-            {activeSection && (
-              <motion.button
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.8 }}
-                onClick={() => router.push('/landingPage')}
-                className="p-2.5 rounded-xl bg-white/40 hover:bg-white/60 shadow-sm transition-colors text-secondary cursor-pointer shrink-0"
-              >
-                <BackIcon className="w-5 h-5" />
-              </motion.button>
-            )}
-          </AnimatePresence>
-          <div>
-            <h2 className={cn("text-2xl font-semibold text-secondary flex items-center gap-2", dir === 'ltr' ? 'font-serif' : 'font-arabic')}>
-              {activeSection && currentSectionInfo ? (
-                <>
-                  <currentSectionInfo.icon className="w-6 h-6 text-primary shrink-0" />
-                  {currentSectionInfo.title}
-                </>
-              ) : (
-                t('landingPage' as any)
-              )}
-            </h2>
-            <p className="text-sm text-secondary/60 mt-1">
-              {activeSection && currentSectionInfo
-                ? currentSectionInfo.description
-                : dir === 'ltr' ? 'Manage the content of your public landing page.' : 'إدارة محتوى صفحة الهبوط العامة الخاصة بك.'}
-            </p>
-          </div>
-        </div>
+      <BilingualField labelEn="Title (EN)" labelAr="العنوان (AR)" valueEn={hero.title.en} valueAr={hero.title.ar}
+        onChangeEn={v => setHero(h => h ? { ...h, title: { ...h.title, en: v } } : h)}
+        onChangeAr={v => setHero(h => h ? { ...h, title: { ...h.title, ar: v } } : h)} />
 
-        {activeSection && (
-          <button className="flex items-center justify-center gap-2 px-5 py-2.5 bg-primary hover:bg-primary-dark text-white rounded-xl text-sm font-medium transition-colors shadow-sm shadow-primary/20 cursor-pointer w-full sm:w-auto">
-            <Save className="w-4 h-4" />
-            {dir === 'ltr' ? 'Save Changes' : 'حفظ التغييرات'}
-          </button>
-        )}
+      <BilingualField labelEn="Subtitle (EN)" labelAr="النص الفرعي (AR)" valueEn={hero.subtitle.en} valueAr={hero.subtitle.ar}
+        onChangeEn={v => setHero(h => h ? { ...h, subtitle: { ...h.subtitle, en: v } } : h)}
+        onChangeAr={v => setHero(h => h ? { ...h, subtitle: { ...h.subtitle, ar: v } } : h)} multiline rows={3} />
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <BilingualField labelEn="Primary CTA (EN)" labelAr="CTA الأساسي (AR)"
+            valueEn={hero.primary_cta_label.en} valueAr={hero.primary_cta_label.ar}
+            onChangeEn={v => setHero(h => h ? { ...h, primary_cta_label: { ...h.primary_cta_label, en: v } } : h)}
+            onChangeAr={v => setHero(h => h ? { ...h, primary_cta_label: { ...h.primary_cta_label, ar: v } } : h)} />
+          <label className={cn(labelClass, 'mt-3')}>Primary CTA URL</label>
+          <input type="url" value={hero.primary_cta_url} onChange={e => setHero(h => h ? { ...h, primary_cta_url: e.target.value } : h)} dir="ltr" className={cn(inputClass, 'mt-1.5')} />
+        </div>
+        <div>
+          <BilingualField labelEn="Secondary CTA (EN)" labelAr="CTA الثانوي (AR)"
+            valueEn={hero.secondary_cta_label.en} valueAr={hero.secondary_cta_label.ar}
+            onChangeEn={v => setHero(h => h ? { ...h, secondary_cta_label: { ...h.secondary_cta_label, en: v } } : h)}
+            onChangeAr={v => setHero(h => h ? { ...h, secondary_cta_label: { ...h.secondary_cta_label, ar: v } } : h)} />
+          <label className={cn(labelClass, 'mt-3')}>Secondary CTA URL</label>
+          <input type="url" value={hero.secondary_cta_url} onChange={e => setHero(h => h ? { ...h, secondary_cta_url: e.target.value } : h)} dir="ltr" className={cn(inputClass, 'mt-1.5')} />
+        </div>
       </div>
 
+      <ImageUploadBox url={imagePreview ?? hero.image} label="Hero Image" onFile={handleImageFile} onClear={() => { setImageFile(null); setImagePreview(null); setHero(h => h ? { ...h, image: null } : h); }} />
+
+      <div className="flex justify-end pt-2">
+        <button onClick={handleSave} disabled={saving} className="flex items-center gap-2 px-6 py-2.5 bg-primary hover:bg-primary-dark text-white rounded-xl text-sm font-semibold transition-colors shadow-sm cursor-pointer disabled:opacity-60">
+          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+          {saving ? 'جاري الحفظ...' : 'حفظ التغييرات'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// SECTION: How It Works
+// ═════════════════════════════════════════════════════════════════════════════
+interface StepForm { title_ar: string; title_en: string; description_ar: string; description_en: string; iconFile?: File; iconPreview?: string }
+const emptyStepForm = (): StepForm => ({ title_ar: '', title_en: '', description_ar: '', description_en: '' });
+
+function HowItWorksSection({ token }: { token: string }) {
+  const [steps, setSteps] = useState<LandingHowItWorksStep[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [modal, setModal] = useState<null | { mode: 'add' } | { mode: 'edit'; step: LandingHowItWorksStep } | { mode: 'delete'; step: LandingHowItWorksStep }>(null);
+  const [form, setForm] = useState<StepForm>(emptyStepForm());
+  const [formSaving, setFormSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const load = useCallback(() => {
+    setLoading(true);
+    getLandingHowItWorks(token).then(r => setSteps(r.data?.items ?? [])).catch(() => toast.error('فشل جلب الخطوات')).finally(() => setLoading(false));
+  }, [token]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const moveStep = (idx: number, dir: 'up' | 'down') => {
+    const arr = [...steps];
+    if (dir === 'up' && idx > 0) [arr[idx - 1], arr[idx]] = [arr[idx], arr[idx - 1]];
+    else if (dir === 'down' && idx < arr.length - 1) [arr[idx + 1], arr[idx]] = [arr[idx], arr[idx + 1]];
+    setSteps(arr);
+  };
+
+  const saveReorder = async () => {
+    setSaving(true);
+    try {
+      await reorderHowItWorks(steps.map((s, i) => ({ id: s.id, sort: i })), token);
+      toast.success('تم إعادة الترتيب');
+    } catch (e) { toast.error((e as Error).message); } finally { setSaving(false); }
+  };
+
+  const submitForm = async () => {
+    setFormSaving(true);
+    try {
+      if (modal?.mode === 'add') { await createHowItWorksStep({ ...form, icon: form.iconFile }, token); }
+      else if (modal?.mode === 'edit') { await updateHowItWorksStep(modal.step.id, { ...form, icon: form.iconFile }, token); }
+      toast.success('تم الحفظ بنجاح'); setModal(null); load();
+    } catch (e) { toast.error((e as Error).message); } finally { setFormSaving(false); }
+  };
+
+  const doDelete = async () => {
+    if (modal?.mode !== 'delete') return;
+    setDeleting(true);
+    try { await deleteHowItWorksStep(modal.step.id, token); toast.success('تم الحذف'); setModal(null); load(); }
+    catch (e) { toast.error((e as Error).message); } finally { setDeleting(false); }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between bg-secondary/5 p-4 rounded-2xl border border-secondary/10">
+        <span className="font-semibold text-secondary">الخطوات <span className="text-secondary/40 font-normal text-sm">({steps.length})</span></span>
+        <div className="flex gap-2">
+          <button onClick={saveReorder} disabled={saving || loading} className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-secondary/20 rounded-xl text-sm font-medium text-secondary/70 hover:text-secondary transition-colors cursor-pointer disabled:opacity-50 shadow-sm">
+            {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />} حفظ الترتيب
+          </button>
+          <button onClick={() => { setForm(emptyStepForm()); setModal({ mode: 'add' }); }} className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-white rounded-xl text-sm font-medium cursor-pointer hover:bg-primary-dark transition-colors shadow-sm">
+            <Plus className="w-4 h-4" /> إضافة خطوة
+          </button>
+        </div>
+      </div>
+
+      {loading ? <SectionSkeleton /> : (
+        <div className="space-y-3">
+          {steps.map((step, idx) => (
+            <motion.div key={step.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.04 }}
+              className="flex items-center gap-3 p-4 bg-white/40 border border-secondary/10 rounded-2xl group hover:bg-white/60 transition-colors shadow-sm">
+              <div className="flex flex-col gap-0.5 shrink-0">
+                <button onClick={() => moveStep(idx, 'up')} disabled={idx === 0} className="p-1 hover:bg-secondary/10 rounded-lg disabled:opacity-25 cursor-pointer transition-colors"><ArrowUp className="w-3.5 h-3.5" /></button>
+                <button onClick={() => moveStep(idx, 'down')} disabled={idx === steps.length - 1} className="p-1 hover:bg-secondary/10 rounded-lg disabled:opacity-25 cursor-pointer transition-colors"><ArrowDown className="w-3.5 h-3.5" /></button>
+              </div>
+              {step.icon_url && <div className="w-10 h-10 rounded-xl bg-secondary/5 overflow-hidden shrink-0 relative"><Image src={step.icon_url} alt={step.title} fill className="object-contain p-1" /></div>}
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-secondary text-sm">{step.title}</p>
+                <p className="text-xs text-secondary/50 mt-0.5 truncate">{step.description}</p>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button onClick={() => { setForm({ title_ar: step.title, title_en: step.title, description_ar: step.description, description_en: step.description }); setModal({ mode: 'edit', step }); }}
+                  className="flex items-center gap-1 px-2.5 py-1.5 bg-primary/10 text-primary rounded-lg text-xs font-medium cursor-pointer hover:bg-primary/20 transition-colors">
+                  <Pencil className="w-3.5 h-3.5" /> تعديل
+                </button>
+                <button onClick={() => setModal({ mode: 'delete', step })}
+                  className="flex items-center gap-1 px-2.5 py-1.5 bg-red-50 text-red-500 rounded-lg text-xs font-medium cursor-pointer hover:bg-red-100 transition-colors">
+                  <Trash2 className="w-3.5 h-3.5" /> حذف
+                </button>
+              </div>
+            </motion.div>
+          ))}
+          {steps.length === 0 && <div className="text-center py-12 text-secondary/40 text-sm">لم تتم إضافة خطوات بعد.</div>}
+        </div>
+      )}
+
+      {/* Add/Edit Modal */}
+      <AnimatePresence>
+        {(modal?.mode === 'add' || modal?.mode === 'edit') && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30 backdrop-blur-sm" onClick={() => setModal(null)}>
+            <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              transition={{ type: 'spring', damping: 22, stiffness: 280 }} onClick={e => e.stopPropagation()}
+              className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-secondary/10">
+                <h3 className="font-bold text-secondary">{modal?.mode === 'add' ? 'إضافة خطوة جديدة' : 'تعديل الخطوة'}</h3>
+                <button onClick={() => setModal(null)} className="p-2 hover:bg-secondary/10 rounded-xl cursor-pointer transition-colors"><X className="w-5 h-5 text-secondary/60" /></button>
+              </div>
+              <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+                <ImageUploadBox url={form.iconPreview ?? null} label="Icon Image" aspect="aspect-square max-w-[120px]"
+                  onFile={f => { setForm(v => ({ ...v, iconFile: f, iconPreview: URL.createObjectURL(f) })); }}
+                  onClear={() => setForm(v => ({ ...v, iconFile: undefined, iconPreview: undefined }))} />
+                <BilingualField labelEn="Title (EN)" labelAr="العنوان (AR)" valueEn={form.title_en} valueAr={form.title_ar}
+                  onChangeEn={v => setForm(f => ({ ...f, title_en: v }))} onChangeAr={v => setForm(f => ({ ...f, title_ar: v }))} />
+                <BilingualField labelEn="Description (EN)" labelAr="الوصف (AR)" valueEn={form.description_en} valueAr={form.description_ar}
+                  onChangeEn={v => setForm(f => ({ ...f, description_en: v }))} onChangeAr={v => setForm(f => ({ ...f, description_ar: v }))} multiline />
+              </div>
+              <div className="flex gap-3 px-6 py-4 border-t border-secondary/10">
+                <button onClick={() => setModal(null)} className="flex-1 py-2.5 rounded-xl bg-secondary/8 text-secondary font-semibold text-sm cursor-pointer hover:bg-secondary/15 transition-colors">إلغاء</button>
+                <button onClick={submitForm} disabled={formSaving} className="flex-1 py-2.5 rounded-xl bg-primary text-white font-semibold text-sm cursor-pointer hover:bg-primary-dark transition-colors disabled:opacity-60 flex items-center justify-center gap-2">
+                  {formSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} حفظ
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+        {modal?.mode === 'delete' && <DeleteConfirm label={modal.step.title} onConfirm={doDelete} onCancel={() => setModal(null)} loading={deleting} />}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// SECTION: Features
+// ═════════════════════════════════════════════════════════════════════════════
+function FeaturesSection({ token }: { token: string }) {
+  const [features, setFeatures] = useState<LandingFeature[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [modal, setModal] = useState<null | { mode: 'add' } | { mode: 'edit'; feat: LandingFeature } | { mode: 'delete'; feat: LandingFeature }>(null);
+  const [form, setForm] = useState<StepForm>(emptyStepForm());
+  const [formSaving, setFormSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const load = useCallback(() => {
+    setLoading(true);
+    getLandingFeatures(token).then(r => setFeatures(r.data?.items ?? [])).catch(() => toast.error('فشل جلب الميزات')).finally(() => setLoading(false));
+  }, [token]);
+  useEffect(() => { load(); }, [load]);
+
+  const moveItem = (idx: number, dir: 'up' | 'down') => {
+    const arr = [...features];
+    if (dir === 'up' && idx > 0) [arr[idx - 1], arr[idx]] = [arr[idx], arr[idx - 1]];
+    else if (dir === 'down' && idx < arr.length - 1) [arr[idx + 1], arr[idx]] = [arr[idx], arr[idx + 1]];
+    setFeatures(arr);
+  };
+  const saveReorder = async () => {
+    setSaving(true);
+    try { await reorderFeatures(features.map((f, i) => ({ id: f.id, sort: i })), token); toast.success('تم إعادة الترتيب'); }
+    catch (e) { toast.error((e as Error).message); } finally { setSaving(false); }
+  };
+  const submitForm = async () => {
+    setFormSaving(true);
+    try {
+      if (modal?.mode === 'add') await createFeature({ ...form, icon: form.iconFile }, token);
+      else if (modal?.mode === 'edit') await updateFeature(modal.feat.id, { ...form, icon: form.iconFile }, token);
+      toast.success('تم الحفظ'); setModal(null); load();
+    } catch (e) { toast.error((e as Error).message); } finally { setFormSaving(false); }
+  };
+  const doDelete = async () => {
+    if (modal?.mode !== 'delete') return;
+    setDeleting(true);
+    try { await deleteFeature(modal.feat.id, token); toast.success('تم الحذف'); setModal(null); load(); }
+    catch (e) { toast.error((e as Error).message); } finally { setDeleting(false); }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between bg-secondary/5 p-4 rounded-2xl border border-secondary/10">
+        <span className="font-semibold text-secondary">الميزات <span className="text-secondary/40 font-normal text-sm">({features.length})</span></span>
+        <div className="flex gap-2">
+          <button onClick={saveReorder} disabled={saving || loading} className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-secondary/20 rounded-xl text-sm font-medium text-secondary/70 hover:text-secondary transition-colors cursor-pointer disabled:opacity-50 shadow-sm">
+            {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />} حفظ الترتيب
+          </button>
+          <button onClick={() => { setForm(emptyStepForm()); setModal({ mode: 'add' }); }} className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-white rounded-xl text-sm font-medium cursor-pointer hover:bg-primary-dark transition-colors shadow-sm">
+            <Plus className="w-4 h-4" /> إضافة ميزة
+          </button>
+        </div>
+      </div>
+      {loading ? <SectionSkeleton /> : (
+        <div className="space-y-3">
+          {features.map((feat, idx) => (
+            <motion.div key={feat.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.04 }}
+              className="flex items-center gap-3 p-4 bg-white/40 border border-secondary/10 rounded-2xl group hover:bg-white/60 transition-colors shadow-sm">
+              <div className="flex flex-col gap-0.5 shrink-0">
+                <button onClick={() => moveItem(idx, 'up')} disabled={idx === 0} className="p-1 hover:bg-secondary/10 rounded-lg disabled:opacity-25 cursor-pointer"><ArrowUp className="w-3.5 h-3.5" /></button>
+                <button onClick={() => moveItem(idx, 'down')} disabled={idx === features.length - 1} className="p-1 hover:bg-secondary/10 rounded-lg disabled:opacity-25 cursor-pointer"><ArrowDown className="w-3.5 h-3.5" /></button>
+              </div>
+              {feat.icon_url && <div className="w-10 h-10 rounded-xl bg-secondary/5 overflow-hidden shrink-0 relative"><Image src={feat.icon_url} alt={feat.title} fill className="object-contain p-1" /></div>}
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-secondary text-sm">{feat.title}</p>
+                <p className="text-xs text-secondary/50 mt-0.5 truncate">{feat.description}</p>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button onClick={() => { setForm({ title_ar: feat.title, title_en: feat.title, description_ar: feat.description, description_en: feat.description }); setModal({ mode: 'edit', feat }); }}
+                  className="flex items-center gap-1 px-2.5 py-1.5 bg-primary/10 text-primary rounded-lg text-xs font-medium cursor-pointer hover:bg-primary/20 transition-colors">
+                  <Pencil className="w-3.5 h-3.5" /> تعديل
+                </button>
+                <button onClick={() => setModal({ mode: 'delete', feat })}
+                  className="flex items-center gap-1 px-2.5 py-1.5 bg-red-50 text-red-500 rounded-lg text-xs font-medium cursor-pointer hover:bg-red-100 transition-colors">
+                  <Trash2 className="w-3.5 h-3.5" /> حذف
+                </button>
+              </div>
+            </motion.div>
+          ))}
+          {features.length === 0 && <div className="text-center py-12 text-secondary/40 text-sm">لم تتم إضافة ميزات بعد.</div>}
+        </div>
+      )}
+      <AnimatePresence>
+        {(modal?.mode === 'add' || modal?.mode === 'edit') && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30 backdrop-blur-sm" onClick={() => setModal(null)}>
+            <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              transition={{ type: 'spring', damping: 22, stiffness: 280 }} onClick={e => e.stopPropagation()}
+              className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-secondary/10">
+                <h3 className="font-bold text-secondary">{modal?.mode === 'add' ? 'إضافة ميزة' : 'تعديل الميزة'}</h3>
+                <button onClick={() => setModal(null)} className="p-2 hover:bg-secondary/10 rounded-xl cursor-pointer"><X className="w-5 h-5 text-secondary/60" /></button>
+              </div>
+              <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+                <ImageUploadBox url={form.iconPreview ?? null} label="Icon Image" aspect="aspect-square max-w-[120px]"
+                  onFile={f => setForm(v => ({ ...v, iconFile: f, iconPreview: URL.createObjectURL(f) }))}
+                  onClear={() => setForm(v => ({ ...v, iconFile: undefined, iconPreview: undefined }))} />
+                <BilingualField labelEn="Title (EN)" labelAr="العنوان (AR)" valueEn={form.title_en} valueAr={form.title_ar}
+                  onChangeEn={v => setForm(f => ({ ...f, title_en: v }))} onChangeAr={v => setForm(f => ({ ...f, title_ar: v }))} />
+                <BilingualField labelEn="Description (EN)" labelAr="الوصف (AR)" valueEn={form.description_en} valueAr={form.description_ar}
+                  onChangeEn={v => setForm(f => ({ ...f, description_en: v }))} onChangeAr={v => setForm(f => ({ ...f, description_ar: v }))} multiline />
+              </div>
+              <div className="flex gap-3 px-6 py-4 border-t border-secondary/10">
+                <button onClick={() => setModal(null)} className="flex-1 py-2.5 rounded-xl bg-secondary/8 text-secondary font-semibold text-sm cursor-pointer hover:bg-secondary/15 transition-colors">إلغاء</button>
+                <button onClick={submitForm} disabled={formSaving} className="flex-1 py-2.5 rounded-xl bg-primary text-white font-semibold text-sm cursor-pointer hover:bg-primary-dark transition-colors disabled:opacity-60 flex items-center justify-center gap-2">
+                  {formSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} حفظ
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+        {modal?.mode === 'delete' && <DeleteConfirm label={modal.feat.title} onConfirm={doDelete} onCancel={() => setModal(null)} loading={deleting} />}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// SECTION: Portfolio
+// ═════════════════════════════════════════════════════════════════════════════
+interface PortfolioForm { name_ar: string; name_en: string; imageFile?: File; imagePreview?: string }
+const emptyPortfolioForm = (): PortfolioForm => ({ name_ar: '', name_en: '' });
+
+function PortfolioSection({ token }: { token: string }) {
+  const [items, setItems] = useState<LandingPortfolioItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [modal, setModal] = useState<null | { mode: 'add' } | { mode: 'edit'; item: LandingPortfolioItem } | { mode: 'delete'; item: LandingPortfolioItem }>(null);
+  const [form, setForm] = useState<PortfolioForm>(emptyPortfolioForm());
+  const [formSaving, setFormSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const load = useCallback(() => {
+    setLoading(true);
+    getLandingPortfolio(token).then(r => setItems(r.data?.items ?? [])).catch(() => toast.error('فشل جلب Portfolio')).finally(() => setLoading(false));
+  }, [token]);
+  useEffect(() => { load(); }, [load]);
+
+  const moveItem = (idx: number, dir: 'up' | 'down') => {
+    const arr = [...items];
+    if (dir === 'up' && idx > 0) [arr[idx - 1], arr[idx]] = [arr[idx], arr[idx - 1]];
+    else if (dir === 'down' && idx < arr.length - 1) [arr[idx + 1], arr[idx]] = [arr[idx], arr[idx + 1]];
+    setItems(arr);
+  };
+  const saveReorder = async () => {
+    setSaving(true);
+    try { await reorderPortfolio(items.map((it, i) => ({ id: it.id, sort: i })), token); toast.success('تم إعادة الترتيب'); }
+    catch (e) { toast.error((e as Error).message); } finally { setSaving(false); }
+  };
+  const submitForm = async () => {
+    setFormSaving(true);
+    try {
+      if (modal?.mode === 'add') await createPortfolioItem({ ...form, image: form.imageFile }, token);
+      else if (modal?.mode === 'edit') await updatePortfolioItem(modal.item.id, { ...form, image: form.imageFile }, token);
+      toast.success('تم الحفظ'); setModal(null); load();
+    } catch (e) { toast.error((e as Error).message); } finally { setFormSaving(false); }
+  };
+  const doDelete = async () => {
+    if (modal?.mode !== 'delete') return;
+    setDeleting(true);
+    try { await deletePortfolioItem(modal.item.id, token); toast.success('تم الحذف'); setModal(null); load(); }
+    catch (e) { toast.error((e as Error).message); } finally { setDeleting(false); }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between bg-secondary/5 p-4 rounded-2xl border border-secondary/10">
+        <span className="font-semibold text-secondary">معرض الأعمال <span className="text-secondary/40 font-normal text-sm">({items.length})</span></span>
+        <div className="flex gap-2">
+          <button onClick={saveReorder} disabled={saving || loading} className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-secondary/20 rounded-xl text-sm font-medium text-secondary/70 hover:text-secondary transition-colors cursor-pointer disabled:opacity-50 shadow-sm">
+            {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />} حفظ الترتيب
+          </button>
+          <button onClick={() => { setForm(emptyPortfolioForm()); setModal({ mode: 'add' }); }} className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-white rounded-xl text-sm font-medium cursor-pointer hover:bg-primary-dark transition-colors shadow-sm">
+            <Plus className="w-4 h-4" /> إضافة عنصر
+          </button>
+        </div>
+      </div>
+      {loading ? <SectionSkeleton /> : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {items.map((item, idx) => (
+            <motion.div key={item.id} initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: idx * 0.05 }}
+              className="bg-white/40 border border-secondary/10 rounded-2xl overflow-hidden shadow-sm group hover:shadow-md transition-shadow">
+              <div className="aspect-video relative bg-secondary/5">
+                {item.image
+                  ? <Image src={item.image} alt={item.name} fill className="object-cover" />
+                  : <div className="w-full h-full flex items-center justify-center"><LayoutGrid className="w-8 h-8 text-secondary/20" /></div>}
+                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                  <button onClick={() => { setForm({ name_ar: item.name, name_en: item.name }); setModal({ mode: 'edit', item }); }}
+                    className="p-2 bg-white rounded-xl cursor-pointer hover:bg-secondary/10 transition-colors"><Pencil className="w-4 h-4 text-secondary" /></button>
+                  <button onClick={() => setModal({ mode: 'delete', item })}
+                    className="p-2 bg-red-500 text-white rounded-xl cursor-pointer hover:bg-red-600 transition-colors"><Trash2 className="w-4 h-4" /></button>
+                </div>
+              </div>
+              <div className="p-3 flex items-center justify-between">
+                <p className="font-semibold text-secondary text-sm truncate">{item.name}</p>
+                <div className="flex gap-0.5 shrink-0">
+                  <button onClick={() => moveItem(idx, 'up')} disabled={idx === 0} className="p-1 hover:bg-secondary/10 rounded-lg disabled:opacity-25 cursor-pointer"><ArrowUp className="w-3.5 h-3.5 text-secondary/60" /></button>
+                  <button onClick={() => moveItem(idx, 'down')} disabled={idx === items.length - 1} className="p-1 hover:bg-secondary/10 rounded-lg disabled:opacity-25 cursor-pointer"><ArrowDown className="w-3.5 h-3.5 text-secondary/60" /></button>
+                </div>
+              </div>
+            </motion.div>
+          ))}
+          {items.length === 0 && <div className="col-span-full text-center py-12 text-secondary/40 text-sm">لم تتم إضافة عناصر بعد.</div>}
+        </div>
+      )}
+      <AnimatePresence>
+        {(modal?.mode === 'add' || modal?.mode === 'edit') && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30 backdrop-blur-sm" onClick={() => setModal(null)}>
+            <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              transition={{ type: 'spring', damping: 22, stiffness: 280 }} onClick={e => e.stopPropagation()}
+              className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-secondary/10">
+                <h3 className="font-bold text-secondary">{modal?.mode === 'add' ? 'إضافة عنصر' : 'تعديل العنصر'}</h3>
+                <button onClick={() => setModal(null)} className="p-2 hover:bg-secondary/10 rounded-xl cursor-pointer"><X className="w-5 h-5 text-secondary/60" /></button>
+              </div>
+              <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+                <ImageUploadBox url={form.imagePreview ?? (modal?.mode === 'edit' ? modal.item.image : null)} label="Portfolio Image"
+                  onFile={f => setForm(v => ({ ...v, imageFile: f, imagePreview: URL.createObjectURL(f) }))}
+                  onClear={() => setForm(v => ({ ...v, imageFile: undefined, imagePreview: undefined }))} />
+                <BilingualField labelEn="Name (EN)" labelAr="الاسم (AR)" valueEn={form.name_en} valueAr={form.name_ar}
+                  onChangeEn={v => setForm(f => ({ ...f, name_en: v }))} onChangeAr={v => setForm(f => ({ ...f, name_ar: v }))} />
+              </div>
+              <div className="flex gap-3 px-6 py-4 border-t border-secondary/10">
+                <button onClick={() => setModal(null)} className="flex-1 py-2.5 rounded-xl bg-secondary/8 text-secondary font-semibold text-sm cursor-pointer hover:bg-secondary/15 transition-colors">إلغاء</button>
+                <button onClick={submitForm} disabled={formSaving} className="flex-1 py-2.5 rounded-xl bg-primary text-white font-semibold text-sm cursor-pointer hover:bg-primary-dark transition-colors disabled:opacity-60 flex items-center justify-center gap-2">
+                  {formSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} حفظ
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+        {modal?.mode === 'delete' && <DeleteConfirm label={modal.item.name} onConfirm={doDelete} onCancel={() => setModal(null)} loading={deleting} />}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// SECTION: Social Links
+// ═════════════════════════════════════════════════════════════════════════════
+interface SLForm { platform: string; url: string; label_ar: string; label_en: string }
+const emptySLForm = (): SLForm => ({ platform: 'instagram', url: '', label_ar: '', label_en: '' });
+
+function SocialLinksSection({ token }: { token: string }) {
+  const [links, setLinks] = useState<LandingSocialLink[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [modal, setModal] = useState<null | { mode: 'add' } | { mode: 'edit'; link: LandingSocialLink } | { mode: 'delete'; link: LandingSocialLink }>(null);
+  const [form, setForm] = useState<SLForm>(emptySLForm());
+  const [formSaving, setFormSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const load = useCallback(() => {
+    setLoading(true);
+    getLandingSocialLinks(token).then(r => setLinks(r.data?.items ?? [])).catch(() => toast.error('فشل جلب الروابط')).finally(() => setLoading(false));
+  }, [token]);
+  useEffect(() => { load(); }, [load]);
+
+  const moveLink = (idx: number, dir: 'up' | 'down') => {
+    const arr = [...links];
+    if (dir === 'up' && idx > 0) [arr[idx - 1], arr[idx]] = [arr[idx], arr[idx - 1]];
+    else if (dir === 'down' && idx < arr.length - 1) [arr[idx + 1], arr[idx]] = [arr[idx], arr[idx + 1]];
+    setLinks(arr);
+  };
+  const saveReorder = async () => {
+    setSaving(true);
+    try { await reorderSocialLinks(links.map((l, i) => ({ id: l.id, sort: i })), token); toast.success('تم إعادة الترتيب'); }
+    catch (e) { toast.error((e as Error).message); } finally { setSaving(false); }
+  };
+  const submitForm = async () => {
+    setFormSaving(true);
+    try {
+      if (modal?.mode === 'add') await createSocialLink(form, token);
+      else if (modal?.mode === 'edit') await updateSocialLink(modal.link.id, form, token);
+      toast.success('تم الحفظ'); setModal(null); load();
+    } catch (e) { toast.error((e as Error).message); } finally { setFormSaving(false); }
+  };
+  const doDelete = async () => {
+    if (modal?.mode !== 'delete') return;
+    setDeleting(true);
+    try { await deleteSocialLink(modal.link.id, token); toast.success('تم الحذف'); setModal(null); load(); }
+    catch (e) { toast.error((e as Error).message); } finally { setDeleting(false); }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between bg-secondary/5 p-4 rounded-2xl border border-secondary/10">
+        <span className="font-semibold text-secondary">روابط التواصل <span className="text-secondary/40 font-normal text-sm">({links.length})</span></span>
+        <div className="flex gap-2">
+          <button onClick={saveReorder} disabled={saving || loading} className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-secondary/20 rounded-xl text-sm font-medium text-secondary/70 hover:text-secondary transition-colors cursor-pointer disabled:opacity-50 shadow-sm">
+            {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />} حفظ الترتيب
+          </button>
+          <button onClick={() => { setForm(emptySLForm()); setModal({ mode: 'add' }); }} className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-white rounded-xl text-sm font-medium cursor-pointer hover:bg-primary-dark transition-colors shadow-sm">
+            <Plus className="w-4 h-4" /> إضافة رابط
+          </button>
+        </div>
+      </div>
+      {loading ? <SectionSkeleton /> : (
+        <div className="space-y-3">
+          {links.map((link, idx) => {
+            const Icon = getSocialIcon(link.platform);
+            return (
+              <motion.div key={link.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.04 }}
+                className="flex items-center gap-3 p-4 bg-white/40 border border-secondary/10 rounded-2xl group hover:bg-white/60 transition-colors shadow-sm">
+                <div className="flex flex-col gap-0.5 shrink-0">
+                  <button onClick={() => moveLink(idx, 'up')} disabled={idx === 0} className="p-1 hover:bg-secondary/10 rounded-lg disabled:opacity-25 cursor-pointer"><ArrowUp className="w-3.5 h-3.5" /></button>
+                  <button onClick={() => moveLink(idx, 'down')} disabled={idx === links.length - 1} className="p-1 hover:bg-secondary/10 rounded-lg disabled:opacity-25 cursor-pointer"><ArrowDown className="w-3.5 h-3.5" /></button>
+                </div>
+                <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                  <Icon className="w-4 h-4 text-primary" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-secondary text-sm capitalize">{link.platform}</p>
+                  <a href={link.url} target="_blank" rel="noreferrer" className="text-xs text-primary/70 truncate hover:underline flex items-center gap-1">
+                    <Link className="w-3 h-3 shrink-0" />{link.url}
+                  </a>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button onClick={() => { setForm({ platform: link.platform, url: link.url, label_ar: '', label_en: '' }); setModal({ mode: 'edit', link }); }}
+                    className="flex items-center gap-1 px-2.5 py-1.5 bg-primary/10 text-primary rounded-lg text-xs font-medium cursor-pointer hover:bg-primary/20 transition-colors">
+                    <Pencil className="w-3.5 h-3.5" /> تعديل
+                  </button>
+                  <button onClick={() => setModal({ mode: 'delete', link })}
+                    className="flex items-center gap-1 px-2.5 py-1.5 bg-red-50 text-red-500 rounded-lg text-xs font-medium cursor-pointer hover:bg-red-100 transition-colors">
+                    <Trash2 className="w-3.5 h-3.5" /> حذف
+                  </button>
+                </div>
+              </motion.div>
+            );
+          })}
+          {links.length === 0 && <div className="text-center py-12 text-secondary/40 text-sm">لم تتم إضافة روابط بعد.</div>}
+        </div>
+      )}
+      <AnimatePresence>
+        {(modal?.mode === 'add' || modal?.mode === 'edit') && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30 backdrop-blur-sm" onClick={() => setModal(null)}>
+            <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              transition={{ type: 'spring', damping: 22, stiffness: 280 }} onClick={e => e.stopPropagation()}
+              className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-secondary/10">
+                <h3 className="font-bold text-secondary">{modal?.mode === 'add' ? 'إضافة رابط' : 'تعديل الرابط'}</h3>
+                <button onClick={() => setModal(null)} className="p-2 hover:bg-secondary/10 rounded-xl cursor-pointer"><X className="w-5 h-5 text-secondary/60" /></button>
+              </div>
+              <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+                <div>
+                  <label className={labelClass}>المنصة / Platform</label>
+                  <select value={form.platform} onChange={e => setForm(f => ({ ...f, platform: e.target.value }))}
+                    className={cn(inputClass, 'cursor-pointer')}>
+                    {SOCIAL_PLATFORMS.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className={labelClass}>URL</label>
+                  <input type="url" value={form.url} onChange={e => setForm(f => ({ ...f, url: e.target.value }))} dir="ltr" className={cn(inputClass, 'text-left')} placeholder="https://" />
+                </div>
+                <BilingualField labelEn="Label (EN)" labelAr="التسمية (AR)" valueEn={form.label_en} valueAr={form.label_ar}
+                  onChangeEn={v => setForm(f => ({ ...f, label_en: v }))} onChangeAr={v => setForm(f => ({ ...f, label_ar: v }))} />
+              </div>
+              <div className="flex gap-3 px-6 py-4 border-t border-secondary/10">
+                <button onClick={() => setModal(null)} className="flex-1 py-2.5 rounded-xl bg-secondary/8 text-secondary font-semibold text-sm cursor-pointer hover:bg-secondary/15 transition-colors">إلغاء</button>
+                <button onClick={submitForm} disabled={formSaving} className="flex-1 py-2.5 rounded-xl bg-primary text-white font-semibold text-sm cursor-pointer hover:bg-primary-dark transition-colors disabled:opacity-60 flex items-center justify-center gap-2">
+                  {formSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} حفظ
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+        {modal?.mode === 'delete' && <DeleteConfirm label={modal.link.platform} onConfirm={doDelete} onCancel={() => setModal(null)} loading={deleting} />}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// SECTION: Footer
+// ═════════════════════════════════════════════════════════════════════════════
+function FooterSection({ token }: { token: string }) {
+  const [footer, setFooter] = useState<LandingFooter | null>(null);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    getLandingFooter(token).then(r => setFooter(r.data ?? null)).catch(() => toast.error('فشل جلب بيانات Footer')).finally(() => setLoading(false));
+  }, [token]);
+
+  const handleSave = async () => {
+    if (!footer) return;
+    setSaving(true);
+    try {
+      await updateLandingFooter({ brand_name_ar: footer.brand_name, brand_name_en: footer.brand_name, tagline_ar: footer.tagline, tagline_en: footer.tagline, description_ar: footer.description, description_en: footer.description, copyright: footer.copyright, logo: logoFile }, token);
+      toast.success('تم تحديث Footer بنجاح');
+    } catch (e) { toast.error((e as Error).message); } finally { setSaving(false); }
+  };
+
+  if (loading) return <SectionSkeleton />;
+  if (!footer) return null;
+
+  return (
+    <div className="space-y-6">
+      <BilingualField labelEn="Brand Name (EN)" labelAr="اسم العلامة (AR)"
+        valueEn={footer.brand_name} valueAr={footer.brand_name}
+        onChangeEn={v => setFooter(f => f ? { ...f, brand_name: v } : f)}
+        onChangeAr={v => setFooter(f => f ? { ...f, brand_name: v } : f)} />
+
+      <BilingualField labelEn="Tagline (EN)" labelAr="الشعار (AR)"
+        valueEn={footer.tagline} valueAr={footer.tagline}
+        onChangeEn={v => setFooter(f => f ? { ...f, tagline: v } : f)}
+        onChangeAr={v => setFooter(f => f ? { ...f, tagline: v } : f)} />
+
+      <BilingualField labelEn="Description (EN)" labelAr="الوصف (AR)"
+        valueEn={footer.description} valueAr={footer.description}
+        onChangeEn={v => setFooter(f => f ? { ...f, description: v } : f)}
+        onChangeAr={v => setFooter(f => f ? { ...f, description: v } : f)} multiline />
+
+      <div>
+        <label className={labelClass}>Copyright</label>
+        <input type="text" value={footer.copyright} onChange={e => setFooter(f => f ? { ...f, copyright: e.target.value } : f)} dir="ltr" className={cn(inputClass, 'text-left')} />
+      </div>
+
+      <ImageUploadBox url={logoPreview ?? footer.logo_url} label="Logo"
+        aspect="aspect-[3/1] max-w-[300px]"
+        onFile={f => { setLogoFile(f); setLogoPreview(URL.createObjectURL(f)); }}
+        onClear={() => { setLogoFile(null); setLogoPreview(null); }} />
+
+      <div className="flex justify-end pt-2">
+        <button onClick={handleSave} disabled={saving} className="flex items-center gap-2 px-6 py-2.5 bg-primary hover:bg-primary-dark text-white rounded-xl text-sm font-semibold transition-colors shadow-sm cursor-pointer disabled:opacity-60">
+          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+          {saving ? 'جاري الحفظ...' : 'حفظ التغييرات'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// SECTION: Contact
+// ═════════════════════════════════════════════════════════════════════════════
+function ContactSection({ token }: { token: string }) {
+  const [contact, setContact] = useState<LandingContact | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    getLandingContact(token).then(r => setContact(r.data ?? null)).catch(() => toast.error('فشل جلب معلومات التواصل')).finally(() => setLoading(false));
+  }, [token]);
+
+  const handleSave = async () => {
+    if (!contact) return;
+    setSaving(true);
+    try {
+      await updateLandingContact({ whatsapp_country_code: contact.whatsapp_country_code, whatsapp_phone: contact.whatsapp_phone, office_address_ar: contact.office_address.ar, office_address_en: contact.office_address.en, google_maps_url: contact.google_maps_url }, token);
+      toast.success('تم تحديث معلومات التواصل');
+    } catch (e) { toast.error((e as Error).message); } finally { setSaving(false); }
+  };
+
+  if (loading) return <SectionSkeleton />;
+  if (!contact) return null;
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label className={labelClass}>رمز البلد (Country Code)</label>
+          <input type="text" value={contact.whatsapp_country_code} onChange={e => setContact(c => c ? { ...c, whatsapp_country_code: e.target.value } : c)} dir="ltr" className={cn(inputClass, 'text-left')} placeholder="+965" />
+        </div>
+        <div>
+          <label className={labelClass}>رقم الواتساب (WhatsApp Phone)</label>
+          <input type="text" value={contact.whatsapp_phone} onChange={e => setContact(c => c ? { ...c, whatsapp_phone: e.target.value } : c)} dir="ltr" className={cn(inputClass, 'text-left')} />
+        </div>
+      </div>
+
+      <BilingualField labelEn="Office Address (EN)" labelAr="عنوان المكتب (AR)"
+        valueEn={contact.office_address.en} valueAr={contact.office_address.ar}
+        onChangeEn={v => setContact(c => c ? { ...c, office_address: { ...c.office_address, en: v } } : c)}
+        onChangeAr={v => setContact(c => c ? { ...c, office_address: { ...c.office_address, ar: v } } : c)} />
+
+      <div>
+        <label className={labelClass}>Google Maps URL</label>
+        <input type="url" value={contact.google_maps_url} onChange={e => setContact(c => c ? { ...c, google_maps_url: e.target.value } : c)} dir="ltr" className={cn(inputClass, 'text-left')} placeholder="https://maps.google.com/..." />
+      </div>
+
+      {/* Social links (read-only display — managed in the Social Links section) */}
+      {contact.social_links.length > 0 && (
+        <div className="bg-secondary/3 rounded-2xl p-4 space-y-2">
+          <p className="text-xs font-bold text-secondary/40 uppercase tracking-wider mb-3">روابط التواصل المرتبطة</p>
+          {contact.social_links.map(sl => {
+            const Icon = getSocialIcon(sl.platform);
+            return (
+              <div key={sl.id} className="flex items-center gap-3 text-sm">
+                <Icon className="w-4 h-4 text-secondary/50 shrink-0" />
+                <a href={sl.url} target="_blank" rel="noreferrer" className="text-primary/70 hover:underline truncate">{sl.url}</a>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <div className="flex justify-end pt-2">
+        <button onClick={handleSave} disabled={saving} className="flex items-center gap-2 px-6 py-2.5 bg-primary hover:bg-primary-dark text-white rounded-xl text-sm font-semibold transition-colors shadow-sm cursor-pointer disabled:opacity-60">
+          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+          {saving ? 'جاري الحفظ...' : 'حفظ التغييرات'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// SECTION: Event Types
+// ═════════════════════════════════════════════════════════════════════════════
+interface ETForm { name_ar: string; name_en: string }
+const emptyETForm = (): ETForm => ({ name_ar: '', name_en: '' });
+
+function EventTypesSection({ token }: { token: string }) {
+  const [types, setTypes] = useState<LandingEventType[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [modal, setModal] = useState<null | { mode: 'add' } | { mode: 'edit'; et: LandingEventType } | { mode: 'delete'; et: LandingEventType }>(null);
+  const [form, setForm] = useState<ETForm>(emptyETForm());
+  const [formSaving, setFormSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const load = useCallback(() => {
+    setLoading(true);
+    getLandingEventTypes(token).then(r => setTypes(r.data?.items ?? [])).catch(() => toast.error('فشل جلب أنواع الفعاليات')).finally(() => setLoading(false));
+  }, [token]);
+  useEffect(() => { load(); }, [load]);
+
+  const moveType = (idx: number, dir: 'up' | 'down') => {
+    const arr = [...types];
+    if (dir === 'up' && idx > 0) [arr[idx - 1], arr[idx]] = [arr[idx], arr[idx - 1]];
+    else if (dir === 'down' && idx < arr.length - 1) [arr[idx + 1], arr[idx]] = [arr[idx], arr[idx + 1]];
+    setTypes(arr);
+  };
+  const saveReorder = async () => {
+    setSaving(true);
+    try { await reorderEventTypes(types.map((t, i) => ({ id: t.id, sort: i })), token); toast.success('تم إعادة الترتيب'); }
+    catch (e) { toast.error((e as Error).message); } finally { setSaving(false); }
+  };
+  const submitForm = async () => {
+    setFormSaving(true);
+    try {
+      if (modal?.mode === 'add') await createEventType(form, token);
+      else if (modal?.mode === 'edit') await updateEventType(modal.et.id, form, token);
+      toast.success('تم الحفظ'); setModal(null); load();
+    } catch (e) { toast.error((e as Error).message); } finally { setFormSaving(false); }
+  };
+  const doDelete = async () => {
+    if (modal?.mode !== 'delete') return;
+    setDeleting(true);
+    try { await deleteEventType(modal.et.id, token); toast.success('تم الحذف'); setModal(null); load(); }
+    catch (e) { toast.error((e as Error).message); } finally { setDeleting(false); }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between bg-secondary/5 p-4 rounded-2xl border border-secondary/10">
+        <span className="font-semibold text-secondary">أنواع الفعاليات <span className="text-secondary/40 font-normal text-sm">({types.length})</span></span>
+        <div className="flex gap-2">
+          <button onClick={saveReorder} disabled={saving || loading} className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-secondary/20 rounded-xl text-sm font-medium text-secondary/70 hover:text-secondary transition-colors cursor-pointer disabled:opacity-50 shadow-sm">
+            {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />} حفظ الترتيب
+          </button>
+          <button onClick={() => { setForm(emptyETForm()); setModal({ mode: 'add' }); }} className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-white rounded-xl text-sm font-medium cursor-pointer hover:bg-primary-dark transition-colors shadow-sm">
+            <Plus className="w-4 h-4" /> إضافة نوع
+          </button>
+        </div>
+      </div>
+      {loading ? <SectionSkeleton /> : (
+        <div className="space-y-3">
+          {types.map((et, idx) => (
+            <motion.div key={et.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.04 }}
+              className="flex items-center gap-3 p-4 bg-white/40 border border-secondary/10 rounded-2xl group hover:bg-white/60 transition-colors shadow-sm">
+              <div className="flex flex-col gap-0.5 shrink-0">
+                <button onClick={() => moveType(idx, 'up')} disabled={idx === 0} className="p-1 hover:bg-secondary/10 rounded-lg disabled:opacity-25 cursor-pointer"><ArrowUp className="w-3.5 h-3.5" /></button>
+                <button onClick={() => moveType(idx, 'down')} disabled={idx === types.length - 1} className="p-1 hover:bg-secondary/10 rounded-lg disabled:opacity-25 cursor-pointer"><ArrowDown className="w-3.5 h-3.5" /></button>
+              </div>
+              <span className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center text-xs font-bold text-primary shrink-0">{idx + 1}</span>
+              <p className="flex-1 font-semibold text-secondary text-sm">{et.name}</p>
+              <div className="flex items-center gap-1.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button onClick={() => { setForm({ name_ar: et.name, name_en: et.name }); setModal({ mode: 'edit', et }); }}
+                  className="flex items-center gap-1 px-2.5 py-1.5 bg-primary/10 text-primary rounded-lg text-xs font-medium cursor-pointer hover:bg-primary/20 transition-colors">
+                  <Pencil className="w-3.5 h-3.5" /> تعديل
+                </button>
+                <button onClick={() => setModal({ mode: 'delete', et })}
+                  className="flex items-center gap-1 px-2.5 py-1.5 bg-red-50 text-red-500 rounded-lg text-xs font-medium cursor-pointer hover:bg-red-100 transition-colors">
+                  <Trash2 className="w-3.5 h-3.5" /> حذف
+                </button>
+              </div>
+            </motion.div>
+          ))}
+          {types.length === 0 && <div className="text-center py-12 text-secondary/40 text-sm">لم تتم إضافة أنواع بعد.</div>}
+        </div>
+      )}
+      <AnimatePresence>
+        {(modal?.mode === 'add' || modal?.mode === 'edit') && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30 backdrop-blur-sm" onClick={() => setModal(null)}>
+            <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              transition={{ type: 'spring', damping: 22, stiffness: 280 }} onClick={e => e.stopPropagation()}
+              className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-secondary/10">
+                <h3 className="font-bold text-secondary">{modal?.mode === 'add' ? 'إضافة نوع فعالية' : 'تعديل النوع'}</h3>
+                <button onClick={() => setModal(null)} className="p-2 hover:bg-secondary/10 rounded-xl cursor-pointer"><X className="w-5 h-5 text-secondary/60" /></button>
+              </div>
+              <div className="p-6 space-y-4">
+                <BilingualField labelEn="Name (EN)" labelAr="الاسم (AR)" valueEn={form.name_en} valueAr={form.name_ar}
+                  onChangeEn={v => setForm(f => ({ ...f, name_en: v }))} onChangeAr={v => setForm(f => ({ ...f, name_ar: v }))} />
+              </div>
+              <div className="flex gap-3 px-6 py-4 border-t border-secondary/10">
+                <button onClick={() => setModal(null)} className="flex-1 py-2.5 rounded-xl bg-secondary/8 text-secondary font-semibold text-sm cursor-pointer hover:bg-secondary/15 transition-colors">إلغاء</button>
+                <button onClick={submitForm} disabled={formSaving} className="flex-1 py-2.5 rounded-xl bg-primary text-white font-semibold text-sm cursor-pointer hover:bg-primary-dark transition-colors disabled:opacity-60 flex items-center justify-center gap-2">
+                  {formSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} حفظ
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+        {modal?.mode === 'delete' && <DeleteConfirm label={modal.et.name} onConfirm={doDelete} onCancel={() => setModal(null)} loading={deleting} />}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// MAIN PAGE
+// ═════════════════════════════════════════════════════════════════════════════
+
+const SECTIONS = [
+  { id: 'hero',         title: 'Hero Section',      titleAr: 'القسم الرئيسي',     icon: ImageIcon,    description: 'Manage the main banner, title, CTA buttons, and image.',           descAr: 'إدارة البانر الرئيسي والعنوان وأزرار الدعوة.' },
+  { id: 'how-it-works', title: 'How It Works',      titleAr: 'كيف يعمل',          icon: CheckCircle2, description: 'Manage the steps shown in the "How It Works" section.',            descAr: 'إدارة خطوات قسم "كيف يعمل".' },
+  { id: 'features',     title: 'Features',          titleAr: 'الميزات',            icon: Sparkles,     description: 'Edit the key features shown on the landing page.',                 descAr: 'تعديل الميزات الرئيسية المعروضة.' },
+  { id: 'portfolio',    title: 'Portfolio',         titleAr: 'معرض الأعمال',       icon: LayoutGrid,   description: 'Manage portfolio items and their images.',                         descAr: 'إدارة عناصر معرض الأعمال وصورها.' },
+  { id: 'social-links', title: 'Social Links',      titleAr: 'روابط التواصل',      icon: Link,         description: 'Manage social media links displayed on the landing page.',         descAr: 'إدارة روابط وسائل التواصل الاجتماعي.' },
+  { id: 'footer',       title: 'Footer',            titleAr: 'تذييل الصفحة',       icon: Footprints,   description: 'Manage brand name, tagline, copyright text, and logo.',            descAr: 'إدارة اسم العلامة والشعار وحقوق النشر.' },
+  { id: 'contact',      title: 'Contact Info',      titleAr: 'معلومات التواصل',    icon: Phone,        description: 'Manage WhatsApp number, office address, and map link.',            descAr: 'إدارة رقم الواتساب وعنوان المكتب.' },
+  { id: 'event-types',  title: 'Event Types',       titleAr: 'أنواع الفعاليات',    icon: CalendarDays, description: 'Manage event type options shown in the contact form.',              descAr: 'إدارة أنواع الفعاليات في نموذج التواصل.' },
+];
+
+function LandingPageContent() {
+  const { dir } = useLanguage();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const activeSection = searchParams.get('s');
+  const token = getToken() ?? '';
+
+  const BackIcon = dir === 'ltr' ? ArrowLeft : ArrowRight;
+  const currentSection = SECTIONS.find(s => s.id === activeSection);
+
+  const renderSection = () => {
+    switch (activeSection) {
+      case 'hero':         return <HeroSection token={token} />;
+      case 'how-it-works': return <HowItWorksSection token={token} />;
+      case 'features':     return <FeaturesSection token={token} />;
+      case 'portfolio':    return <PortfolioSection token={token} />;
+      case 'social-links': return <SocialLinksSection token={token} />;
+      case 'footer':       return <FooterSection token={token} />;
+      case 'contact':      return <ContactSection token={token} />;
+      case 'event-types':  return <EventTypesSection token={token} />;
+      default:             return null;
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center gap-4 px-2">
+        <AnimatePresence mode="wait">
+          {activeSection && (
+            <motion.button key="back" initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.8 }}
+              onClick={() => router.push('/landingPage')}
+              className="p-2.5 rounded-xl bg-white/40 hover:bg-white/60 shadow-sm transition-colors text-secondary cursor-pointer shrink-0">
+              <BackIcon className="w-5 h-5" />
+            </motion.button>
+          )}
+        </AnimatePresence>
+        <div>
+          <h2 className={cn('text-2xl font-semibold text-secondary flex items-center gap-2', dir === 'ltr' ? 'font-serif' : 'font-arabic')}>
+            {currentSection ? (
+              <><currentSection.icon className="w-6 h-6 text-primary shrink-0" />
+                {dir === 'ltr' ? currentSection.title : currentSection.titleAr}</>
+            ) : (dir === 'rtl' ? 'صفحة الهبوط' : 'Landing Page')}
+          </h2>
+          <p className="text-sm text-secondary/55 mt-0.5">
+            {currentSection
+              ? (dir === 'ltr' ? currentSection.description : currentSection.descAr)
+              : (dir === 'rtl' ? 'إدارة محتوى صفحة الهبوط العامة' : 'Manage the content of your public landing page.')}
+          </p>
+        </div>
+      </div>
+
+      {/* Body */}
       <AnimatePresence mode="wait">
         {!activeSection ? (
-          <motion.div
-            key="grid"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="grid grid-cols-1 md:grid-cols-2 gap-6"
-          >
-            {sections.map((section, index) => (
-              <motion.button
-                key={section.id}
+          <motion.div key="grid" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}
+            className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+            {SECTIONS.map((section, i) => (
+              <motion.button key={section.id}
                 onClick={() => router.push(`/landingPage?s=${section.id}`)}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.1, duration: 0.5 }}
-                className="p-6 rounded-3xl glass-panel text-start hover:bg-white/60 transition-all shadow-sm border border-secondary/5 group flex flex-col gap-4 cursor-pointer"
-              >
+                initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.07, duration: 0.4 }}
+                className="p-6 rounded-3xl glass-panel text-start hover:bg-white/60 transition-all shadow-sm border border-secondary/5 group flex flex-col gap-4 cursor-pointer hover:-translate-y-0.5">
                 <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
                   <section.icon className="w-7 h-7" />
                 </div>
                 <div>
-                  <h3 className="text-xl font-semibold text-secondary mb-2">{section.title}</h3>
-                  <p className="text-secondary/60">{section.description}</p>
+                  <h3 className="text-lg font-bold text-secondary mb-1">{dir === 'ltr' ? section.title : section.titleAr}</h3>
+                  <p className="text-sm text-secondary/55 leading-relaxed">{dir === 'ltr' ? section.description : section.descAr}</p>
                 </div>
               </motion.button>
             ))}
           </motion.div>
         ) : (
-          <motion.div
-            key={`section-${activeSection}`}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="glass-panel rounded-3xl p-6 sm:p-8 space-y-8 min-h-[80vh]"
-          >
-            {/* HERO SECTION */}
-            {activeSection === 'hero' && (
-              <div className="space-y-6">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-secondary mb-2">{dir === 'rtl' ? 'العنوان الرئيسي (EN)' : 'Headline (EN)'}</label>
-                    <input
-                      type="text"
-                      value={hero.headlineEn}
-                      onChange={(e) => setHero({ ...hero, headlineEn: e.target.value })}
-                      dir="ltr"
-                      className="w-full px-4 py-3 rounded-xl bg-white/50 border border-secondary/20 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all text-left"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-secondary mb-2">{dir === 'rtl' ? 'العنوان الرئيسي (AR)' : 'Headline (AR)'}</label>
-                    <input
-                      type="text"
-                      value={hero.headlineAr}
-                      onChange={(e) => setHero({ ...hero, headlineAr: e.target.value })}
-                      dir="rtl"
-                      className="w-full px-4 py-3 rounded-xl bg-white/50 border border-secondary/20 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all text-right font-arabic"
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-secondary mb-2">{dir === 'rtl' ? 'النص الفرعي (EN)' : 'Subheading (EN)'}</label>
-                    <textarea
-                      rows={3}
-                      value={hero.subheadingEn}
-                      onChange={(e) => setHero({ ...hero, subheadingEn: e.target.value })}
-                      dir="ltr"
-                      className="w-full px-4 py-3 rounded-xl bg-white/50 border border-secondary/20 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all resize-none text-left"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-secondary mb-2">{dir === 'rtl' ? 'النص الفرعي (AR)' : 'Subheading (AR)'}</label>
-                    <textarea
-                      rows={3}
-                      value={hero.subheadingAr}
-                      onChange={(e) => setHero({ ...hero, subheadingAr: e.target.value })}
-                      dir="rtl"
-                      className="w-full px-4 py-3 rounded-xl bg-white/50 border border-secondary/20 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all resize-none text-right font-arabic"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-secondary mb-2">{dir === 'rtl' ? 'الصورة الرئيسية' : 'Hero Image'}</label>
-                  {hero.imageUrl ? (
-                    <div className="relative rounded-2xl overflow-hidden shadow-sm group">
-                      <Image src={hero.imageUrl} alt="Hero" width={800} height={400} className="w-full h-64 object-cover" />
-                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                        <button
-                          onClick={() => setHero({ ...hero, imageUrl: '' })}
-                          className="p-3 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors cursor-pointer"
-                        >
-                          <Trash2 className="w-5 h-5" />
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="w-full h-64 rounded-2xl border-2 border-dashed border-secondary/20 flex flex-col items-center justify-center bg-white/30 text-secondary/50 hover:bg-white/50 transition-colors cursor-pointer">
-                      <Upload className="w-8 h-8 mb-3 opacity-50" />
-                      <span className="font-medium">{dir === 'rtl' ? 'انقر لرفع الصورة الرئيسية' : 'Click to upload hero image'}</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* FEATURES SECTION */}
-            {activeSection === 'features' && (
-              <div className="space-y-6">
-                <div className="flex justify-between items-center bg-secondary/5 p-4 rounded-2xl border border-secondary/10">
-                  <span className="font-medium text-secondary">{dir === 'rtl' ? 'المميزات المضافة' : 'Added Features'}</span>
-                  <button
-                    onClick={() => setFeatures([...features, { id: Date.now().toString(), icon: '', textEn: 'New Feature', textAr: 'ميزة جديدة', descriptionEn: '', descriptionAr: '' }])}
-                    className="flex items-center gap-2 px-3 py-1.5 bg-white text-primary rounded-lg text-sm font-medium hover:bg-primary/5 transition-colors shadow-sm ring-1 ring-black/5 cursor-pointer"
-                  >
-                    <Plus className="w-4 h-4" /> {dir === 'rtl' ? 'إضافة ميزة' : 'Add Feature'}
-                  </button>
-                </div>
-
-                <div className="space-y-4">
-                  {features.map((feature, index) => (
-                    <div key={feature.id} className="flex flex-col sm:flex-row gap-4 p-4 rounded-2xl bg-white/40 border border-secondary/10 shadow-sm group">
-                      <div className="flex sm:flex-col gap-1 items-center justify-center bg-secondary/5 p-2 rounded-xl">
-                        <button onClick={() => setFeatures(moveItem(features, index, 'up'))} disabled={index === 0} className="p-1 hover:bg-white rounded-md disabled:opacity-30 cursor-pointer">
-                          <ArrowUp className="w-4 h-4" />
-                        </button>
-                        <button onClick={() => setFeatures(moveItem(features, index, 'down'))} disabled={index === features.length - 1} className="p-1 hover:bg-white rounded-md disabled:opacity-30 cursor-pointer">
-                          <ArrowDown className="w-4 h-4" />
-                        </button>
-                      </div>
-
-                      <div className="flex-1 flex flex-col gap-4">
-                        <div className="grid grid-cols-1 sm:grid-cols-5 gap-4">
-                          <div className="sm:col-span-1">
-                            <label className="block text-xs font-medium text-secondary/60 mb-1.5 uppercase tracking-wider">{dir === 'rtl' ? 'الأيقونة' : 'Icon'}</label>
-                            {feature.icon ? (
-                              <div className="relative w-full h-9 rounded-xl overflow-hidden shadow-sm group bg-secondary/5">
-                                <Image src={feature.icon} alt="Icon" fill className="object-contain p-1" />
-                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                  <button
-                                    onClick={() => {
-                                      const newF = [...features];
-                                      newF[index].icon = '';
-                                      setFeatures(newF);
-                                    }}
-                                    className="p-1 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors cursor-pointer"
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                  </button>
-                                </div>
-                              </div>
-                            ) : (
-                              <div className="w-full h-9 rounded-xl border-2 border-dashed border-secondary/20 flex items-center justify-center bg-white/30 text-secondary/50 hover:bg-white/50 transition-colors cursor-pointer">
-                                <Upload className="w-4 h-4 opacity-50" />
-                              </div>
-                            )}
-                          </div>
-                          <div className="sm:col-span-2">
-                            <label className="block text-xs font-medium text-secondary/60 mb-1.5 uppercase tracking-wider">{dir === 'rtl' ? 'الميزة (EN)' : 'Feature (EN)'}</label>
-                            <input
-                              type="text"
-                              value={feature.textEn}
-                              onChange={(e) => {
-                                const newF = [...features];
-                                newF[index].textEn = e.target.value;
-                                setFeatures(newF);
-                              }}
-                              dir="ltr"
-                              className="w-full px-3 py-2 text-sm rounded-xl bg-white/50 border border-secondary/20 focus:border-primary outline-none text-left"
-                            />
-                          </div>
-                          <div className="sm:col-span-2">
-                            <label className="block text-xs font-medium text-secondary/60 mb-1.5 uppercase tracking-wider">{dir === 'rtl' ? 'الميزة (AR)' : 'Feature (AR)'}</label>
-                            <input
-                              type="text"
-                              value={feature.textAr}
-                              onChange={(e) => {
-                                const newF = [...features];
-                                newF[index].textAr = e.target.value;
-                                setFeatures(newF);
-                              }}
-                              dir="rtl"
-                              className="w-full px-3 py-2 text-sm rounded-xl bg-white/50 border border-secondary/20 focus:border-primary outline-none text-right font-arabic"
-                            />
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          <div>
-                            <label className="block text-xs font-medium text-secondary/60 mb-1.5 uppercase tracking-wider">{dir === 'rtl' ? 'الوصف (EN)' : 'Description (EN)'}</label>
-                            <textarea
-                              value={feature.descriptionEn || ''}
-                              onChange={(e) => {
-                                const newF = [...features];
-                                newF[index].descriptionEn = e.target.value;
-                                setFeatures(newF);
-                              }}
-                              dir="ltr"
-                              rows={2}
-                              className="w-full px-3 py-2 text-sm rounded-xl bg-white/50 border border-secondary/20 focus:border-primary outline-none text-left resize-none"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-secondary/60 mb-1.5 uppercase tracking-wider">{dir === 'rtl' ? 'الوصف (AR)' : 'Description (AR)'}</label>
-                            <textarea
-                              value={feature.descriptionAr || ''}
-                              onChange={(e) => {
-                                const newF = [...features];
-                                newF[index].descriptionAr = e.target.value;
-                                setFeatures(newF);
-                              }}
-                              dir="rtl"
-                              rows={2}
-                              className="w-full px-3 py-2 text-sm rounded-xl bg-white/50 border border-secondary/20 focus:border-primary outline-none text-right font-arabic resize-none"
-                            />
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center shrink-0">
-                        <button
-                          onClick={() => setFeatures(features.filter(f => f.id !== feature.id))}
-                          className="p-2 text-red-500 hover:bg-red-50 rounded-xl transition-colors cursor-pointer"
-                        >
-                          <Trash2 className="w-5 h-5" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-
-                  {features.length === 0 && (
-                    <div className="text-center py-8 text-secondary/50">{dir === 'rtl' ? 'لم يتم إضافة مميزات.' : 'No features added.'}</div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* PORTFOLIO SECTION */}
-            {activeSection === 'portfolio' && (
-              <div className="space-y-6">
-                <div className="flex justify-between items-center bg-secondary/5 p-4 rounded-2xl border border-secondary/10">
-                  <span className="font-medium text-secondary">{dir === 'rtl' ? 'عناصر معرض الأعمال' : 'Portfolio Items'}</span>
-                  <button
-                    onClick={() => setPortfolio([...portfolio, { id: Date.now().toString(), imageUrl: '', textEn: 'New Project', textAr: 'مشروع جديد' }])}
-                    className="flex items-center gap-2 px-3 py-1.5 bg-white text-primary rounded-lg text-sm font-medium hover:bg-primary/5 transition-colors shadow-sm ring-1 ring-black/5 cursor-pointer"
-                  >
-                    <Plus className="w-4 h-4" /> {dir === 'rtl' ? 'إضافة عنصر' : 'Add Item'}
-                  </button>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {portfolio.map((item, index) => (
-                    <div key={item.id} className="flex flex-col gap-4 p-4 rounded-2xl bg-white/40 border border-secondary/10 shadow-sm">
-                      <div className="flex justify-between items-center">
-                        <div className="flex gap-1 bg-secondary/5 p-1.5 rounded-xl">
-                          <button onClick={() => setPortfolio(moveItem(portfolio, index, 'up'))} disabled={index === 0} className="p-1 hover:bg-white shadow-sm rounded-md disabled:opacity-30 cursor-pointer">
-                            <ArrowUp className="w-4 h-4" />
-                          </button>
-                          <button onClick={() => setPortfolio(moveItem(portfolio, index, 'down'))} disabled={index === portfolio.length - 1} className="p-1 hover:bg-white shadow-sm rounded-md disabled:opacity-30 cursor-pointer">
-                            <ArrowDown className="w-4 h-4" />
-                          </button>
-                        </div>
-                        <button
-                          onClick={() => setPortfolio(portfolio.filter(p => p.id !== item.id))}
-                          className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-
-                      {item.imageUrl ? (
-                        <div className="relative rounded-xl overflow-hidden aspect-video bg-secondary/5">
-                          <Image src={item.imageUrl} alt={item.textEn} fill className="object-cover" />
-                          <div className="absolute inset-0 bg-black/40 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center">
-                            <button
-                              onClick={() => {
-                                const newP = [...portfolio];
-                                newP[index].imageUrl = '';
-                                setPortfolio(newP);
-                              }}
-                              className="px-3 py-1.5 bg-white text-sm font-medium rounded-lg shadow-sm cursor-pointer"
-                            >
-                              {dir === 'rtl' ? 'تغيير الصورة' : 'Replace Image'}
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="aspect-video rounded-xl border-2 border-dashed border-secondary/20 flex flex-col items-center justify-center bg-white/30 text-secondary/50 hover:bg-white/50 transition-colors cursor-pointer">
-                          <Upload className="w-6 h-6 mb-2 opacity-50" />
-                          <span className="text-sm font-medium">{dir === 'rtl' ? 'رفع صورة' : 'Upload Image'}</span>
-                        </div>
-                      )}
-
-                      <div className="space-y-4">
-                        <div>
-                          <label className="block text-xs font-medium text-secondary/60 mb-1.5 uppercase tracking-wider">{dir === 'rtl' ? 'اسم المشروع (EN)' : 'Project Name (EN)'}</label>
-                          <input
-                            type="text"
-                            value={item.textEn}
-                            onChange={(e) => {
-                              const newP = [...portfolio];
-                              newP[index].textEn = e.target.value;
-                              setPortfolio(newP);
-                            }}
-                            dir="ltr"
-                            className="w-full px-3 py-2 text-sm rounded-xl bg-white/50 border border-secondary/20 focus:border-primary outline-none text-left"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs font-medium text-secondary/60 mb-1.5 uppercase tracking-wider">{dir === 'rtl' ? 'اسم المشروع (AR)' : 'Project Name (AR)'}</label>
-                          <input
-                            type="text"
-                            value={item.textAr}
-                            onChange={(e) => {
-                              const newP = [...portfolio];
-                              newP[index].textAr = e.target.value;
-                              setPortfolio(newP);
-                            }}
-                            dir="rtl"
-                            className="w-full px-3 py-2 text-sm rounded-xl bg-white/50 border border-secondary/20 focus:border-primary outline-none text-right font-arabic"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-
-                  {portfolio.length === 0 && (
-                    <div className="col-span-full text-center py-8 text-secondary/50">{dir === 'rtl' ? 'لم يتم إضافة عناصر.' : 'No portfolio items added.'}</div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* SERVICES SECTION */}
-            {activeSection === 'services' && (
-              <div className="space-y-4">
-                {/* Header bar */}
-                <div className="flex justify-between items-center bg-secondary/5 p-4 rounded-2xl border border-secondary/10">
-                  <span className="font-medium text-secondary">{dir === 'rtl' ? 'الخدمات المضافة' : 'Added Services'} <span className="text-sm text-secondary/40">({services.length})</span></span>
-                  <button
-                    onClick={openAdd}
-                    className="flex items-center gap-2 px-3 py-1.5 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors shadow-sm shadow-primary/20 cursor-pointer"
-                  >
-                    <Plus className="w-4 h-4" /> {dir === 'rtl' ? 'إضافة خدمة' : 'Add Service'}
-                  </button>
-                </div>
-
-                {/* Services list */}
-                <div className="rounded-2xl border border-secondary/10 overflow-hidden bg-white/20 divide-y divide-secondary/10">
-                  {services.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-14 gap-3 text-secondary/40">
-                      <Briefcase className="w-10 h-10 opacity-30" />
-                      <p className="text-sm font-medium">{dir === 'rtl' ? 'لم يتم إضافة خدمات بعد.' : 'No services added yet.'}</p>
-                    </div>
-                  ) : (
-                    services.map((service, index) => (
-                      <motion.div
-                        key={service.id}
-                        initial={{ opacity: 0, y: 6 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: index * 0.04 }}
-                        className="flex items-center gap-4 px-4 py-3.5 hover:bg-white/50 transition-colors group"
-                      >
-                        {/* Thumbnail */}
-                        <div className="w-12 h-12 rounded-xl overflow-hidden bg-secondary/10 shrink-0 flex items-center justify-center">
-                          {service.imageUrl ? (
-                            <div className="relative w-full h-full">
-                              <Image src={service.imageUrl} alt={service.nameEn} fill className="object-cover" />
-                            </div>
-                          ) : (
-                            <Briefcase className="w-5 h-5 text-secondary/30" />
-                          )}
-                        </div>
-
-                        {/* Text */}
-                        <div className="flex-1 min-w-0">
-                          <p className={cn('text-sm font-semibold text-secondary truncate', dir === 'rtl' ? 'font-arabic text-right' : '')}>
-                            {dir === 'rtl' ? (service.nameAr || service.nameEn) : (service.nameEn || service.nameAr)}
-                          </p>
-                          <p className={cn('text-xs text-secondary/50 mt-0.5 line-clamp-1', dir === 'rtl' ? 'font-arabic text-right' : '')}>
-                            {dir === 'rtl' ? (service.descriptionAr || service.descriptionEn) : (service.descriptionEn || service.descriptionAr)}
-                          </p>
-                        </div>
-
-                        {/* Reorder */}
-                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button onClick={() => setServices(moveItem(services, index, 'up'))} disabled={index === 0} className="p-1.5 hover:bg-secondary/10 rounded-lg disabled:opacity-30 cursor-pointer transition-colors">
-                            <ArrowUp className="w-3.5 h-3.5 text-secondary/60" />
-                          </button>
-                          <button onClick={() => setServices(moveItem(services, index, 'down'))} disabled={index === services.length - 1} className="p-1.5 hover:bg-secondary/10 rounded-lg disabled:opacity-30 cursor-pointer transition-colors">
-                            <ArrowDown className="w-3.5 h-3.5 text-secondary/60" />
-                          </button>
-                        </div>
-
-                        {/* Edit / Delete */}
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          <button
-                            onClick={() => openEdit(service, index)}
-                            className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-primary bg-primary/10 hover:bg-primary/20 rounded-lg transition-colors cursor-pointer"
-                          >
-                            <Pencil className="w-3.5 h-3.5" />
-                            {dir === 'rtl' ? 'تعديل' : 'Edit'}
-                          </button>
-                          <button
-                            onClick={() => openDelete(service, index)}
-                            className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-red-500 bg-red-50 hover:bg-red-100 rounded-lg transition-colors cursor-pointer"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                            {dir === 'rtl' ? 'حذف' : 'Delete'}
-                          </button>
-                        </div>
-                      </motion.div>
-                    ))
-                  )}
-                </div>
-
-                {/* ── ADD / EDIT MODAL ── */}
-                <AnimatePresence>
-                  {(serviceModal?.mode === 'add' || serviceModal?.mode === 'edit') && (
-                    <motion.div
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
-                      onClick={closeServiceModal}
-                    >
-                      <motion.div
-                        initial={{ opacity: 0, scale: 0.95, y: 20 }}
-                        animate={{ opacity: 1, scale: 1, y: 0 }}
-                        exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                        transition={{ type: 'spring', damping: 20, stiffness: 300 }}
-                        onClick={(e) => e.stopPropagation()}
-                        className="w-full max-w-lg bg-white rounded-3xl shadow-2xl overflow-hidden"
-                      >
-                        {/* Modal header */}
-                        <div className="flex items-center justify-between px-6 py-4 border-b border-secondary/10">
-                          <div className="flex items-center gap-3">
-                            <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center">
-                              <Briefcase className="w-5 h-5 text-primary" />
-                            </div>
-                            <h3 className="font-semibold text-secondary text-base">
-                              {serviceModal.mode === 'add'
-                                ? (dir === 'rtl' ? 'إضافة خدمة جديدة' : 'Add New Service')
-                                : (dir === 'rtl' ? 'تعديل الخدمة' : 'Edit Service')}
-                            </h3>
-                          </div>
-                          <button onClick={closeServiceModal} className="p-2 hover:bg-secondary/10 rounded-xl transition-colors cursor-pointer">
-                            <X className="w-5 h-5 text-secondary/60" />
-                          </button>
-                        </div>
-
-                        {/* Modal body */}
-                        <div className="p-6 space-y-5 max-h-[70vh] overflow-y-auto">
-                          {/* Image */}
-                          <div>
-                            <label className="block text-xs font-semibold text-secondary/60 mb-2 uppercase tracking-wider">{dir === 'rtl' ? 'صورة الخدمة' : 'Service Image'}</label>
-                            {serviceForm.imageUrl ? (
-                              <div className="relative rounded-xl overflow-hidden aspect-video bg-secondary/5">
-                                <Image src={serviceForm.imageUrl} alt={serviceForm.nameEn} fill className="object-cover" />
-                                <div className="absolute inset-0 bg-black/40 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center">
-                                  <button onClick={() => setServiceForm({ ...serviceForm, imageUrl: '' })} className="p-2.5 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors cursor-pointer">
-                                    <Trash2 className="w-4 h-4" />
-                                  </button>
-                                </div>
-                              </div>
-                            ) : (
-                              <div
-                                onClick={() => imageInputRef.current?.click()}
-                                className="aspect-video rounded-xl border-2 border-dashed border-secondary/20 flex flex-col items-center justify-center bg-secondary/5 text-secondary/40 hover:bg-primary/5 hover:border-primary/30 transition-colors cursor-pointer group/upload"
-                              >
-                                <Upload className="w-6 h-6 mb-2 group-hover/upload:text-primary transition-colors" />
-                                <span className="text-sm font-medium group-hover/upload:text-primary transition-colors">{dir === 'rtl' ? 'انقر لرفع الصورة' : 'Click to upload image'}</span>
-                                <span className="text-xs mt-1 opacity-60">{dir === 'rtl' ? 'PNG, JPG, WebP' : 'PNG, JPG, WebP'}</span>
-                                <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Names */}
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <div>
-                              <label className="block text-xs font-semibold text-secondary/60 mb-1.5 uppercase tracking-wider">{dir === 'rtl' ? 'الاسم (EN)' : 'Name (EN)'}</label>
-                              <input type="text" dir="ltr" value={serviceForm.nameEn} onChange={(e) => setServiceForm({ ...serviceForm, nameEn: e.target.value })}
-                                className="w-full px-3 py-2.5 text-sm rounded-xl bg-secondary/5 border border-secondary/15 focus:border-primary focus:ring-1 focus:ring-primary/30 outline-none text-left transition-all" />
-                            </div>
-                            <div>
-                              <label className="block text-xs font-semibold text-secondary/60 mb-1.5 uppercase tracking-wider">{dir === 'rtl' ? 'الاسم (AR)' : 'Name (AR)'}</label>
-                              <input type="text" dir="rtl" value={serviceForm.nameAr} onChange={(e) => setServiceForm({ ...serviceForm, nameAr: e.target.value })}
-                                className="w-full px-3 py-2.5 text-sm rounded-xl bg-secondary/5 border border-secondary/15 focus:border-primary focus:ring-1 focus:ring-primary/30 outline-none text-right font-arabic transition-all" />
-                            </div>
-                          </div>
-
-                          {/* Descriptions */}
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <div>
-                              <label className="block text-xs font-semibold text-secondary/60 mb-1.5 uppercase tracking-wider">{dir === 'rtl' ? 'الوصف (EN)' : 'Description (EN)'}</label>
-                              <textarea rows={3} dir="ltr" value={serviceForm.descriptionEn} onChange={(e) => setServiceForm({ ...serviceForm, descriptionEn: e.target.value })}
-                                className="w-full px-3 py-2.5 text-sm rounded-xl bg-secondary/5 border border-secondary/15 focus:border-primary focus:ring-1 focus:ring-primary/30 outline-none text-left resize-none transition-all" />
-                            </div>
-                            <div>
-                              <label className="block text-xs font-semibold text-secondary/60 mb-1.5 uppercase tracking-wider">{dir === 'rtl' ? 'الوصف (AR)' : 'Description (AR)'}</label>
-                              <textarea rows={3} dir="rtl" value={serviceForm.descriptionAr} onChange={(e) => setServiceForm({ ...serviceForm, descriptionAr: e.target.value })}
-                                className="w-full px-3 py-2.5 text-sm rounded-xl bg-secondary/5 border border-secondary/15 focus:border-primary focus:ring-1 focus:ring-primary/30 outline-none text-right font-arabic resize-none transition-all" />
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Modal footer */}
-                        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-secondary/10 bg-secondary/5">
-                          <button onClick={closeServiceModal} className="px-4 py-2 text-sm font-medium text-secondary/70 hover:text-secondary bg-white hover:bg-secondary/5 border border-secondary/15 rounded-xl transition-colors cursor-pointer">
-                            {dir === 'rtl' ? 'إلغاء' : 'Cancel'}
-                          </button>
-                          <button onClick={saveServiceForm} className="px-5 py-2 text-sm font-medium text-white bg-primary hover:bg-primary/90 rounded-xl transition-colors shadow-sm shadow-primary/20 cursor-pointer">
-                            {serviceModal.mode === 'add' ? (dir === 'rtl' ? 'إضافة' : 'Add Service') : (dir === 'rtl' ? 'حفظ التغييرات' : 'Save Changes')}
-                          </button>
-                        </div>
-                      </motion.div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-
-                {/* ── DELETE CONFIRM MODAL ── */}
-                <AnimatePresence>
-                  {serviceModal?.mode === 'delete' && (
-                    <motion.div
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
-                      onClick={closeServiceModal}
-                    >
-                      <motion.div
-                        initial={{ opacity: 0, scale: 0.95, y: 20 }}
-                        animate={{ opacity: 1, scale: 1, y: 0 }}
-                        exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                        transition={{ type: 'spring', damping: 20, stiffness: 300 }}
-                        onClick={(e) => e.stopPropagation()}
-                        className="w-full max-w-sm bg-white rounded-3xl shadow-2xl overflow-hidden"
-                      >
-                        <div className="p-6 flex flex-col items-center text-center gap-4">
-                          <div className="w-14 h-14 rounded-2xl bg-red-50 flex items-center justify-center">
-                            <AlertTriangle className="w-7 h-7 text-red-500" />
-                          </div>
-                          <div>
-                            <h3 className="font-semibold text-secondary text-base mb-1">{dir === 'rtl' ? 'حذف الخدمة؟' : 'Delete Service?'}</h3>
-                            <p className="text-sm text-secondary/60">
-                              {dir === 'rtl'
-                                ? `هل أنت متأكد من حذف "${serviceModal.service.nameAr || serviceModal.service.nameEn}"؟ لا يمكن التراجع عن هذا الإجراء.`
-                                : `Are you sure you want to delete "${serviceModal.service.nameEn || serviceModal.service.nameAr}"? This action cannot be undone.`}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex gap-3 px-6 pb-6">
-                          <button onClick={closeServiceModal} className="flex-1 px-4 py-2.5 text-sm font-medium text-secondary/70 bg-secondary/5 hover:bg-secondary/10 border border-secondary/15 rounded-xl transition-colors cursor-pointer">
-                            {dir === 'rtl' ? 'إلغاء' : 'Cancel'}
-                          </button>
-                          <button onClick={confirmDeleteService} className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-xl transition-colors cursor-pointer">
-                            {dir === 'rtl' ? 'نعم، احذف' : 'Yes, Delete'}
-                          </button>
-                        </div>
-                      </motion.div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-            )}
-
-            {/* CONTACT SECTION */}
-            {activeSection === 'contact' && (
-              <div className="space-y-8">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <label className="block text-sm font-medium text-secondary mb-2">{dir === 'rtl' ? 'رقم الواتساب' : 'WhatsApp Number'}</label>
-                    <input
-                      type="text"
-                      value={contact.whatsapp}
-                      onChange={(e) => setContact({ ...contact, whatsapp: e.target.value })}
-                      dir="ltr"
-                      className="w-full px-4 py-3 rounded-xl bg-white/50 border border-secondary/20 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all text-left"
-                    />
-                  </div>
-                  <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                      <label className="block text-sm font-medium text-secondary mb-2">{dir === 'rtl' ? 'عنوان المكتب (EN)' : 'Office Address (EN)'}</label>
-                      <input
-                        type="text"
-                        value={contact.addressEn}
-                        onChange={(e) => setContact({ ...contact, addressEn: e.target.value })}
-                        dir="ltr"
-                        className="w-full px-4 py-3 rounded-xl bg-white/50 border border-secondary/20 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all text-left"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-secondary mb-2">{dir === 'rtl' ? 'عنوان المكتب (AR)' : 'Office Address (AR)'}</label>
-                      <input
-                        type="text"
-                        value={contact.addressAr}
-                        onChange={(e) => setContact({ ...contact, addressAr: e.target.value })}
-                        dir="rtl"
-                        className="w-full px-4 py-3 rounded-xl bg-white/50 border border-secondary/20 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all text-right font-arabic"
-                      />
-                    </div>
-                  </div>
-                  <div className="md:col-span-2">
-                    <label className="block text-sm font-medium text-secondary mb-2">{dir === 'rtl' ? 'رابط خرائط جوجل' : 'Google Maps Embed URL'}</label>
-                    <input
-                      type="text"
-                      value={contact.mapUrl}
-                      onChange={(e) => setContact({ ...contact, mapUrl: e.target.value })}
-                      dir="ltr"
-                      className="w-full px-4 py-3 rounded-xl bg-white/50 border border-secondary/20 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all font-mono text-sm text-left"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <div className="flex justify-between items-center bg-secondary/5 p-4 rounded-2xl border border-secondary/10 mb-4">
-                    <span className="font-medium text-secondary">{dir === 'rtl' ? 'روابط التواصل الاجتماعي' : 'Social Media Links'}</span>
-                    <button
-                      onClick={() => setContact({ ...contact, socials: [...contact.socials, { id: Date.now().toString(), platform: 'instagram', url: 'https://' }] })}
-                      className="flex items-center gap-2 px-3 py-1.5 bg-white text-primary rounded-lg text-sm font-medium hover:bg-primary/5 transition-colors shadow-sm ring-1 ring-black/5 cursor-pointer"
-                    >
-                      <Plus className="w-4 h-4" /> {dir === 'rtl' ? 'إضافة رابط' : 'Add Link'}
-                    </button>
-                  </div>
-
-                  <div className="space-y-4">
-                    {contact.socials.map((social, index) => (
-                      <div key={social.id} className="flex flex-col sm:flex-row gap-4 p-4 rounded-2xl bg-white/40 border border-secondary/10 shadow-sm items-start sm:items-center">
-                        <div className="w-full sm:w-1/3">
-                          <label className="block text-xs font-medium text-secondary/60 mb-1.5 uppercase tracking-wider">{dir === 'rtl' ? 'المنصة' : 'Platform'}</label>
-                          <SocialPlatformSelect
-                            value={social.platform}
-                            dir={dir}
-                            onChange={(val) => {
-                              const newS = [...contact.socials];
-                              newS[index].platform = val;
-                              setContact({ ...contact, socials: newS });
-                            }}
-                          />
-                        </div>
-                        <div className="w-full sm:w-full flex-1">
-                          <label className="block text-xs font-medium text-secondary/60 mb-1.5 uppercase tracking-wider">{dir === 'rtl' ? 'الرابط' : 'URL'}</label>
-                          <input
-                            type="text"
-                            value={social.url}
-                            onChange={(e) => {
-                              const newS = [...contact.socials];
-                              newS[index].url = e.target.value;
-                              setContact({ ...contact, socials: newS });
-                            }}
-                            dir="ltr"
-                            className="w-full px-3 py-2 text-sm rounded-xl bg-white/50 border border-secondary/20 focus:border-primary outline-none text-left"
-                          />
-                        </div>
-                        <button
-                          onClick={() => setContact({ ...contact, socials: contact.socials.filter(s => s.id !== social.id) })}
-                          className="p-2.5 mt-0 sm:mt-5 text-red-500 hover:bg-red-50 rounded-xl transition-colors cursor-pointer self-end sm:self-auto"
-                        >
-                          <Trash2 className="w-5 h-5" />
-                        </button>
-                      </div>
-                    ))}
-                    {contact.socials.length === 0 && (
-                      <div className="text-center py-4 text-secondary/50 text-sm">{dir === 'rtl' ? 'لم يتم إضافة روابط.' : 'No social links added.'}</div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
+          <motion.div key={`s-${activeSection}`} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}
+            className="glass-panel rounded-3xl p-6 sm:p-8 min-h-[60vh]">
+            {renderSection()}
           </motion.div>
         )}
       </AnimatePresence>
@@ -955,8 +1066,8 @@ function LandingPageContent() {
 export default function LandingPage() {
   return (
     <Suspense fallback={
-      <div className="flex h-[60vh] justify-center items-center font-sans">
-        <div className="animate-pulse text-stone-400 text-sm">Loading...</div>
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="w-8 h-8 animate-spin text-primary/50" />
       </div>
     }>
       <LandingPageContent />

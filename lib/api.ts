@@ -1773,3 +1773,269 @@ export async function settleFinancialRecord(
     token,
   });
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// LANDING PAGE APIs
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ── Types ────────────────────────────────────────────────────────────────────
+export interface LandingHero {
+  title: { ar: string; en: string };
+  subtitle: { ar: string; en: string };
+  primary_cta_label: { ar: string; en: string };
+  primary_cta_url: string;
+  secondary_cta_label: { ar: string; en: string };
+  secondary_cta_url: string;
+  image: string | null;
+}
+
+export interface LandingHowItWorksStep {
+  id: number;
+  icon: string;
+  icon_url: string;
+  title: string;
+  description: string;
+  sort: number;
+}
+
+export interface LandingFeature {
+  id: number;
+  icon_url: string;
+  title: string;
+  description: string;
+  sort: number;
+}
+
+export interface LandingPortfolioItem {
+  id: number;
+  image: string | null;
+  name: string;
+  sort: number;
+}
+
+export interface LandingSocialLink {
+  id: number;
+  platform: string;
+  url: string;
+  sort: number;
+}
+
+export interface LandingFooter {
+  id: number;
+  brand_name: string;
+  tagline: string;
+  description: string;
+  about_url?: string;
+  privacy_url?: string;
+  terms_url?: string;
+  copyright: string;
+  logo_url: string | null;
+}
+
+export interface LandingContact {
+  id: number;
+  whatsapp_country_code: string;
+  whatsapp_phone: string;
+  whatsapp_full_number: string;
+  office_address: { ar: string; en: string };
+  google_maps_url: string;
+  social_links: LandingSocialLink[];
+}
+
+export interface LandingEventType {
+  id: number;
+  name: string;
+  sort: number;
+}
+
+// ── Helper ───────────────────────────────────────────────────────────────────
+interface ReorderItem { id: number; sort: number }
+
+// ── Hero ─────────────────────────────────────────────────────────────────────
+export async function getLandingHero(token: string): Promise<ApiResponse<{ data: LandingHero }>> {
+  return apiRequest('/admin/landing-page/hero', { token });
+}
+export async function updateLandingHero(fields: {
+  title_ar: string; title_en: string;
+  subtitle_ar: string; subtitle_en: string;
+  primary_cta_label_ar: string; primary_cta_label_en: string; primary_cta_url: string;
+  secondary_cta_label_ar: string; secondary_cta_label_en: string; secondary_cta_url: string;
+  image?: File | null;
+}, token: string): Promise<ApiResponse<any>> {
+  const fd = new FormData();
+  fd.append('title[ar]', fields.title_ar);
+  fd.append('title[en]', fields.title_en);
+  fd.append('subtitle[ar]', fields.subtitle_ar);
+  fd.append('subtitle[en]', fields.subtitle_en);
+  fd.append('primary_cta_label[ar]', fields.primary_cta_label_ar);
+  fd.append('primary_cta_label[en]', fields.primary_cta_label_en);
+  fd.append('primary_cta_url', fields.primary_cta_url);
+  fd.append('secondary_cta_label[ar]', fields.secondary_cta_label_ar);
+  fd.append('secondary_cta_label[en]', fields.secondary_cta_label_en);
+  fd.append('secondary_cta_url', fields.secondary_cta_url);
+  if (fields.image) fd.append('image', fields.image);
+  return apiRequest<any>('/admin/landing-page/hero?_method=put', { method: 'POST', body: fd, token });
+}
+
+// ── How It Works ──────────────────────────────────────────────────────────────
+export async function getLandingHowItWorks(token: string): Promise<ApiResponse<{ items: LandingHowItWorksStep[] }>> {
+  return apiRequest('/admin/landing-page/how-it-works', { token });
+}
+export async function createHowItWorksStep(fields: { title_ar: string; title_en: string; description_ar: string; description_en: string; icon?: File }, token: string): Promise<ApiResponse<LandingHowItWorksStep>> {
+  const fd = new FormData();
+  fd.append('title[ar]', fields.title_ar);
+  fd.append('title[en]', fields.title_en);
+  fd.append('description[ar]', fields.description_ar);
+  fd.append('description[en]', fields.description_en);
+  if (fields.icon) fd.append('icon', fields.icon);
+  return apiRequest('/admin/landing-page/how-it-works', { method: 'POST', body: fd, token });
+}
+export async function updateHowItWorksStep(id: number, fields: { title_ar: string; title_en: string; description_ar: string; description_en: string; icon?: File }, token: string): Promise<ApiResponse<LandingHowItWorksStep>> {
+  const fd = new FormData();
+  fd.append('title[ar]', fields.title_ar);
+  fd.append('title[en]', fields.title_en);
+  fd.append('description[ar]', fields.description_ar);
+  fd.append('description[en]', fields.description_en);
+  if (fields.icon) fd.append('icon', fields.icon);
+  return apiRequest(`/admin/landing-page/how-it-works/${id}?_method=put`, { method: 'POST', body: fd, token });
+}
+export async function deleteHowItWorksStep(id: number, token: string): Promise<ApiResponse<any>> {
+  return apiRequest(`/admin/landing-page/how-it-works/${id}`, { method: 'DELETE', token });
+}
+export async function reorderHowItWorks(items: ReorderItem[], token: string): Promise<ApiResponse<any>> {
+  return apiRequest('/admin/landing-page/how-it-works/reorder', { method: 'PATCH', body: { items } as any, token });
+}
+
+// ── Features ──────────────────────────────────────────────────────────────────
+export async function getLandingFeatures(token: string): Promise<ApiResponse<{ items: LandingFeature[] }>> {
+  return apiRequest('/admin/landing-page/features', { token });
+}
+export async function createFeature(fields: { title_ar: string; title_en: string; description_ar: string; description_en: string; sort?: number; icon?: File }, token: string): Promise<ApiResponse<LandingFeature>> {
+  const fd = new FormData();
+  fd.append('title[ar]', fields.title_ar);
+  fd.append('title[en]', fields.title_en);
+  fd.append('description[ar]', fields.description_ar);
+  fd.append('description[en]', fields.description_en);
+  if (fields.sort != null) fd.append('sort', String(fields.sort));
+  if (fields.icon) fd.append('icon', fields.icon);
+  return apiRequest('/admin/landing-page/features', { method: 'POST', body: fd, token });
+}
+export async function updateFeature(id: number, fields: { title_ar: string; title_en: string; description_ar: string; description_en: string; sort?: number; icon?: File }, token: string): Promise<ApiResponse<LandingFeature>> {
+  const fd = new FormData();
+  fd.append('title[ar]', fields.title_ar);
+  fd.append('title[en]', fields.title_en);
+  fd.append('description[ar]', fields.description_ar);
+  fd.append('description[en]', fields.description_en);
+  if (fields.sort != null) fd.append('sort', String(fields.sort));
+  if (fields.icon) fd.append('icon', fields.icon);
+  return apiRequest(`/admin/landing-page/features/${id}?_method=put`, { method: 'POST', body: fd, token });
+}
+export async function deleteFeature(id: number, token: string): Promise<ApiResponse<any>> {
+  return apiRequest(`/admin/landing-page/features/${id}`, { method: 'DELETE', token });
+}
+export async function reorderFeatures(items: ReorderItem[], token: string): Promise<ApiResponse<any>> {
+  return apiRequest('/admin/landing-page/features/reorder?_method=patch', { method: 'POST', body: { items } as any, token });
+}
+
+// ── Portfolio ─────────────────────────────────────────────────────────────────
+export async function getLandingPortfolio(token: string): Promise<ApiResponse<{ items: LandingPortfolioItem[] }>> {
+  return apiRequest('/admin/landing-page/portfolio', { token });
+}
+export async function createPortfolioItem(fields: { name_ar: string; name_en: string; sort?: number; status?: number; image?: File }, token: string): Promise<ApiResponse<LandingPortfolioItem>> {
+  const fd = new FormData();
+  fd.append('name[ar]', fields.name_ar);
+  fd.append('name[en]', fields.name_en);
+  if (fields.sort != null) fd.append('sort', String(fields.sort));
+  fd.append('status', String(fields.status ?? 1));
+  if (fields.image) fd.append('image', fields.image);
+  return apiRequest('/admin/landing-page/portfolio', { method: 'POST', body: fd, token });
+}
+export async function updatePortfolioItem(id: number, fields: { name_ar: string; name_en: string; sort?: number; status?: number; image?: File }, token: string): Promise<ApiResponse<LandingPortfolioItem>> {
+  const fd = new FormData();
+  fd.append('name[ar]', fields.name_ar);
+  fd.append('name[en]', fields.name_en);
+  if (fields.sort != null) fd.append('sort', String(fields.sort));
+  fd.append('status', String(fields.status ?? 1));
+  if (fields.image) fd.append('image', fields.image);
+  return apiRequest(`/admin/landing-page/portfolio/${id}?_method=put`, { method: 'POST', body: fd, token });
+}
+export async function deletePortfolioItem(id: number, token: string): Promise<ApiResponse<any>> {
+  return apiRequest(`/admin/landing-page/portfolio/${id}`, { method: 'DELETE', token });
+}
+export async function reorderPortfolio(items: ReorderItem[], token: string): Promise<ApiResponse<any>> {
+  return apiRequest('/admin/landing-page/portfolio/reorder?_method=patch', { method: 'POST', body: { items } as any, token });
+}
+
+// ── Social Links ──────────────────────────────────────────────────────────────
+export async function getLandingSocialLinks(token: string): Promise<ApiResponse<{ items: LandingSocialLink[] }>> {
+  return apiRequest('/admin/landing-page/social-links', { token });
+}
+export async function createSocialLink(fields: { platform: string; url: string; label_ar?: string; label_en?: string; sort?: number; status?: number }, token: string): Promise<ApiResponse<LandingSocialLink>> {
+  return apiRequest('/admin/landing-page/social-links', { method: 'POST', body: { platform: fields.platform, url: fields.url, 'label[ar]': fields.label_ar ?? '', 'label[en]': fields.label_en ?? '', sort: fields.sort ?? 0, status: fields.status ?? 1 } as any, token });
+}
+export async function updateSocialLink(id: number, fields: { platform: string; url: string; label_ar?: string; label_en?: string; sort?: number; status?: number }, token: string): Promise<ApiResponse<LandingSocialLink>> {
+  return apiRequest(`/admin/landing-page/social-links/${id}?_method=put`, { method: 'POST', body: { platform: fields.platform, url: fields.url, 'label[ar]': fields.label_ar ?? '', 'label[en]': fields.label_en ?? '', sort: fields.sort ?? 0, status: fields.status ?? 1 } as any, token });
+}
+export async function deleteSocialLink(id: number, token: string): Promise<ApiResponse<any>> {
+  return apiRequest(`/admin/landing-page/social-links/${id}`, { method: 'DELETE', token });
+}
+export async function reorderSocialLinks(items: ReorderItem[], token: string): Promise<ApiResponse<any>> {
+  return apiRequest('/admin/landing-page/social-links/reorder?_method=patch', { method: 'POST', body: { items } as any, token });
+}
+
+// ── Footer ────────────────────────────────────────────────────────────────────
+export async function getLandingFooter(token: string): Promise<ApiResponse<LandingFooter>> {
+  return apiRequest('/admin/landing-page/footer', { token });
+}
+export async function updateLandingFooter(fields: {
+  brand_name_ar: string; brand_name_en: string;
+  tagline_ar: string; tagline_en: string;
+  description_ar: string; description_en: string;
+  copyright: string; logo?: File | null;
+}, token: string): Promise<ApiResponse<LandingFooter>> {
+  const fd = new FormData();
+  fd.append('brand_name[ar]', fields.brand_name_ar);
+  fd.append('brand_name[en]', fields.brand_name_en);
+  fd.append('tagline[ar]', fields.tagline_ar);
+  fd.append('tagline[en]', fields.tagline_en);
+  fd.append('description[ar]', fields.description_ar);
+  fd.append('description[en]', fields.description_en);
+  fd.append('copyright', fields.copyright);
+  if (fields.logo) fd.append('logo', fields.logo);
+  return apiRequest<LandingFooter>('/admin/landing-page/footer?_method=put', { method: 'POST', body: fd, token });
+}
+
+// ── Contact ───────────────────────────────────────────────────────────────────
+export async function getLandingContact(token: string): Promise<ApiResponse<LandingContact>> {
+  return apiRequest('/admin/landing-page/contact', { token });
+}
+export async function updateLandingContact(fields: {
+  whatsapp_country_code: string; whatsapp_phone: string;
+  office_address_ar: string; office_address_en: string;
+  google_maps_url: string;
+}, token: string): Promise<ApiResponse<LandingContact>> {
+  const fd = new FormData();
+  fd.append('whatsapp_country_code', fields.whatsapp_country_code);
+  fd.append('whatsapp_phone', fields.whatsapp_phone);
+  fd.append('office_address[ar]', fields.office_address_ar);
+  fd.append('office_address[en]', fields.office_address_en);
+  fd.append('google_maps_url', fields.google_maps_url);
+  return apiRequest<LandingContact>('/admin/landing-page/contact?_method=put', { method: 'POST', body: fd, token });
+}
+
+// ── Event Types ───────────────────────────────────────────────────────────────
+export async function getLandingEventTypes(token: string): Promise<ApiResponse<{ items: LandingEventType[] }>> {
+  return apiRequest('/admin/landing-page/event-types', { token });
+}
+export async function createEventType(fields: { name_ar: string; name_en: string; sort?: number }, token: string): Promise<ApiResponse<LandingEventType>> {
+  return apiRequest('/admin/landing-page/event-types', { method: 'POST', body: { 'name[ar]': fields.name_ar, 'name[en]': fields.name_en, sort: fields.sort ?? 0 } as any, token });
+}
+export async function updateEventType(id: number, fields: { name_ar: string; name_en: string; sort?: number }, token: string): Promise<ApiResponse<LandingEventType>> {
+  return apiRequest(`/admin/landing-page/event-types/${id}?_method=put`, { method: 'POST', body: { 'name[ar]': fields.name_ar, 'name[en]': fields.name_en, sort: fields.sort ?? 0 } as any, token });
+}
+export async function deleteEventType(id: number, token: string): Promise<ApiResponse<any>> {
+  return apiRequest(`/admin/landing-page/event-types/${id}`, { method: 'DELETE', token });
+}
+export async function reorderEventTypes(items: ReorderItem[], token: string): Promise<ApiResponse<any>> {
+  return apiRequest('/admin/landing-page/event-types/reorder?_method=patch', { method: 'POST', body: { items } as any, token });
+}
