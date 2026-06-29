@@ -484,7 +484,7 @@ export default function EventsPage() {
                               >
                                 <Eye className="w-4 h-4" />
                               </button>
-                              {(event.actions ? event.actions.can_edit : true) && (
+                              {/* {(event.actions ? event.actions.can_edit : true) && (
                                 <button
                                   title={t('edit' as any) || (dir === 'ltr' ? 'Edit' : 'تعديل')}
                                   onClick={(e) => { e.preventDefault(); setEventToEdit(event); }}
@@ -492,7 +492,7 @@ export default function EventsPage() {
                                 >
                                   <Edit2 className="w-4 h-4" />
                                 </button>
-                              )}
+                              )} */}
                               {(event.actions ? event.actions.can_delete : true) && (
                                 <button
                                   title={t('remove') || (dir === 'ltr' ? 'Remove' : 'حذف')}

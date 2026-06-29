@@ -8,7 +8,10 @@ import { getToken } from '@/lib/auth';
 import {
   getAdminServiceOrders,
   createAdminServiceOrder,
+  getAdminServiceOrderById,
+  deleteAdminServiceOrder,
   type ApiServiceOrderItem,
+  type ApiServiceOrderDetail,
   type ServiceOrderStatus,
   type CreateServiceOrderPayload
 } from '@/lib/api';
@@ -25,6 +28,7 @@ import { OrderList } from './components/order-list';
 import { OrderForm, FormState, createEmptyServiceItem } from './components/order-form';
 import { OrderSent } from './components/order-sent';
 import { DeleteModal } from './components/delete-modal';
+import { OrderDetailModal } from './components/order-detail-modal';
 
 const EMPTY_FORM = {
   services: [] as any[],
@@ -68,6 +72,10 @@ export default function ServiceOrdersPage() {
   const [createdOrder, setCreatedOrder] = useState<ServiceOrder | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
 
+  // Detail modal state
+  const [detailOrder, setDetailOrder] = useState<ApiServiceOrderDetail | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+
   const fetchOrders = useCallback(async () => {
     if (!token) return;
     setLoading(true);
@@ -110,6 +118,25 @@ export default function ServiceOrdersPage() {
     });
     setEditing(null);
     setView('form');
+  };
+
+  const openDetail = async (order: ApiServiceOrderItem) => {
+    setDetailLoading(true);
+    setDetailOrder(null);
+    try {
+      const res = await getAdminServiceOrderById(order.id, token);
+      setDetailOrder(res.data);
+    } catch (err) {
+      toast.error((err as Error).message || 'فشل جلب تفاصيل الطلب');
+      setDetailLoading(false);
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
+  const closeDetail = () => {
+    setDetailOrder(null);
+    setDetailLoading(false);
   };
 
   const openEdit = (order: ApiServiceOrderItem) => {
@@ -216,18 +243,49 @@ export default function ServiceOrdersPage() {
       } else {
         // ── CREATE CYCLE (INTEGRATED WITH BACKEND API) ──
         const items = form.services.map(s => {
-          const optionsPayload = s.options.map(opt => {
+          // Build options per the exact API contract, keyed by option type:
+          //   text / number → { service_option_id, value }
+          //   color         → { service_option_id, values: [selected_color_ids] }
+          //   employee      → { service_option_id, employee_id } — one entry per employee
+          //   list          → { service_option_id, labels: [{ service_option_value_id, text_value }] }
+          const optionsPayload: any[] = [];
+          for (const opt of s.options) {
             if (opt.type === 'employee') {
-              return {
+              // One entry per selected employee
+              for (const empId of (opt.selectedEmployeeIds || [])) {
+                optionsPayload.push({
+                  service_option_id: opt.service_option_id,
+                  employee_id: empId,
+                });
+              }
+            } else if (opt.type === 'color') {
+              if ((opt.values || []).length > 0) {
+                // API palette — send selected swatch IDs
+                optionsPayload.push({
+                  service_option_id: opt.service_option_id,
+                  values: opt.selectedColorIds || [],
+                });
+              } else {
+                // Free-form hex picker — send the hex string as value
+                optionsPayload.push({
+                  service_option_id: opt.service_option_id,
+                  value: opt.value || '',
+                });
+              }
+            } else if (opt.type === 'list') {
+              // Single selected label ID from the dropdown
+              optionsPayload.push({
                 service_option_id: opt.service_option_id,
-                values: opt.selectedEmployeeIds || [],
-              };
+                value: Number(opt.value),
+              });
+            } else {
+              // text, number — plain scalar value
+              optionsPayload.push({
+                service_option_id: opt.service_option_id,
+                value: opt.type === 'number' ? Number(opt.value) : opt.value,
+              });
             }
-            return {
-              service_option_id: opt.service_option_id,
-              value: opt.value,
-            };
-          });
+          }
 
           let employeePayload = undefined;
           if (s.employeeType === 'employee' && s.employeeId) {
@@ -364,16 +422,28 @@ export default function ServiceOrdersPage() {
 
   return (
     <>
+      {/* Order detail slide-over */}
+      <OrderDetailModal
+        order={detailOrder}
+        loading={detailLoading}
+        onClose={closeDetail}
+      />
+
       <AnimatePresence>
         {deleteTarget && (
           <DeleteModal
             order={deleteTarget}
             onClose={() => setDeleteTarget(null)}
-            onConfirm={() => {
-              const localId = deleteTarget.reference_label || `SO-${deleteTarget.reference_number}`;
-              deleteOrder(String(localId));
-              fetchOrders();
-              setDeleteTarget(null);
+            onConfirm={async () => {
+              try {
+                await deleteAdminServiceOrder(deleteTarget.id, token);
+                toast.success(language === 'ar' ? 'تم حذف الطلب' : 'Order deleted');
+              } catch (err) {
+                toast.error((err as Error).message || 'فشل حذف الطلب');
+              } finally {
+                fetchOrders();
+                setDeleteTarget(null);
+              }
             }}
           />
         )}
@@ -396,6 +466,7 @@ export default function ServiceOrdersPage() {
         totalPages={totalPages}
         totalItems={totalItems}
         onCreateNew={openCreate}
+        onViewDetail={openDetail}
         onEdit={openEdit}
         onDelete={setDeleteTarget}
       />

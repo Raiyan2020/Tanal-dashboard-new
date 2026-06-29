@@ -171,15 +171,15 @@ export function EventDetails({ event, onBack, onEdit, onDelete, onUpdateEvent }:
       await deleteEventGuest(Number(event.id), Number(guestId), token);
       toast.dismiss(deleteToast);
       toast.success(dir === 'ltr' ? 'Guest deleted successfully' : 'تم حذف الضيف بنجاح');
-      
+
       setGuests(prev => prev.filter(g => g.id !== guestId));
       setGuestTotal(prev => Math.max(0, prev - 1));
-      
+
       getEventById(Number(event.id), token)
         .then((detailRes) => {
           setDetail(detailRes.data);
         })
-        .catch(() => {});
+        .catch(() => { });
     } catch (err) {
       toast.dismiss(deleteToast);
       toast.error((err as Error).message || (dir === 'ltr' ? 'Failed to delete guest' : 'فشل حذف الضيف'));
@@ -296,7 +296,7 @@ export function EventDetails({ event, onBack, onEdit, onDelete, onUpdateEvent }:
         </button>
 
         <div className="flex items-center gap-2">
-          {detail?.actions?.can_edit && (
+          {/* {detail?.actions?.can_edit && (
             <button
               onClick={onEdit}
               className="p-2 sm:p-2 bg-white text-yellow-500 border border-transparent hover:bg-yellow-50 hover:border-yellow-200 hover:text-yellow-600 hover:-translate-y-[2px] hover:scale-[1.03] hover:shadow-md active:scale-95 active:translate-y-0 rounded-xl transition-all duration-200 ease-out flex items-center justify-center cursor-pointer"
@@ -304,7 +304,7 @@ export function EventDetails({ event, onBack, onEdit, onDelete, onUpdateEvent }:
             >
               <Edit2 className="w-5 h-5" />
             </button>
-          )}
+          )} */}
           {detail?.actions?.can_delete && (
             <button
               onClick={onDelete}

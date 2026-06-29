@@ -8,7 +8,7 @@ import Image from 'next/image';
 import { Mail, Lock, ArrowRight, ArrowLeft, Loader2, AlertCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { loginAdmin } from '@/lib/api';
-import { saveToken, saveAdmin } from '@/lib/auth';
+import { saveToken, saveAdmin, savePermissions } from '@/lib/auth';
 
 export default function LoginPage() {
   const { t, dir } = useLanguage();
@@ -25,11 +25,12 @@ export default function LoginPage() {
 
     try {
       const res = await loginAdmin(email, password);
-      const { token, admin } = res.data;
+      const { token, admin, permissions } = res.data;
 
-      // Persist auth data (localStorage + cookie for middleware)
+      // Persist auth data (localStorage + cookies for middleware)
       saveToken(token);
       saveAdmin(admin);
+      savePermissions(permissions ?? []);
 
       // Redirect to dashboard
       router.push('/');

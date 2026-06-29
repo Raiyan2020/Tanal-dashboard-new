@@ -13,6 +13,29 @@ const PUBLIC_PATHS = [
   '/order-employee',
 ];
 
+/**
+ * Map from URL path prefix → required permission string.
+ * The middleware checks that the user's permissions array (stored in the
+ * tanal_permissions cookie) contains the required entry.
+ *
+ * Super-admins skip this check entirely.
+ */
+const ROUTE_PERMISSIONS: Record<string, string> = {
+  '/admins':          'admins',
+  '/roles':           'roles',
+  '/clients':         'clients',
+  '/events':          'events',
+  '/invitations':     'invitations',
+  '/service-orders':  'service-orders',
+  '/services':        'services',
+  '/service-options': 'service-options',
+  '/employees':       'employees',
+  '/financial':       'finance',
+  '/landing-page':    'landing-page',
+  '/notifications':   'notifications',
+  '/settings':        'show-settings',
+};
+
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
@@ -44,6 +67,30 @@ export function middleware(request: NextRequest) {
   // If already authenticated and visiting /login → redirect to dashboard
   if (pathname === '/login' && token) {
     return NextResponse.redirect(new URL('/', request.url));
+  }
+
+  // ── Permission check for protected routes ────────────────────────────────
+  if (token && !isPublic && pathname !== '/') {
+    // Parse permissions from cookie
+    const rawPerms = request.cookies.get('tanal_permissions')?.value;
+    let permissions: string[] = [];
+    if (rawPerms) {
+      try {
+        permissions = JSON.parse(decodeURIComponent(rawPerms)) as string[];
+      } catch {
+        permissions = [];
+      }
+    }
+
+    // Find if this path requires a specific permission
+    const requiredPerm = Object.entries(ROUTE_PERMISSIONS).find(([prefix]) =>
+      pathname === prefix || pathname.startsWith(`${prefix}/`)
+    )?.[1];
+
+    if (requiredPerm && !permissions.includes(requiredPerm)) {
+      // User lacks the required permission — redirect to dashboard
+      return NextResponse.redirect(new URL('/', request.url));
+    }
   }
 
   return NextResponse.next();

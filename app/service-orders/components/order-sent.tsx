@@ -73,14 +73,14 @@ export function OrderSent({
         {/* WhatsApp send buttons */}
         <div className="w-full space-y-3">
           {/* Client link */}
-          <button onClick={() => sendWhatsApp(createdOrder.clientPhone, clientMsg(createdOrder))}
+          {/* <button onClick={() => sendWhatsApp(createdOrder.clientPhone, clientMsg(createdOrder))}
             className="w-full flex items-center justify-center gap-3 px-5 py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-medium transition-all cursor-pointer shadow-lg shadow-emerald-500/20 hover:-translate-y-0.5">
             <Image src="https://raiyansoft.com/wp-content/uploads/2026/05/whatsapp.png" alt="WhatsApp" width={20} height={20} referrerPolicy="no-referrer" />
             {t('sendPaymentLinkClient') || 'Send Payment Link to Client'}
-          </button>
+          </button> */}
 
           {/* Employees links */}
-          {createdOrder.services.map((svcItem) => {
+          {/* {createdOrder.services.map((svcItem) => {
             const svcName = language === 'ar' ? (svcItem.serviceNameAr || svcItem.serviceName) : svcItem.serviceName;
             return (
               <button key={svcItem.id} onClick={() => sendWhatsApp(svcItem.employeePhone, employeeMsg(createdOrder, svcItem))}
@@ -89,7 +89,7 @@ export function OrderSent({
                 {language === 'ar' ? `رابط مهمة: ${svcItem.employeeName} (${svcName})` : `Send Task: ${svcItem.employeeName} (${svcName})`}
               </button>
             );
-          })}
+          })} */}
         </div>
 
         <div className="flex gap-3 w-full">

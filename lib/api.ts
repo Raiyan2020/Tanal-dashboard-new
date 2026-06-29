@@ -43,6 +43,7 @@ export interface Admin {
 export interface LoginResponseData {
   admin: Admin;
   token: string;
+  permissions: string[];
 }
 
 type RequestOptions = {
@@ -1527,11 +1528,99 @@ export async function getAdminServiceOrders(
   );
 }
 
-export interface CreateServiceOrderItemOption {
+// ── Detail types ──────────────────────────────────────────────────────────────
+export interface ApiServiceOrderDetailOption {
+  id: number;
   service_option_id: number;
-  value?: any;
-  values?: any[];
+  option: { id: number; name: string; name_ar: string; name_en: string; type: string; is_required: boolean } | null;
+  service_option_value_id: number | null;
+  value: { id: number; label: string; color_hex: string | null } | null;
+  text_value: string | null;
+  number_value: string | null;
+  employee_id: number | null;
+  employee: { id: number; name: string; reference_label: string; full_phone: string } | null;
 }
+
+export interface ApiServiceOrderDetailItem {
+  id: number;
+  service_id: number;
+  service: { id: number; name: string; description: string; image: string | null; sort_order: number };
+  price: string;
+  notes: string | null;
+  sort: number;
+  employee: { type: string; id: number; name: string; reference_label: string; full_phone: string } | null;
+  options: ApiServiceOrderDetailOption[];
+}
+
+export interface ApiServiceOrderDetail {
+  id: number;
+  reference_number: number;
+  reference_label: string;
+  client_id: number;
+  client: {
+    id: number; reference_label: string; name: string; country_code: string;
+    phone: string; full_phone: string; whatsapp_url: string; email: string; notes: string | null;
+  };
+  event_date: string;
+  event_time: string;
+  hall_name: string;
+  location_url: string | null;
+  statuses: ServiceOrderStatus[];
+  is_paid: boolean;
+  payment_type: string;
+  paid_amount: string;
+  first_installment_amount: string | null;
+  second_installment_amount: string | null;
+  second_payment_status: string | null;
+  has_pending_second_payment: boolean;
+  total_amount: string;
+  notes: string | null;
+  primary_service_name: { ar: string; en: string };
+  items: ApiServiceOrderDetailItem[];
+  whatsapp_url: string;
+  created_at: string;
+  updated_at: string;
+}
+
+/** GET /admin/service-orders/:id */
+export async function getAdminServiceOrderById(
+  id: number,
+  token: string
+): Promise<ApiResponse<ApiServiceOrderDetail>> {
+  return apiRequest<ApiServiceOrderDetail>(`/admin/service-orders/${id}`, { token });
+}
+
+/** DELETE /admin/service-orders/:id */
+export async function deleteAdminServiceOrder(
+  id: number,
+  token: string
+): Promise<ApiResponse<any>> {
+  return apiRequest<any>(`/admin/service-orders/${id}`, { method: 'DELETE', token });
+}
+
+
+/** Option shape variants sent to POST /admin/service-orders */
+export interface CreateServiceOrderItemOptionValue {
+  service_option_id: number;
+  value?: string | number;         // text / number types
+}
+export interface CreateServiceOrderItemOptionValues {
+  service_option_id: number;
+  values?: (string | number)[];    // list type  (array of ids)
+}
+export interface CreateServiceOrderItemOptionEmployee {
+  service_option_id: number;
+  employee_id?: number;            // employee type (one entry per employee)
+}
+export interface CreateServiceOrderItemOptionLabels {
+  service_option_id: number;
+  labels?: { service_option_value_id: number; text_value: string }[]; // labels type
+}
+export type CreateServiceOrderItemOption =
+  | CreateServiceOrderItemOptionValue
+  | CreateServiceOrderItemOptionValues
+  | CreateServiceOrderItemOptionEmployee
+  | CreateServiceOrderItemOptionLabels;
 
 export interface CreateServiceOrderItemEmployee {
   type: 'employee' | 'freelancer';
@@ -1560,7 +1649,7 @@ export interface CreateServiceOrderPayload {
   items: CreateServiceOrderItem[];
 }
 
-/** POST /admin/service-orders */
+/** POST /admin/service-orders — body sent as JSON */
 export async function createAdminServiceOrder(
   payload: CreateServiceOrderPayload,
   token: string

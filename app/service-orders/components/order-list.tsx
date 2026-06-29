@@ -3,7 +3,7 @@ import { useLanguage } from '@/lib/i18n';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Plus, Search, Trash2, Edit2, ChevronLeft, ChevronRight,
-  Calendar, User, Briefcase, ClipboardList, Loader2
+  Calendar, User, Briefcase, ClipboardList, Loader2, Eye
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Image from 'next/image';
@@ -26,6 +26,7 @@ interface OrderListProps {
   totalPages: number;
   totalItems: number;
   onCreateNew: () => void;
+  onViewDetail: (order: ApiServiceOrderItem) => void;
   onEdit: (order: ApiServiceOrderItem) => void;
   onDelete: (order: ApiServiceOrderItem) => void;
 }
@@ -85,6 +86,7 @@ export function OrderList({
   totalPages,
   totalItems,
   onCreateNew,
+  onViewDetail,
   onEdit,
   onDelete,
 }: OrderListProps) {
@@ -184,17 +186,21 @@ export function OrderList({
                   exit={{ opacity: 0, scale: 0.97 }} transition={{ delay: idx * 0.02, duration: 0.15 }}
                   className="p-4 rounded-2xl bg-white/40 border border-secondary/5 shadow-sm hover:bg-white/60 transition-colors">
                   <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-                    {/* Left info */}
-                    <div className="flex items-center gap-3 flex-1 min-w-0">
-                      <div className="w-11 h-11 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                    {/* Left info — click to open detail */}
+                    <button
+                      type="button"
+                      onClick={() => onViewDetail(order)}
+                      className="flex items-center gap-3 flex-1 min-w-0 text-start cursor-pointer group/card"
+                    >
+                      <div className="w-11 h-11 rounded-xl bg-primary/10 group-hover/card:bg-primary/20 flex items-center justify-center shrink-0 transition-colors">
                         <Briefcase className="w-5 h-5 text-primary" />
                       </div>
-                      <div className="min-w-0 text-start">
+                      <div className="min-w-0">
                         <div className="flex items-center gap-2 mb-0.5 flex-wrap">
                           <span className="text-xs font-mono bg-secondary/5 px-2 py-0.5 rounded text-secondary/60 shrink-0">
                             {order.reference_label || `SO-${order.reference_number}`}
                           </span>
-                          <h3 className="font-semibold text-secondary text-sm truncate">{order.service_name}</h3>
+                          <h3 className="font-semibold text-secondary text-sm truncate group-hover/card:text-primary transition-colors">{order.service_name}</h3>
                         </div>
                         <div className="flex items-center gap-2 text-xs text-secondary/55 flex-wrap">
                           <span className="flex items-center gap-1 shrink-0"><User className="w-3 h-3" /> {order.client_name}</span>
@@ -207,7 +213,7 @@ export function OrderList({
                           </span>
                         </div>
                       </div>
-                    </div>
+                    </button>
 
                     {/* Right badges + actions */}
                     <div className={cn("flex items-center gap-2 flex-wrap shrink-0", dir === 'rtl' ? 'flex-row-reverse' : '')}>
@@ -224,11 +230,11 @@ export function OrderList({
                           className="p-2 rounded-lg hover:bg-emerald-50 transition-colors cursor-pointer flex items-center justify-center">
                           <Image src="https://raiyansoft.com/wp-content/uploads/2026/05/whatsapp.png" alt="WA" width={15} height={15} referrerPolicy="no-referrer" />
                         </button>
-                        <button title={t('edit') || 'Edit'} onClick={() => onEdit(order)}
-                          className="p-2 bg-white text-yellow-500 hover:bg-yellow-50 border border-transparent hover:border-yellow-100 rounded-lg transition-all cursor-pointer hover:-translate-y-px">
-                          <Edit2 className="w-3.5 h-3.5" />
+                        <button title={language === 'ar' ? 'عرض التفاصيل' : 'View Details'} onClick={() => onViewDetail(order)}
+                          className="p-2 bg-white text-primary hover:bg-primary/10 border border-transparent hover:border-primary/20 rounded-lg transition-all cursor-pointer hover:-translate-y-px">
+                          <Eye className="w-3.5 h-3.5" />
                         </button>
-                        <button title={t('remove') || 'Remove'} onClick={() => onDelete(order)}
+                        <button title={language === 'ar' ? 'حذف' : 'Remove'} onClick={() => onDelete(order)}
                           className="p-2 bg-white text-red-500 hover:bg-red-50 border border-transparent hover:border-red-100 rounded-lg transition-all cursor-pointer hover:-translate-y-px">
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>

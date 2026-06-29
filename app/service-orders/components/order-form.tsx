@@ -21,9 +21,11 @@ export interface FormServiceItemOption {
   type: string; // text, number, list, employee, color
   name: string; // label
   is_required: boolean;
-  values?: any[]; // option values choices
-  value?: any; // selected value for text/number/list/color
-  selectedEmployeeIds?: number[]; // for employee option type checkbox selection
+  values?: any[];                  // available choices from API (colors / labels)
+  value?: any;                     // selected value for text / number
+  selectedEmployeeIds?: number[];  // employee type — selected employee IDs
+  selectedColorIds?: number[];     // color type — selected color value IDs from API
+  labelValues?: { service_option_value_id: number; text_value: string }[]; // list type
 }
 
 export interface FormServiceItem {
@@ -99,6 +101,13 @@ export function OrderForm({
   const { t, dir, language } = useLanguage();
   const clientDropdownValue = form.clientName ? `${form.clientName}` : '';
 
+  // Compute tomorrow's date in YYYY-MM-DD format for the date input min constraint
+  const tomorrow = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    return d.toISOString().split('T')[0];
+  }, []);
+
   const [dbClients, setDbClients] = useState<any[]>([]);
   const [dbServices, setDbServices] = useState<any[]>([]);
   const [dbEmployees, setDbEmployees] = useState<any[]>([]);
@@ -148,14 +157,29 @@ export function OrderForm({
           ? ((opt as any).name_ar || opt.name)
           : ((opt as any).name_en || opt.name);
 
+        // Available choices — colors come in `values`, list choices come in `labels`
+        const availableChoices = (opt as any).labels || opt.values || [];
+
         return {
           service_option_id: opt.id,
           type: opt.type,
           name: optionName,
           is_required: opt.is_required,
-          values: (opt as any).labels || opt.values || [],
-          value: opt.type === 'number' ? '' : opt.type === 'color' ? '#4234F3' : '',
+          values: availableChoices,
+          // For color with no API palette, pre-fill a default hex so the picker isn't blank
+          value: opt.type === 'number'
+            ? ''
+            : (opt.type === 'color' && availableChoices.length === 0)
+              ? '#4234F3'
+              : '',
           selectedEmployeeIds: [],
+          selectedColorIds: opt.type === 'color' ? [] : undefined,
+          labelValues: opt.type === 'list'
+            ? availableChoices.map((l: any) => ({
+              service_option_value_id: l.id,
+              text_value: '',
+            }))
+            : undefined,
         };
       });
 
@@ -223,7 +247,7 @@ export function OrderForm({
               <label className="flex items-center gap-2 text-sm font-medium text-secondary/80">
                 <Calendar className="w-4 h-4 text-secondary/40" /> {t('eventDate') || 'Event Date'} <span className="text-red-500">*</span>
               </label>
-              <input type="date" required value={form.date} onChange={e => setForm({ ...form, date: e.target.value })}
+              <input type="date" required min={tomorrow} value={form.date} onChange={e => setForm({ ...form, date: e.target.value })}
                 className="w-full px-4 py-3 rounded-xl bg-white/50 border border-white/60 focus:border-primary/50 focus:ring-2 focus:ring-primary/20 outline-none text-secondary text-sm" />
             </div>
             <div className="space-y-1.5">
@@ -354,58 +378,98 @@ export function OrderForm({
                               )}
 
                               {opt.type === 'number' && (
-                                  <input
-                                    type="number"
-                                    required={opt.is_required}
-                                    value={opt.value !== undefined ? opt.value : ''}
-                                    onChange={e => {
-                                      const copy = [...form.services];
-                                      copy[index].options[optIdx].value = Number(e.target.value);
-                                      setForm({ ...form, services: copy });
-                                    }}
-                                    placeholder="0"
-                                    className="w-full px-3 py-2 text-xs rounded-lg bg-white/50 border border-secondary/20 focus:border-primary/50 outline-none text-secondary"
-                                  />
-                                )}
+                                <input
+                                  type="number"
+                                  required={opt.is_required}
+                                  value={opt.value !== undefined ? opt.value : ''}
+                                  onChange={e => {
+                                    const copy = [...form.services];
+                                    copy[index].options[optIdx].value = Number(e.target.value);
+                                    setForm({ ...form, services: copy });
+                                  }}
+                                  placeholder="0"
+                                  className="w-full px-3 py-2 text-xs rounded-lg bg-white/50 border border-secondary/20 focus:border-primary/50 outline-none text-secondary"
+                                />
+                              )}
 
                               {opt.type === 'color' && (
-                                <div className="space-y-2">
-                                  <div className="flex items-center gap-2">
-                                    <input
-                                      type="color"
-                                      value={opt.value || '#4234F3'}
-                                      onChange={e => {
-                                        const copy = [...form.services];
-                                        copy[index].options[optIdx].value = e.target.value;
-                                        setForm({ ...form, services: copy });
-                                      }}
-                                      className="w-8 h-8 rounded-lg cursor-pointer p-0.5 border border-secondary/25 transition-transform hover:scale-105"
-                                    />
-                                    <span className="text-[11px] font-mono text-secondary/60">
-                                      {(opt.value || '#4234F3').toUpperCase()}
-                                    </span>
-                                  </div>
-                                  
-                                  {/* Preset colors */}
-                                  <div className="flex flex-wrap gap-1.5 pt-1">
-                                    {PRESET_COLORS.map(c => (
-                                      <button
-                                        key={c.hex}
-                                        type="button"
-                                        title={c.label}
-                                        onClick={() => {
-                                          const copy = [...form.services];
-                                          copy[index].options[optIdx].value = c.hex;
-                                          setForm({ ...form, services: copy });
-                                        }}
-                                        style={{ backgroundColor: c.hex }}
-                                        className={cn(
-                                          "w-5 h-5 rounded-full border border-white/60 transition-transform hover:scale-110 cursor-pointer shadow-sm",
-                                          opt.value === c.hex ? "ring-2 ring-primary ring-offset-1" : ""
-                                        )}
-                                      />
-                                    ))}
-                                  </div>
+                                <div className="space-y-1.5">
+                                  {(opt.values || []).length > 0 ? (
+                                    // API-provided palette — multi-select by swatch ID
+                                    <>
+                                      <div className="flex flex-wrap gap-2">
+                                        {(opt.values || []).map((colorVal: any) => {
+                                          const isSelected = (opt.selectedColorIds || []).includes(colorVal.id);
+                                          return (
+                                            <button
+                                              key={colorVal.id}
+                                              type="button"
+                                              title={language === 'ar' ? colorVal.label_ar : colorVal.label_en}
+                                              onClick={() => {
+                                                const copy = [...form.services];
+                                                const prev = copy[index].options[optIdx].selectedColorIds || [];
+                                                copy[index].options[optIdx].selectedColorIds = isSelected
+                                                  ? prev.filter(id => id !== colorVal.id)
+                                                  : [...prev, colorVal.id];
+                                                setForm({ ...form, services: copy });
+                                              }}
+                                              style={{ backgroundColor: colorVal.color_hex }}
+                                              className={cn(
+                                                'w-7 h-7 rounded-full border-2 transition-all cursor-pointer shadow-sm hover:scale-110',
+                                                isSelected
+                                                  ? 'border-primary ring-2 ring-primary ring-offset-1 scale-110'
+                                                  : 'border-white/70'
+                                              )}
+                                            />
+                                          );
+                                        })}
+                                      </div>
+                                      {(opt.selectedColorIds || []).length > 0 && (
+                                        <p className="text-[10px] text-secondary/50">
+                                          {(opt.selectedColorIds || []).length}{' '}
+                                          {language === 'ar' ? 'لون محدد' : 'color(s) selected'}
+                                        </p>
+                                      )}
+                                    </>
+                                  ) : (
+                                    // No predefined palette — free-form hex picker
+                                    <div className="space-y-2">
+                                      <div className="flex items-center gap-2">
+                                        <input
+                                          type="color"
+                                          value={opt.value || '#4234F3'}
+                                          onChange={e => {
+                                            const copy = [...form.services];
+                                            copy[index].options[optIdx].value = e.target.value;
+                                            setForm({ ...form, services: copy });
+                                          }}
+                                          className="w-8 h-8 rounded-lg cursor-pointer p-0.5 border border-secondary/25 transition-transform hover:scale-105"
+                                        />
+                                        <span className="text-[11px] font-mono text-secondary/60">
+                                          {(opt.value || '#4234F3').toUpperCase()}
+                                        </span>
+                                      </div>
+                                      <div className="flex flex-wrap gap-1.5">
+                                        {PRESET_COLORS.map(c => (
+                                          <button
+                                            key={c.hex}
+                                            type="button"
+                                            title={c.label}
+                                            onClick={() => {
+                                              const copy = [...form.services];
+                                              copy[index].options[optIdx].value = c.hex;
+                                              setForm({ ...form, services: copy });
+                                            }}
+                                            style={{ backgroundColor: c.hex }}
+                                            className={cn(
+                                              'w-5 h-5 rounded-full border border-white/60 transition-transform hover:scale-110 cursor-pointer shadow-sm',
+                                              opt.value === c.hex ? 'ring-2 ring-primary ring-offset-1' : ''
+                                            )}
+                                          />
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
                                 </div>
                               )}
 
@@ -421,12 +485,10 @@ export function OrderForm({
                                   className="w-full px-3 py-2 text-xs rounded-lg bg-white/50 border border-secondary/20 focus:border-primary/50 outline-none text-secondary cursor-pointer"
                                 >
                                   <option value="">{language === 'ar' ? 'اختر خياراً...' : 'Select choice...'}</option>
-                                  {opt.values?.map((valItem: any, vIdx) => {
-                                    const labelText = language === 'ar'
-                                      ? (valItem.label_ar || valItem.value_ar || valItem.value)
-                                      : (valItem.label_en || valItem.value_en || valItem.value);
+                                  {(opt.values || []).map((label: any) => {
+                                    const labelText = language === 'ar' ? label.label_ar : label.label_en;
                                     return (
-                                      <option key={vIdx} value={valItem.id}>
+                                      <option key={label.id} value={label.id}>
                                         {labelText}
                                       </option>
                                     );

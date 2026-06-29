@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, Suspense } from 'react';
+import React, { useState, Suspense, useMemo } from 'react';
 import { useLanguage } from '@/lib/i18n';
 import { motion, AnimatePresence } from 'motion/react';
 import {
@@ -26,25 +26,29 @@ import {
 import { cn } from '@/lib/utils';
 import Image from 'next/image';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { clearAuth, getAdmin, getToken } from '@/lib/auth';
+import { clearAuth, getAdmin, getToken, getPermissions } from '@/lib/auth';
 import { logoutAdmin } from '@/lib/api';
 import type { Admin } from '@/lib/api';
 import { ProfileEditDialog } from './profile-edit-dialog';
 
+/**
+ * Each nav item declares which permission string is needed to see it.
+ * `permission: null` means always visible (e.g. dashboard).
+ */
 const navItems = [
-  { icon: LayoutDashboard, id: 'dashboard' },
-  { icon: UserCog, id: 'admins' },
-  { icon: ShieldCheck, id: 'roles' },
-  { icon: Users, id: 'clients' },
-  { icon: CalendarDays, id: 'events' },
-  { icon: MailPlus, id: 'invitations' },
-  { icon: ShoppingBag, id: 'serviceOrders' },
-  { icon: Layers, id: 'services' },
-  { icon: SlidersHorizontal, id: 'serviceOptions' },
-  { icon: Briefcase, id: 'employees' },
-  { icon: Wallet, id: 'financial' },
-  { icon: Globe, id: 'landingPage' },
-  { icon: Settings, id: 'settings' },
+  { icon: LayoutDashboard, id: 'dashboard',     permission: null },
+  { icon: UserCog,         id: 'admins',         permission: 'admins' },
+  { icon: ShieldCheck,     id: 'roles',          permission: 'roles' },
+  { icon: Users,           id: 'clients',        permission: 'clients' },
+  { icon: CalendarDays,    id: 'events',         permission: 'events' },
+  { icon: MailPlus,        id: 'invitations',    permission: 'invitations' },
+  { icon: ShoppingBag,     id: 'serviceOrders',  permission: 'service-orders' },
+  { icon: Layers,          id: 'services',       permission: 'services' },
+  { icon: SlidersHorizontal, id: 'serviceOptions', permission: 'service-options' },
+  { icon: Briefcase,       id: 'employees',      permission: 'employees' },
+  { icon: Wallet,          id: 'financial',      permission: 'finance' },
+  { icon: Globe,           id: 'landingPage',    permission: 'landing-page' },
+  { icon: Settings,        id: 'settings',       permission: 'show-settings' },
 ];
 
 // Map nav ids that differ from their URL segment
@@ -66,6 +70,15 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
 
   // Admin state — starts from localStorage, can be refreshed on profile update
   const [admin, setAdmin] = useState<Admin | null>(() => getAdmin<Admin>());
+
+  // Permissions — read once from localStorage on mount
+  const visibleNavItems = useMemo(() => {
+    const perms = getPermissions();
+    const isSuperAdmin = (admin as any)?.is_super_admin === true;
+    return navItems.filter(item =>
+      item.permission === null || isSuperAdmin || perms.includes(item.permission)
+    );
+  }, [admin]);
 
   const searchParams = useSearchParams();
 
@@ -151,7 +164,7 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
           </div>
 
           <nav className="flex-1 px-4 space-y-2 overflow-y-auto overflow-x-hidden scrollbar-hide py-2">
-            {navItems.map((item) => {
+            {visibleNavItems.map((item) => {
               const isSelected = activeItem === item.id;
 
               return (
