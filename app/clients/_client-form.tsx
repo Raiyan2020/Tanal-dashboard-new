@@ -1,6 +1,9 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 import { useLanguage } from '@/lib/i18n';
 import { motion } from 'motion/react';
 import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
@@ -14,6 +17,15 @@ import {
   getCountries,
   getCountryCallingCode,
 } from 'libphonenumber-js';
+
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/form';
 
 /* ─── Dynamic Country Codes List ──────────────────────────────── */
 export interface CountryOption {
@@ -51,11 +63,18 @@ export const COUNTRIES: CountryOption[] = [
   ...rawCountries.filter(c => !PRIORITY_ISOS.includes(c.iso)).sort((a, b) => a.name.localeCompare(b.name)),
 ];
 
-
 interface ClientEditFormProps {
   clientId: number | null; // null = create, number = edit
   onBack: () => void;
   onSaved: (client: Client) => void;
+}
+
+interface FormValues {
+  name: string;
+  countryCode: string;
+  phone: string;
+  email: string;
+  notes?: string;
 }
 
 export function ClientEditForm({ clientId, onBack, onSaved }: ClientEditFormProps) {
@@ -64,14 +83,27 @@ export function ClientEditForm({ clientId, onBack, onSaved }: ClientEditFormProp
 
   // loading state for edit mode
   const [fetchLoading, setFetchLoading] = useState(clientId !== null);
-
-  // form state
-  const [name, setName] = useState('');
-  const [countryCode, setCountryCode] = useState('+965');
-  const [phone, setPhone] = useState('');
-  const [email, setEmail] = useState('');
-  const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const schema = React.useMemo(() => z.object({
+    name: z.string().min(1, { message: t('nameRequired') }),
+    countryCode: z.string().min(1),
+    phone: z.string().min(1, { message: t('phoneRequired') }).regex(/^\d+$/, { message: dir === 'ltr' ? 'Phone number must contain digits only' : 'رقم الهاتف يجب أن يحتوي على أرقام فقط' }),
+    email: z.string().email({ message: t('invalidEmail') }).or(z.literal('')),
+    notes: z.string().optional(),
+  }), [t, dir]);
+
+  // Initialize React Hook Form
+  const form = useForm<FormValues>({
+    resolver: zodResolver(schema),
+    defaultValues: {
+      name: '',
+      countryCode: '+965',
+      phone: '',
+      email: '',
+      notes: '',
+    },
+  });
 
   // load single client data if editing
   useEffect(() => {
@@ -80,30 +112,28 @@ export function ClientEditForm({ clientId, onBack, onSaved }: ClientEditFormProp
     getClientById(clientId, token)
       .then(res => {
         const c = res.data;
-        setName(c.name);
-        setCountryCode(c.country_code || '+965');
-        setPhone(c.phone);
-        setEmail(c.email || '');
-        setNotes(c.notes || '');
+        form.reset({
+          name: c.name,
+          countryCode: c.country_code || '+965',
+          phone: c.phone,
+          email: c.email || '',
+          notes: c.notes || '',
+        });
       })
       .catch(err => toast.error((err as Error).message || 'فشل جلب بيانات العميل'))
       .finally(() => setFetchLoading(false));
-  }, [clientId, token]);
+  }, [clientId, token, form]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!name.trim()) { toast.error(dir === 'ltr' ? 'Name is required' : 'الاسم الكامل مطلوب'); return; }
-    if (!phone.trim()) { toast.error(dir === 'ltr' ? 'Phone is required' : 'رقم الهاتف مطلوب'); return; }
-
+  const onSubmit = async (values: FormValues) => {
     setLoading(true);
     try {
       let res;
       const payload = {
-        name,
-        country_code: countryCode,
-        phone,
-        email: email.trim() ? email : undefined,
-        notes: notes.trim() ? notes : undefined,
+        name: values.name,
+        country_code: values.countryCode,
+        phone: values.phone,
+        email: values.email.trim() ? values.email : undefined,
+        notes: values.notes?.trim() ? values.notes : undefined,
       };
 
       if (clientId !== null) {
@@ -134,7 +164,7 @@ export function ClientEditForm({ clientId, onBack, onSaved }: ClientEditFormProp
       initial={{ opacity: 0, x: dir === 'ltr' ? 20 : -20 }}
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: dir === 'ltr' ? -20 : 20 }}
-      className="space-y-6 pb-10 w-full"
+      className="space-y-6 pb-10 w-full text-start"
     >
       {/* Back button */}
       <div className="flex items-center justify-start mb-2">
@@ -154,106 +184,152 @@ export function ClientEditForm({ clientId, onBack, onSaved }: ClientEditFormProp
           {clientId !== null ? t('editClient' as any) : t('addClient' as any)}
         </h2>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Full Name */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-secondary/80 ml-1 rtl:mr-1 rtl:ml-0">
-              {t('fullName' as any) || 'Full Name'} <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              value={name}
-              onChange={e => setName(e.target.value)}
-              required
-              className="w-full bg-white/50 border border-white/60 focus:border-primary/50 focus:ring-2 focus:ring-primary/20 rounded-xl py-3 px-4 transition-all outline-none text-secondary"
-              placeholder="Mohammed Khalid"
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            {/* Full Name */}
+            <FormField
+              control={form.control}
+              name="name"
+              render={({ field }) => (
+                <FormItem className="space-y-2">
+                  <FormLabel className="text-sm font-medium text-secondary/80 ml-1 rtl:mr-1 rtl:ml-0">
+                    {t('fullName' as any) || 'Full Name'} <span className="text-red-500">*</span>
+                  </FormLabel>
+                  <FormControl>
+                    <input
+                      type="text"
+                      {...field}
+                      className="w-full bg-white/50 border border-white/60 focus:border-primary/50 focus:ring-2 focus:ring-primary/20 rounded-xl py-3 px-4 transition-all outline-none text-secondary"
+                      placeholder="Mohammed Khalid"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
             />
-          </div>
 
-          {/* Phone */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-secondary/80 ml-1 rtl:mr-1 rtl:ml-0">
-              {t('phoneNumber' as any) || 'Phone Number'} <span className="text-red-500">*</span>
-            </label>
-            <div className="flex gap-2">
-              <div className="relative shrink-0 w-[140px]">
-                <select
-                  value={countryCode}
-                  onChange={e => setCountryCode(e.target.value)}
-                  className="w-full appearance-none bg-white/50 border border-white/60 focus:border-primary/50 focus:ring-2 focus:ring-primary/20 rounded-xl py-3 ps-3 pe-8 transition-all outline-none text-secondary text-sm font-medium h-full cursor-pointer"
-                >
-                  {COUNTRIES.map(c => (
-                    <option key={c.iso} value={c.code}>
-                      {c.flag} {c.code} ({dir === 'ltr' ? c.name : c.nameAr})
-                    </option>
-                  ))}
-                </select>
-                <div className="absolute inset-y-0 end-0 flex items-center pe-2.5 pointer-events-none text-secondary/50">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="m6 9 6 6 6-6" />
-                  </svg>
-                </div>
+            {/* Phone */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-secondary/80 ml-1 rtl:mr-1 rtl:ml-0 flex items-center gap-1">
+                {t('phoneNumber' as any) || 'Phone Number'} <span className="text-red-500">*</span>
+              </label>
+              <div className="flex gap-2 items-start">
+                <FormField
+                  control={form.control}
+                  name="countryCode"
+                  render={({ field }) => (
+                    <FormItem className="shrink-0 w-[140px]">
+                      <div className="relative">
+                        <FormControl>
+                          <select
+                            {...field}
+                            className="w-full appearance-none bg-white/50 border border-white/60 focus:border-primary/50 focus:ring-2 focus:ring-primary/20 rounded-xl py-3 ps-3 pe-8 transition-all outline-none text-secondary text-sm font-medium h-[50px] cursor-pointer"
+                          >
+                            {COUNTRIES.map(c => (
+                              <option key={c.iso} value={c.code}>
+                                {c.flag} {c.code} ({dir === 'ltr' ? c.name : c.nameAr})
+                              </option>
+                            ))}
+                          </select>
+                        </FormControl>
+                        <div className="absolute inset-y-0 end-0 flex items-center pe-2.5 pointer-events-none text-secondary/50">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="m6 9 6 6 6-6" />
+                          </svg>
+                        </div>
+                      </div>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="phone"
+                  render={({ field }) => (
+                    <FormItem className="flex-1 min-w-0">
+                      <FormControl>
+                        <input
+                          type="tel"
+                          {...field}
+                          onChange={e => field.onChange(e.target.value.replace(/\D/g, ''))}
+                          dir="ltr"
+                          className="w-full bg-white/50 border border-white/60 focus:border-primary/50 focus:ring-2 focus:ring-primary/20 rounded-xl py-3 px-4 transition-all outline-none text-secondary h-[50px]"
+                          placeholder="501234567"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
               </div>
-              <input
-                type="tel"
-                value={phone}
-                onChange={e => setPhone(e.target.value.replace(/\D/g, ''))} // only digits
-                required
-                dir="ltr"
-                className="flex-1 min-w-0 bg-white/50 border border-white/60 focus:border-primary/50 focus:ring-2 focus:ring-primary/20 rounded-xl py-3 px-4 transition-all outline-none text-secondary"
-                placeholder="501234567"
-              />
+              <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#e8f5e9] text-[#2e7d32] rounded-lg text-xs font-medium mt-1">
+                <Image
+                  src="https://raiyansoft.com/wp-content/uploads/2026/05/whatsapp.png"
+                  alt="WhatsApp"
+                  width={14}
+                  height={14}
+                  className="opacity-80 drop-shadow-sm"
+                  referrerPolicy="no-referrer"
+                />
+                {t('phoneMustHaveWhatsapp' as any) || 'Phone number must have WhatsApp'}
+              </div>
             </div>
-            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#e8f5e9] text-[#2e7d32] rounded-lg text-xs font-medium mt-1">
-              <Image
-                src="https://raiyansoft.com/wp-content/uploads/2026/05/whatsapp.png"
-                alt="WhatsApp"
-                width={14}
-                height={14}
-                className="opacity-80 drop-shadow-sm"
-                referrerPolicy="no-referrer"
-              />
-              {t('phoneMustHaveWhatsapp' as any) || 'Phone number must have WhatsApp'}
-            </div>
-          </div>
 
-          {/* Email */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-secondary/80 ml-1 rtl:mr-1 rtl:ml-0">
-              {t('emailOptional' as any) || 'Email (Optional)'}
-            </label>
-            <input
-              type="email"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              className="w-full bg-white/50 border border-white/60 focus:border-primary/50 focus:ring-2 focus:ring-primary/20 rounded-xl py-3 px-4 transition-all outline-none text-secondary"
-              placeholder="mohammed.k@example.com"
-              dir="ltr"
+            {/* Email */}
+            <FormField
+              control={form.control}
+              name="email"
+              render={({ field }) => (
+                <FormItem className="space-y-2">
+                  <FormLabel className="text-sm font-medium text-secondary/80 ml-1 rtl:mr-1 rtl:ml-0">
+                    {t('emailOptional' as any) || 'Email (Optional)'}
+                  </FormLabel>
+                  <FormControl>
+                    <input
+                      type="email"
+                      {...field}
+                      className="w-full bg-white/50 border border-white/60 focus:border-primary/50 focus:ring-2 focus:ring-primary/20 rounded-xl py-3 px-4 transition-all outline-none text-secondary"
+                      placeholder="mohammed.k@example.com"
+                      dir="ltr"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
             />
-          </div>
 
-          {/* Notes */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-secondary/80 ml-1 rtl:mr-1 rtl:ml-0">
-              {t('notesOptional' as any) || 'Notes (Optional)'}
-            </label>
-            <textarea
-              value={notes}
-              onChange={e => setNotes(e.target.value)}
-              className="w-full bg-white/50 border border-white/60 focus:border-primary/50 focus:ring-2 focus:ring-primary/20 rounded-xl py-3 px-4 transition-all outline-none text-secondary resize-none"
-              rows={4}
+            {/* Notes */}
+            <FormField
+              control={form.control}
+              name="notes"
+              render={({ field }) => (
+                <FormItem className="space-y-2">
+                  <FormLabel className="text-sm font-medium text-secondary/80 ml-1 rtl:mr-1 rtl:ml-0">
+                    {t('notesOptional' as any) || 'Notes (Optional)'}
+                  </FormLabel>
+                  <FormControl>
+                    <textarea
+                      {...field}
+                      className="w-full bg-white/50 border border-white/60 focus:border-primary/50 focus:ring-2 focus:ring-primary/20 rounded-xl py-3 px-4 transition-all outline-none text-secondary resize-none"
+                      rows={4}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
             />
-          </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full mt-6 bg-primary hover:bg-primary-dark disabled:opacity-60 text-white rounded-xl py-3.5 font-medium transition-all shadow-md hover:shadow-lg flex justify-center items-center gap-2 group cursor-pointer"
-          >
-            {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-            {t('saveChanges' as any) || 'Save Changes'}
-          </button>
-        </form>
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full mt-6 bg-primary hover:bg-primary-dark disabled:opacity-60 text-white rounded-xl py-3.5 font-medium transition-all shadow-md hover:shadow-lg flex justify-center items-center gap-2 group cursor-pointer"
+            >
+              {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+              {t('saveChanges' as any) || 'Save Changes'}
+            </button>
+          </form>
+        </Form>
       </div>
     </motion.div>
   );

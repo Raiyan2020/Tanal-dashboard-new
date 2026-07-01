@@ -15,7 +15,7 @@ interface PermPickerProps {
 }
 
 export function PermissionPicker({ groups, selected, onChange }: PermPickerProps) {
-  const { t } = useLanguage();
+  const { t, dir } = useLanguage();
   const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState('');
 
@@ -48,12 +48,12 @@ export function PermissionPicker({ groups, selected, onChange }: PermPickerProps
 
   const filtered = search.trim()
     ? groups.map(g => ({
-        ...g,
-        permissions: g.permissions.filter(p =>
-          p.label.toLowerCase().includes(search.toLowerCase()) ||
-          p.action.toLowerCase().includes(search.toLowerCase())
-        ),
-      })).filter(g => g.permissions.length > 0)
+      ...g,
+      permissions: g.permissions.filter(p =>
+        p.label.toLowerCase().includes(search.toLowerCase()) ||
+        p.action.toLowerCase().includes(search.toLowerCase())
+      ),
+    })).filter(g => g.permissions.length > 0)
     : groups;
 
   return (
@@ -78,7 +78,13 @@ export function PermissionPicker({ groups, selected, onChange }: PermPickerProps
       </div>
 
       <div className="max-h-[420px] overflow-y-auto space-y-2 pr-1 scrollbar-thin">
-        {filtered.map(group => {
+        {filtered.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-10 gap-3 text-secondary/40">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="lucide lucide-funnel-x-icon lucide-funnel-x"><path d="M12.531 3H3a1 1 0 0 0-.742 1.67l7.225 7.989A2 2 0 0 1 10 14v6a1 1 0 0 0 .553.895l2 1A1 1 0 0 0 14 21v-7a2 2 0 0 1 .517-1.341l.427-.473" /><path d="m16.5 3.5 5 5" /><path d="m21.5 3.5-5 5" /></svg>
+            <p className="text-sm font-medium">{dir === 'rtl' ? 'لا توجد صلاحيات مطابقة' : 'No matching permissions found'}</p>
+            <p className="text-xs">{dir === 'rtl' ? 'جرب كلمة بحث مختلفة' : 'Try a different search term'}</p>
+          </div>
+        ) : filtered.map(group => {
           const groupIds = group.permissions.map(p => p.id);
           const checkedCount = groupIds.filter(id => selected.has(id)).length;
           const allChecked = checkedCount === groupIds.length;

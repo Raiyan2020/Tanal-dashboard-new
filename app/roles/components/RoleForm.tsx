@@ -1,6 +1,9 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 import { useLanguage } from '@/lib/i18n';
 import { motion } from 'motion/react';
 import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
@@ -13,24 +16,51 @@ import {
 } from '@/lib/api';
 import { PermissionPicker } from './PermissionPicker';
 
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/form';
+
 interface RoleFormProps {
   roleId: number | null;
   onBack: () => void;
   onSaved: () => void;
 }
 
+interface FormValues {
+  nameAr: string;
+  nameEn: string;
+  permissionIds: number[];
+}
+
 export function RoleForm({ roleId, onBack, onSaved }: RoleFormProps) {
   const { t, dir } = useLanguage();
   const token = getToken() ?? '';
-
-  const [nameAr, setNameAr] = useState('');
-  const [nameEn, setNameEn] = useState('');
-  const [selected, setSelected] = useState<Set<number>>(new Set());
 
   const [permGroups, setPermGroups] = useState<PermissionGroup[]>([]);
   const [permLoading, setPermLoading] = useState(true);
   const [fetchLoading, setFetchLoading] = useState(roleId !== null);
   const [saving, setSaving] = useState(false);
+
+  const schema = React.useMemo(() => z.object({
+    nameAr: z.string().min(1, { message: t('nameArRequired') }),
+    nameEn: z.string().min(1, { message: t('nameEnRequired') }),
+    permissionIds: z.array(z.number()).min(1, { message: t('atLeastOnePermission') }),
+  }), [t]);
+
+  // Initialize React Hook Form
+  const form = useForm<FormValues>({
+    resolver: zodResolver(schema),
+    defaultValues: {
+      nameAr: '',
+      nameEn: '',
+      permissionIds: [],
+    },
+  });
 
   useEffect(() => {
     setPermLoading(true);
@@ -46,22 +76,24 @@ export function RoleForm({ roleId, onBack, onSaved }: RoleFormProps) {
     getRoleById(roleId, token)
       .then(res => {
         const r = res.data;
-        setNameAr(r.name_ar);
-        setNameEn(r.name_en);
-        setSelected(new Set(r.permissions.map(p => p.id)));
+        form.reset({
+          nameAr: r.name_ar,
+          nameEn: r.name_en,
+          permissionIds: r.permissions.map(p => p.id),
+        });
       })
       .catch(err => toast.error((err as Error).message))
       .finally(() => setFetchLoading(false));
-  }, [roleId, token]);
+  }, [roleId, token, form]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!nameAr.trim()) { toast.error(t('nameArRequired')); return; }
-    if (!nameEn.trim()) { toast.error(t('nameEnRequired')); return; }
-    if (selected.size === 0) { toast.error(t('atLeastOnePermission')); return; }
+  const onSubmit = async (values: FormValues) => {
     setSaving(true);
     try {
-      const fields = { nameAr, nameEn, permissionIds: Array.from(selected) };
+      const fields = {
+        nameAr: values.nameAr,
+        nameEn: values.nameEn,
+        permissionIds: values.permissionIds,
+      };
       const res = roleId !== null
         ? await updateRole(roleId, fields, token)
         : await createRole(fields, token);
@@ -104,49 +136,93 @@ export function RoleForm({ roleId, onBack, onSaved }: RoleFormProps) {
           {roleId !== null ? t('editRole') : t('addNewRole')}
         </h2>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-secondary/80">{t('nameAr')} <span className="text-red-500">*</span></label>
-              <input
-                type="text"
-                required
-                value={nameAr}
-                onChange={e => setNameAr(e.target.value)}
-                dir="rtl"
-                className="w-full bg-white/50 border border-secondary/20 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-all text-secondary"
-                placeholder="مدير"
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Name Ar */}
+              <FormField
+                control={form.control}
+                name="nameAr"
+                render={({ field }) => (
+                  <FormItem className="space-y-2">
+                    <FormLabel className="text-sm font-medium text-secondary/80">
+                      {t('nameAr')} <span className="text-red-500">*</span>
+                    </FormLabel>
+                    <FormControl>
+                      <input
+                        type="text"
+                        {...field}
+                        dir="rtl"
+                        className="w-full bg-white/50 border border-secondary/20 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-all text-secondary"
+                        placeholder="مدير"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {/* Name En */}
+              <FormField
+                control={form.control}
+                name="nameEn"
+                render={({ field }) => (
+                  <FormItem className="space-y-2">
+                    <FormLabel className="text-sm font-medium text-secondary/80">
+                      {t('nameEn')} <span className="text-red-500">*</span>
+                    </FormLabel>
+                    <FormControl>
+                      <input
+                        type="text"
+                        {...field}
+                        dir="ltr"
+                        className="w-full bg-white/50 border border-secondary/20 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-all text-secondary"
+                        placeholder="Manager"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
               />
             </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-secondary/80">{t('nameEn')} <span className="text-red-500">*</span></label>
-              <input
-                type="text"
-                required
-                value={nameEn}
-                onChange={e => setNameEn(e.target.value)}
-                dir="ltr"
-                className="w-full bg-white/50 border border-secondary/20 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-all text-secondary"
-                placeholder="Manager"
-              />
+
+            {/* Permissions */}
+            <FormField
+              control={form.control}
+              name="permissionIds"
+              render={({ field }) => {
+                const selectedSet = new Set(field.value || []);
+                return (
+                  <FormItem className="space-y-2">
+                    <FormLabel className="text-sm font-medium text-secondary/80 flex items-center gap-1">
+                      {t('permissions')} <span className="text-red-500">*</span>
+                    </FormLabel>
+                    <FormControl>
+                      <PermissionPicker
+                        groups={permGroups}
+                        selected={selectedSet}
+                        onChange={(newSet) => {
+                          field.onChange(Array.from(newSet));
+                        }}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                );
+              }}
+            />
+
+            <div className="pt-4 border-t border-secondary/10">
+              <button
+                type="submit"
+                disabled={saving}
+                className="w-full bg-primary hover:bg-primary-dark text-white py-3.5 rounded-xl font-medium transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : t('saveChanges')}
+              </button>
             </div>
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-secondary/80">{t('permissions')} <span className="text-red-500">*</span></label>
-            <PermissionPicker groups={permGroups} selected={selected} onChange={setSelected} />
-          </div>
-
-          <div className="pt-4 border-t border-secondary/10">
-            <button
-              type="submit"
-              disabled={saving}
-              className="w-full bg-primary hover:bg-primary-dark text-white py-3.5 rounded-xl font-medium transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
-            >
-              {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : t('saveChanges')}
-            </button>
-          </div>
-        </form>
+          </form>
+        </Form>
       </div>
     </motion.div>
   );

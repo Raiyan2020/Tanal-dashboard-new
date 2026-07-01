@@ -1,4 +1,9 @@
+'use client';
+
 import React, { useState, useRef, useEffect } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 import { motion } from 'motion/react';
 import { ChevronLeft, ChevronRight, Upload, Ticket, Calendar, Clock, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -12,6 +17,23 @@ import { DayPicker } from '@daypicker/react';
 import '@daypicker/react/dist/style.css';
 import { ar } from 'date-fns/locale';
 
+// Form UI imports
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/form';
+
+interface FormValues {
+  eventId: string;
+  logic: 'strict' | 'default_accept' | 'view_only';
+  deadlineDate: string;
+  deadlineTime: string;
+}
+
 interface InvitationEditFormProps {
   invitation?: Invitation | null;
   onBack: () => void;
@@ -23,10 +45,13 @@ export function InvitationEditForm({ invitation, onBack, onSave }: InvitationEdi
   const token = getToken() ?? '';
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [eventId, setEventId] = useState(invitation?.eventId || '');
-  const [logic, setLogic] = useState<'strict' | 'default_accept' | 'view_only'>('strict');
-  const [deadlineDate, setDeadlineDate] = useState('');
-  const [deadlineTime, setDeadlineTime] = useState('');
+  const schema = React.useMemo(() => z.object({
+    eventId: z.string().min(1, { message: t('chooseEvent') }),
+    logic: z.enum(['strict', 'default_accept', 'view_only']),
+    deadlineDate: z.string().min(1, { message: t('pleaseSelectDeadline') }),
+    deadlineTime: z.string().min(1, { message: t('pleaseSelectDeadlineTime') }),
+  }), [t]);
+
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [fileName, setFileName] = useState('');
 
@@ -38,6 +63,20 @@ export function InvitationEditForm({ invitation, onBack, onSave }: InvitationEdi
   // Date picker states
   const [showDatePicker, setShowDatePicker] = useState(false);
   const datePickerRef = useRef<HTMLDivElement>(null);
+
+  // Initialize React Hook Form
+  const form = useForm<FormValues>({
+    resolver: zodResolver(schema),
+    defaultValues: {
+      eventId: invitation?.eventId || '',
+      logic: 'strict',
+      deadlineDate: '',
+      deadlineTime: '',
+    },
+  });
+
+  // Watch deadlineDate value to display it and feed the calendar
+  const deadlineDateValue = form.watch('deadlineDate');
 
   // Close datepicker when clicking outside
   useEffect(() => {
@@ -56,16 +95,7 @@ export function InvitationEditForm({ invitation, onBack, onSave }: InvitationEdi
     return today;
   };
 
-  const handleDateSelect = (date: Date | undefined) => {
-    if (!date) return;
-    const yyyy = date.getFullYear();
-    const mm = String(date.getMonth() + 1).padStart(2, '0');
-    const dd = String(date.getDate()).padStart(2, '0');
-    setDeadlineDate(`${yyyy}-${mm}-${dd}`);
-    setShowDatePicker(false);
-  };
-
-  const selectedDate = deadlineDate ? new Date(deadlineDate) : undefined;
+  const selectedDate = deadlineDateValue ? new Date(deadlineDateValue) : undefined;
 
   // Fetch events list for dropdown
   useEffect(() => {
@@ -98,51 +128,48 @@ export function InvitationEditForm({ invitation, onBack, onSave }: InvitationEdi
     getInvitationById(Number(invitation.id), token)
       .then(res => {
         const details = res.data.details;
-        setEventId(String(res.data.event_id));
-        setLogic(details.logic_type === 'strict_action' ? 'strict' : details.logic_type);
-        setDeadlineDate(parseApiDate(details.deadline_date));
-        setDeadlineTime(details.deadline_time || '');
+        form.reset({
+          eventId: String(res.data.event_id),
+          logic: details.logic_type === 'strict_action' ? 'strict' : details.logic_type,
+          deadlineDate: parseApiDate(details.deadline_date),
+          deadlineTime: details.deadline_time || '',
+        });
       })
       .catch(err => toast.error((err as Error).message || 'فشل تحميل تفاصيل الدعوة'))
       .finally(() => setDetailLoading(false));
   }, [token, invitation?.id]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!deadlineDate) {
-      toast.error(dir === 'ltr' ? 'Please select a deadline date' : 'يرجى اختيار تاريخ الموعد النهائي');
-      return;
-    }
+  const onSubmit = async (values: FormValues) => {
     if (submitting) return;
 
-    const mappedLogic = logic === 'strict' ? 'strict_action' : logic;
-    const selectedEvent = events.find(ev => String(ev.id) === eventId);
-    
+    const mappedLogic = values.logic === 'strict' ? 'strict_action' : values.logic;
+    const selectedEvent = events.find(ev => String(ev.id) === values.eventId);
+
     setSubmitting(true);
-    const formToast = toast.loading(invitation ? 'Saving changes...' : 'Creating invitation...');
-    
+    const formToast = toast.loading(invitation ? t('savingChanges') : t('creatingInvitation'));
+
     try {
       if (invitation) {
         // Update Invitation
         const res = await updateInvitation(
           Number(invitation.id),
           {
-            event_id: eventId,
+            event_id: values.eventId,
             logic_type: mappedLogic,
-            deadline_date: deadlineDate,
-            deadline_time: deadlineTime,
+            deadline_date: values.deadlineDate,
+            deadline_time: values.deadlineTime,
             image: selectedFile,
           },
           token
         );
         toast.dismiss(formToast);
         toast.success(res.msg || 'تم تحديث الدعوة بنجاح');
-        
+
         onSave({
           id: invitation.id,
-          eventId: eventId,
+          eventId: values.eventId,
           eventName: selectedEvent?.name || invitation.eventName,
-          deadlineDate: deadlineDate,
+          deadlineDate: values.deadlineDate,
           guestsNumber: res.data?.guest_count ?? invitation.guestsNumber,
           status: res.data?.status === 'previous' ? 'past' : (res.data?.is_sent ? 'sent' : 'unsent'),
         }, res.data);
@@ -150,22 +177,22 @@ export function InvitationEditForm({ invitation, onBack, onSave }: InvitationEdi
         // Create Invitation
         const res = await createInvitation(
           {
-            event_id: eventId,
+            event_id: values.eventId,
             logic_type: mappedLogic,
-            deadline_date: deadlineDate,
-            deadline_time: deadlineTime,
+            deadline_date: values.deadlineDate,
+            deadline_time: values.deadlineTime,
             design: selectedFile,
           },
           token
         );
         toast.dismiss(formToast);
         toast.success(res.msg || 'تم إنشاء الدعوة بنجاح');
-        
+
         onSave({
           id: String(res.data.id),
-          eventId: eventId,
+          eventId: values.eventId,
           eventName: selectedEvent?.name || res.data.name || 'Unnamed Event',
-          deadlineDate: deadlineDate,
+          deadlineDate: values.deadlineDate,
           guestsNumber: 0,
           status: 'unsent',
         }, res.data);
@@ -208,7 +235,7 @@ export function InvitationEditForm({ invitation, onBack, onSave }: InvitationEdi
       initial={{ opacity: 0, x: dir === 'ltr' ? 20 : -20 }}
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: dir === 'ltr' ? -20 : 20 }}
-      className="space-y-6 pb-10 w-full"
+      className="space-y-6 pb-10 w-full text-start"
     >
       <div className="flex items-center justify-start mb-2">
         <button
@@ -228,182 +255,232 @@ export function InvitationEditForm({ invitation, onBack, onSave }: InvitationEdi
         <h2 className={cn("text-2xl font-medium text-secondary mb-8", dir === 'ltr' ? 'font-serif' : 'font-arabic font-bold')}>
           {invitation ? (t('editInvitation' as any) || (dir === 'ltr' ? 'Edit Invitation' : 'تعديل الدعوة')) : (t('createInvitation' as any) || (dir === 'ltr' ? 'Create Invitation' : 'إنشاء دعوة'))}
         </h2>
-        <form onSubmit={handleSubmit} className="space-y-6">
 
-          <div>
-            <label className="block text-sm font-medium text-secondary/80 mb-1.5 ml-1 flex items-center gap-2 cursor-pointer">
-              <Ticket className="w-4 h-4 text-secondary/50" />
-              {t('selectEvent' as any) || (dir === 'ltr' ? 'Select Event' : 'اختر الحفل')} <span className="text-red-500">*</span>
-            </label>
-            <div className="relative">
-              <select
-                value={eventId}
-                onChange={e => setEventId(e.target.value)}
-                className="w-full bg-white/50 border border-secondary/20 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-all text-secondary appearance-none font-medium cursor-pointer"
-                required
-                disabled={eventsLoading}
-              >
-                <option value="" disabled>
-                  {eventsLoading 
-                    ? (dir === 'ltr' ? 'Loading events...' : 'جاري تحميل الحفلات...')
-                    : (t('chooseEvent' as any) || (dir === 'ltr' ? 'Choose an event...' : 'اختر حفلاً...'))}
-                </option>
-                {events.map(ev => (
-                  <option key={ev.id} value={ev.id}>{ev.name}</option>
-                ))}
-              </select>
-              <div className="absolute inset-y-0 end-4 flex items-center pointer-events-none text-secondary/40">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>
-              </div>
-            </div>
-          </div>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
 
-          <div>
-            <label className="block text-sm font-medium text-secondary/80 mb-2 ml-1">
-              {t('invitationLogic' as any) || (dir === 'ltr' ? 'Invitation Logic' : 'منطق الدعوة')} <span className="text-red-500">*</span>
-            </label>
-            <div className="space-y-3">
-              <label className={cn("flex items-start gap-3 p-4 rounded-xl border cursor-pointer transition-colors", logic === 'strict' ? 'border-primary/50 bg-primary/5' : 'border-secondary/20 bg-white/50 hover:bg-white/80')}>
-                <input
-                  type="radio"
-                  name="logic"
-                  checked={logic === 'strict'}
-                  onChange={() => setLogic('strict')}
-                  className="mt-1 w-4 h-4 text-primary bg-white border-secondary/30 focus:ring-primary/30"
-                />
-                <div>
-                  <span className="block text-sm font-medium text-secondary">{t('strictAction' as any) || (dir === 'ltr' ? 'Strict Action' : 'إجراء صارم')}</span>
-                  <span className="block text-xs text-secondary/60 mt-0.5">{t('strictActionDesc' as any) || (dir === 'ltr' ? 'If no response, recorded as declined.' : 'إذا لم يتم الرد، تسجل كمرفوضة.')}</span>
-                </div>
-              </label>
-
-              <label className={cn("flex items-start gap-3 p-4 rounded-xl border cursor-pointer transition-colors", logic === 'default_accept' ? 'border-primary/50 bg-primary/5' : 'border-secondary/20 bg-white/50 hover:bg-white/80')}>
-                <input
-                  type="radio"
-                  name="logic"
-                  checked={logic === 'default_accept'}
-                  onChange={() => setLogic('default_accept')}
-                  className="mt-1 w-4 h-4 text-primary bg-white border-secondary/30 focus:ring-primary/30"
-                />
-                <div>
-                  <span className="block text-sm font-medium text-secondary">{t('defaultAccept' as any) || (dir === 'ltr' ? 'Default Accept' : 'قبول تلقائي')}</span>
-                  <span className="block text-xs text-secondary/60 mt-0.5">{t('defaultAcceptDesc' as any) || (dir === 'ltr' ? 'If no response, recorded as accepted.' : 'إذا لم يتم الرد، تسجل كمقبولة.')}</span>
-                </div>
-              </label>
-
-              <label className={cn("flex items-start gap-3 p-4 rounded-xl border cursor-pointer transition-colors", logic === 'view_only' ? 'border-primary/50 bg-primary/5' : 'border-secondary/20 bg-white/50 hover:bg-white/80')}>
-                <input
-                  type="radio"
-                  name="logic"
-                  checked={logic === 'view_only'}
-                  onChange={() => setLogic('view_only')}
-                  className="mt-1 w-4 h-4 text-primary bg-white border-secondary/30 focus:ring-primary/30"
-                />
-                <div>
-                  <span className="block text-sm font-medium text-secondary">{t('viewOnly' as any) || (dir === 'ltr' ? 'View Only' : 'للعرض فقط')}</span>
-                  <span className="block text-xs text-secondary/60 mt-0.5">{t('viewOnlyDesc' as any) || (dir === 'ltr' ? 'Accepted right away, for informing only.' : 'تقبل فوراً، للعلم بالخبر فقط.')}</span>
-                </div>
-              </label>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-secondary/80 mb-1.5 ml-1 flex items-center gap-2">
-                <Calendar className="w-4 h-4 text-secondary/50" />
-                {t('deadline' as any) || (dir === 'ltr' ? 'Deadline' : 'الموعد النهائي')} <span className="text-red-500">*</span>
-              </label>
-              <div className="relative" ref={datePickerRef}>
-                <button
-                  type="button"
-                  onClick={() => setShowDatePicker(!showDatePicker)}
-                  className="w-full bg-white/50 border border-secondary/20 rounded-xl px-4 py-3 text-start text-secondary focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-all flex justify-between items-center cursor-pointer font-medium text-sm h-[46px] sm:h-[50px]"
-                >
-                  <span>{deadlineDate || (dir === 'ltr' ? 'Select deadline date...' : 'اختر تاريخ الموعد النهائي...')}</span>
-                  <Calendar className="w-4 h-4 text-secondary/50 shrink-0" />
-                </button>
-
-                {showDatePicker && (
-                  <div className="absolute z-[60] mt-2 p-3 bg-white border border-secondary/15 rounded-2xl shadow-xl left-0 rtl:right-0">
-                    <DayPicker
-                      mode="single"
-                      selected={selectedDate}
-                      onSelect={handleDateSelect}
-                      disabled={{ before: getMinAllowedDate() }}
-                      locale={dir === 'rtl' ? ar : undefined}
-                      dir={dir}
-                    />
+            {/* Event dropdown */}
+            <FormField
+              control={form.control}
+              name="eventId"
+              render={({ field }) => (
+                <FormItem className="space-y-1.5">
+                  <FormLabel className="text-sm font-medium text-secondary/80 ml-1 flex items-center gap-2 cursor-pointer">
+                    <Ticket className="w-4 h-4 text-secondary/50" />
+                    {t('selectEvent' as any) || (dir === 'ltr' ? 'Select Event' : 'اختر الحفل')} <span className="text-red-500">*</span>
+                  </FormLabel>
+                  <div className="relative">
+                    <FormControl>
+                      <select
+                        {...field}
+                        className="w-full bg-white/50 border border-secondary/20 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-all text-secondary appearance-none font-medium cursor-pointer"
+                        disabled={eventsLoading}
+                      >
+                        <option value="" disabled>
+                          {eventsLoading
+                            ? (dir === 'ltr' ? 'Loading events...' : 'جاري تحميل الحفلات...')
+                            : (t('chooseEvent' as any) || (dir === 'ltr' ? 'Choose an event...' : 'اختر حفلاً...'))}
+                        </option>
+                        {events.map(ev => (
+                          <option key={ev.id} value={ev.id}>{ev.name}</option>
+                        ))}
+                      </select>
+                    </FormControl>
+                    <div className="absolute inset-y-0 end-4 flex items-center pointer-events-none text-secondary/40">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>
+                    </div>
                   </div>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {/* Logic type */}
+            <FormField
+              control={form.control}
+              name="logic"
+              render={({ field }) => (
+                <FormItem className="space-y-2">
+                  <FormLabel className="block text-sm font-medium text-secondary/80 ml-1">
+                    {t('invitationLogic' as any) || (dir === 'ltr' ? 'Invitation Logic' : 'منطق الدعوة')} <span className="text-red-500">*</span>
+                  </FormLabel>
+                  <FormControl>
+                    <div className="space-y-3">
+                      <label className={cn("flex items-start gap-3 p-4 rounded-xl border cursor-pointer transition-colors", field.value === 'strict' ? 'border-primary/50 bg-primary/5' : 'border-secondary/20 bg-white/50 hover:bg-white/80')}>
+                        <input
+                          type="radio"
+                          value="strict"
+                          checked={field.value === 'strict'}
+                          onChange={() => field.onChange('strict')}
+                          className="mt-1 w-4 h-4 text-primary bg-white border-secondary/30 focus:ring-primary/30"
+                        />
+                        <div>
+                          <span className="block text-sm font-medium text-secondary">{t('strictAction' as any) || (dir === 'ltr' ? 'Strict Action' : 'إجراء صارم')}</span>
+                          <span className="block text-xs text-secondary/60 mt-0.5">{t('strictActionDesc' as any) || (dir === 'ltr' ? 'If no response, recorded as declined.' : 'إذا لم يتم الرد، تسجل كمرفوضة.')}</span>
+                        </div>
+                      </label>
+
+                      <label className={cn("flex items-start gap-3 p-4 rounded-xl border cursor-pointer transition-colors", field.value === 'default_accept' ? 'border-primary/50 bg-primary/5' : 'border-secondary/20 bg-white/50 hover:bg-white/80')}>
+                        <input
+                          type="radio"
+                          value="default_accept"
+                          checked={field.value === 'default_accept'}
+                          onChange={() => field.onChange('default_accept')}
+                          className="mt-1 w-4 h-4 text-primary bg-white border-secondary/30 focus:ring-primary/30"
+                        />
+                        <div>
+                          <span className="block text-sm font-medium text-secondary">{t('defaultAccept' as any) || (dir === 'ltr' ? 'Default Accept' : 'قبول تلقائي')}</span>
+                          <span className="block text-xs text-secondary/60 mt-0.5">{t('defaultAcceptDesc' as any) || (dir === 'ltr' ? 'If no response, recorded as accepted.' : 'إذا لم يتم الرد، تسجل كمقبولة.')}</span>
+                        </div>
+                      </label>
+
+                      <label className={cn("flex items-start gap-3 p-4 rounded-xl border cursor-pointer transition-colors", field.value === 'view_only' ? 'border-primary/50 bg-primary/5' : 'border-secondary/20 bg-white/50 hover:bg-white/80')}>
+                        <input
+                          type="radio"
+                          value="view_only"
+                          checked={field.value === 'view_only'}
+                          onChange={() => field.onChange('view_only')}
+                          className="mt-1 w-4 h-4 text-primary bg-white border-secondary/30 focus:ring-primary/30"
+                        />
+                        <div>
+                          <span className="block text-sm font-medium text-secondary">{t('viewOnly' as any) || (dir === 'ltr' ? 'View Only' : 'للعرض فقط')}</span>
+                          <span className="block text-xs text-secondary/60 mt-0.5">{t('viewOnlyDesc' as any) || (dir === 'ltr' ? 'Accepted right away, for informing only.' : 'تقبل فوراً، للعلم بالخبر فقط.')}</span>
+                        </div>
+                      </label>
+                    </div>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {/* Deadline date + time fields */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Deadline Date */}
+              <FormField
+                control={form.control}
+                name="deadlineDate"
+                render={({ field }) => (
+                  <FormItem className="space-y-1.5">
+                    <FormLabel className="text-sm font-medium text-secondary/80 ml-1 flex items-center gap-2">
+                      <Calendar className="w-4 h-4 text-secondary/50" />
+                      {t('deadline' as any) || (dir === 'ltr' ? 'Deadline' : 'الموعد النهائي')} <span className="text-red-500">*</span>
+                    </FormLabel>
+                    <FormControl>
+                      <div className="relative" ref={datePickerRef}>
+                        <button
+                          type="button"
+                          onClick={() => setShowDatePicker(!showDatePicker)}
+                          className="w-full bg-white/50 border border-secondary/20 rounded-xl px-4 py-3 text-start text-secondary focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-all flex justify-between items-center cursor-pointer font-medium text-sm h-[46px] sm:h-[50px]"
+                        >
+                          <span>{field.value || (dir === 'ltr' ? 'Select deadline date...' : 'اختر تاريخ الموعد النهائي...')}</span>
+                          <Calendar className="w-4 h-4 text-secondary/50 shrink-0" />
+                        </button>
+
+                        {showDatePicker && (
+                          <div className="absolute z-[60] mt-2 p-3 bg-white border border-secondary/15 rounded-2xl shadow-xl left-0 rtl:right-0">
+                            <DayPicker
+                              mode="single"
+                              selected={selectedDate}
+                              onSelect={(date) => {
+                                if (!date) return;
+                                const yyyy = date.getFullYear();
+                                const mm = String(date.getMonth() + 1).padStart(2, '0');
+                                const dd = String(date.getDate()).padStart(2, '0');
+                                field.onChange(`${yyyy}-${mm}-${dd}`);
+                                setShowDatePicker(false);
+                              }}
+                              disabled={{ before: getMinAllowedDate() }}
+                              locale={dir === 'rtl' ? ar : undefined}
+                              dir={dir}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
                 )}
+              />
+
+              {/* Deadline Time */}
+              <FormField
+                control={form.control}
+                name="deadlineTime"
+                render={({ field }) => (
+                  <FormItem className="space-y-1.5">
+                    <FormLabel className="text-sm font-medium text-secondary/80 ml-1 flex items-center gap-2">
+                      <Clock className="w-4 h-4 text-secondary/50" />
+                      {t('deadlineTime' as any) || (dir === 'ltr' ? 'Time' : 'الوقت')} <span className="text-red-500">*</span>
+                    </FormLabel>
+                    <FormControl>
+                      <input
+                        type="time"
+                        {...field}
+                        className="w-full bg-white/50 border border-secondary/20 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-all text-secondary"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            {/* Design Upload */}
+            <div>
+              <label className="block text-sm font-medium text-secondary/80 mb-1.5 ml-1">
+                {t('uploadDesign' as any) || (dir === 'ltr' ? 'Upload Design' : 'رفع التصميم')}
+              </label>
+              <div
+                onDragOver={e => e.preventDefault()}
+                onDrop={handleFileDrop}
+                onClick={() => fileInputRef.current?.click()}
+                className="w-full border-2 border-dashed border-secondary/20 rounded-2xl p-8 flex flex-col items-center justify-center text-center cursor-pointer hover:bg-white/50 hover:border-primary/30 transition-all bg-white/30"
+              >
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  className="hidden"
+                  accept=".png,.jpg,.jpeg,.webp"
+                  onChange={handleFileSelect}
+                />
+                <Upload className="w-8 h-8 text-secondary/40 mb-3" />
+                <p className="text-sm font-medium text-secondary mb-1">
+                  {fileName ? fileName : (t('uploadDesign' as any) || (dir === 'ltr' ? 'Upload Design' : 'رفع التصميم'))}
+                </p>
+                <p className="text-xs text-secondary/50">
+                  {t('uploadDesignDesc' as any) || (dir === 'ltr' ? 'PNG, JPG, WEBP up to 10MB' : 'أقصى حجم 10 ميجابايت (PNG, JPG, WEBP)')}
+                </p>
               </div>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-secondary/80 mb-1.5 ml-1 flex items-center gap-2">
-                <Clock className="w-4 h-4 text-secondary/50" />
-                {t('deadlineTime' as any) || (dir === 'ltr' ? 'Time' : 'الوقت')} <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="time"
-                required
-                value={deadlineTime}
-                onChange={e => setDeadlineTime(e.target.value)}
-                className="w-full bg-white/50 border border-secondary/20 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-all text-secondary"
-              />
-            </div>
-          </div>
 
-          <div>
-            <label className="block text-sm font-medium text-secondary/80 mb-1.5 ml-1">
-              {t('uploadDesign' as any) || (dir === 'ltr' ? 'Upload Design' : 'رفع التصميم')}
-            </label>
-            <div
-              onDragOver={e => e.preventDefault()}
-              onDrop={handleFileDrop}
-              onClick={() => fileInputRef.current?.click()}
-              className="w-full border-2 border-dashed border-secondary/20 rounded-2xl p-8 flex flex-col items-center justify-center text-center cursor-pointer hover:bg-white/50 hover:border-primary/30 transition-all bg-white/30"
-            >
-              <input
-                type="file"
-                ref={fileInputRef}
-                className="hidden"
-                accept=".png,.jpg,.jpeg,.webp"
-                onChange={handleFileSelect}
-              />
-              <Upload className="w-8 h-8 text-secondary/40 mb-3" />
-              <p className="text-sm font-medium text-secondary mb-1">
-                {fileName ? fileName : (t('uploadDesign' as any) || (dir === 'ltr' ? 'Upload Design' : 'رفع التصميم'))}
-              </p>
-              <p className="text-xs text-secondary/50">
-                {t('uploadDesignDesc' as any) || (dir === 'ltr' ? 'PNG, JPG, WEBP up to 10MB' : 'أقصى حجم 10 ميجابايت (PNG, JPG, WEBP)')}
-              </p>
+            {/* Buttons */}
+            <div className="pt-4 flex flex-col sm:flex-row items-center gap-3 border-t border-secondary/10 mt-8 w-full">
+              <button
+                type="button"
+                onClick={onBack}
+                disabled={submitting}
+                className="w-full sm:flex-1 px-5 py-3.5 rounded-xl border border-secondary/20 bg-white/50 text-secondary hover:bg-white/80 font-medium transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {t('cancel' as any) || (dir === 'ltr' ? 'Cancel' : 'إلغاء')}
+              </button>
+              <button
+                type="submit"
+                disabled={submitting}
+                className="w-full sm:flex-1 bg-primary hover:bg-primary-dark text-white py-3.5 rounded-xl font-medium transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 cursor-pointer disabled:opacity-75 disabled:cursor-not-allowed"
+              >
+                {submitting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    {dir === 'ltr' ? 'Saving...' : 'جاري الحفظ...'}
+                  </>
+                ) : (
+                  invitation ? (t('saveChanges' as any) || (dir === 'ltr' ? 'Save Changes' : 'حفظ التغييرات')) : (t('createInvitation' as any) || (dir === 'ltr' ? 'Create Invitation' : 'إنشاء دعوة'))
+                )}
+              </button>
             </div>
-          </div>
-
-          <div className="pt-4 flex flex-col sm:flex-row items-center gap-3 border-t border-secondary/10 mt-8 w-full">
-            <button
-              type="button"
-              onClick={onBack}
-              disabled={submitting}
-              className="w-full sm:flex-1 px-5 py-3.5 rounded-xl border border-secondary/20 bg-white/50 text-secondary hover:bg-white/80 font-medium transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {t('cancel' as any) || (dir === 'ltr' ? 'Cancel' : 'إلغاء')}
-            </button>
-            <button
-              type="submit"
-              disabled={submitting}
-              className="w-full sm:flex-1 bg-primary hover:bg-primary-dark text-white py-3.5 rounded-xl font-medium transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 cursor-pointer disabled:opacity-75 disabled:cursor-not-allowed"
-            >
-              {submitting ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  {dir === 'ltr' ? 'Saving...' : 'جاري الحفظ...'}
-                </>
-              ) : (
-                invitation ? (t('saveChanges' as any) || (dir === 'ltr' ? 'Save Changes' : 'حفظ التغييرات')) : (t('createInvitation' as any) || (dir === 'ltr' ? 'Create Invitation' : 'إنشاء دعوة'))
-              )}
-            </button>
-          </div>
-        </form>
+          </form>
+        </Form>
       </div>
     </motion.div>
   );

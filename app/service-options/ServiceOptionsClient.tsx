@@ -2,6 +2,9 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useLanguage } from '@/lib/i18n';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Plus, Search, Edit2, Trash2, SlidersHorizontal,
@@ -21,6 +24,15 @@ import {
   type ServiceOptionDetailItem,
   type PaginatedItems
 } from '@/lib/api';
+
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/form';
 
 /* ─── Per-page options ─────────────────────────────────────────── */
 const PER_PAGE_OPTIONS = [10, 15, 25, 50];
@@ -62,18 +74,41 @@ interface OptionFormProps {
   onSaved: (opt: ServiceOptionItem) => void;
 }
 
+interface OptionFormValues {
+  nameAr: string;
+  nameEn: string;
+  type: 'text' | 'number' | 'color' | 'employee' | 'list';
+  isRequired: boolean;
+}
+
 function OptionForm({ option, onBack, onSaved }: OptionFormProps) {
   const { t, dir } = useLanguage();
   const token = getToken() ?? '';
 
   // Form fields
-  const [nameAr, setNameAr] = useState('');
-  const [nameEn, setNameEn] = useState('');
-  const [type, setType] = useState<'text' | 'number' | 'color' | 'employee' | 'list'>('text');
-  const [isRequired, setIsRequired] = useState<boolean>(true);
   const [loading, setLoading] = useState(false);
   const [fetchLoading, setFetchLoading] = useState(option !== null);
   const [labels, setLabels] = useState<Array<{ label_ar: string; label_en: string }>>([]);
+
+  const schema = React.useMemo(() => z.object({
+    nameAr: z.string().min(1, { message: t('nameArRequired') }),
+    nameEn: z.string().min(1, { message: t('nameEnRequired') }),
+    type: z.enum(['text', 'number', 'color', 'employee', 'list']),
+    isRequired: z.boolean(),
+  }), [t]);
+
+  // Initialize React Hook Form
+  const form = useForm<OptionFormValues>({
+    resolver: zodResolver(schema),
+    defaultValues: {
+      nameAr: '',
+      nameEn: '',
+      type: 'text',
+      isRequired: true,
+    },
+  });
+
+  const typeValue = form.watch('type');
 
   // Initialize/Fetch form fields for edit mode
   useEffect(() => {
@@ -85,10 +120,12 @@ function OptionForm({ option, onBack, onSaved }: OptionFormProps) {
     getAdminServiceOptionById(option.id, token)
       .then(res => {
         const opt = res.data;
-        setNameAr(opt.name_ar || '');
-        setNameEn(opt.name_en || '');
-        setType(opt.type);
-        setIsRequired(opt.is_required);
+        form.reset({
+          nameAr: opt.name_ar || '',
+          nameEn: opt.name_en || '',
+          type: opt.type,
+          isRequired: opt.is_required,
+        });
 
         // Load labels if list type
         if (opt.values && Array.isArray(opt.values)) {
@@ -115,13 +152,9 @@ function OptionForm({ option, onBack, onSaved }: OptionFormProps) {
       .finally(() => {
         setFetchLoading(false);
       });
-  }, [option, token]);
+  }, [option, token, form]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!nameAr.trim()) { toast.error(t('nameArRequired')); return; }
-    if (!nameEn.trim()) { toast.error(t('nameEnRequired')); return; }
-
+  const onSubmit = async (values: OptionFormValues) => {
     setLoading(true);
     try {
       let res;
@@ -129,22 +162,22 @@ function OptionForm({ option, onBack, onSaved }: OptionFormProps) {
         res = await updateAdminServiceOption(
           option.id,
           {
-            nameAr,
-            nameEn,
-            type,
-            is_required: isRequired ? 1 : 0,
-            labels: type === 'list' ? labels : undefined
+            nameAr: values.nameAr,
+            nameEn: values.nameEn,
+            type: values.type,
+            is_required: values.isRequired ? 1 : 0,
+            labels: values.type === 'list' ? labels : undefined
           },
           token
         );
       } else {
         res = await createAdminServiceOption(
           {
-            nameAr,
-            nameEn,
-            type,
-            is_required: isRequired ? 1 : 0,
-            labels: type === 'list' ? labels : undefined
+            nameAr: values.nameAr,
+            nameEn: values.nameEn,
+            type: values.type,
+            is_required: values.isRequired ? 1 : 0,
+            labels: values.type === 'list' ? labels : undefined
           },
           token
         );
@@ -171,7 +204,7 @@ function OptionForm({ option, onBack, onSaved }: OptionFormProps) {
       initial={{ opacity: 0, x: dir === 'ltr' ? 20 : -20 }}
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: dir === 'ltr' ? -20 : 20 }}
-      className="space-y-6 pb-10 w-full"
+      className="space-y-6 pb-10 w-full text-start"
     >
       <div className="flex items-center justify-start mb-2">
         <button
@@ -190,149 +223,181 @@ function OptionForm({ option, onBack, onSaved }: OptionFormProps) {
           {option !== null ? t('editOption') : t('addOption')}
         </h2>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Name Arabic */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-secondary/80 ml-1 rtl:mr-1 rtl:ml-0">
-              {t('nameAr')} <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              required
-              value={nameAr}
-              onChange={e => setNameAr(e.target.value)}
-              className="w-full bg-white/50 border border-secondary/20 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-all text-secondary"
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            {/* Name Arabic */}
+            <FormField
+              control={form.control}
+              name="nameAr"
+              render={({ field }) => (
+                <FormItem className="space-y-2">
+                  <FormLabel className="text-sm font-medium text-secondary/80 ml-1 rtl:mr-1 rtl:ml-0">
+                    {t('nameAr')} <span className="text-red-500">*</span>
+                  </FormLabel>
+                  <FormControl>
+                    <input
+                      type="text"
+                      {...field}
+                      className="w-full bg-white/50 border border-secondary/20 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-all text-secondary"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
             />
-          </div>
 
-          {/* Name English */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-secondary/80 ml-1 rtl:mr-1 rtl:ml-0">
-              {t('nameEn')} <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              required
-              value={nameEn}
-              onChange={e => setNameEn(e.target.value)}
-              className="w-full bg-white/50 border border-secondary/20 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-all text-secondary"
+            {/* Name English */}
+            <FormField
+              control={form.control}
+              name="nameEn"
+              render={({ field }) => (
+                <FormItem className="space-y-2">
+                  <FormLabel className="text-sm font-medium text-secondary/80 ml-1 rtl:mr-1 rtl:ml-0">
+                    {t('nameEn')} <span className="text-red-500">*</span>
+                  </FormLabel>
+                  <FormControl>
+                    <input
+                      type="text"
+                      {...field}
+                      className="w-full bg-white/50 border border-secondary/20 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-all text-secondary"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
             />
-          </div>
 
-          {/* Option Type */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-secondary/80 ml-1 rtl:mr-1 rtl:ml-0">
-              {t('optionType')} <span className="text-red-500">*</span>
-            </label>
-            <select
-              value={type}
-              onChange={e => setType(e.target.value as any)}
-              required
-              className="w-full bg-white/50 border border-secondary/20 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-all text-secondary appearance-none cursor-pointer"
-            >
-              <option value="text">{t('optionTypeText')}</option>
-              <option value="number">{t('optionTypeNumber')}</option>
-              <option value="color">{t('optionTypeColor')}</option>
-              <option value="employee">{t('optionTypeEmployee')}</option>
-              <option value="list">{t('optionTypeSelect')}</option>
-            </select>
-          </div>
-
-          {/* is_required toggle switch */}
-          <div className="pt-2">
-            <ToggleSwitch
-              checked={isRequired}
-              onChange={setIsRequired}
-              label={isRequired ? t('optionRequired') : t('optional')}
-            />
-          </div>
-
-          {/* List Labels (only for 'list' type) */}
-          {type === 'list' && (
-            <div className="space-y-4 pt-4 border-t border-secondary/10">
-              <div className="flex items-center justify-between">
-                <label className="text-sm font-medium text-secondary/80">
-                  {t('listOptionsLabels')}
-                </label>
-                <button
-                  type="button"
-                  onClick={() => setLabels(prev => [...prev, { label_ar: '', label_en: '' }])}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 text-primary rounded-xl text-xs font-semibold hover:bg-primary/20 transition-all cursor-pointer"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  {t('addLabel')}
-                </button>
-              </div>
-
-              <div className="space-y-3 max-h-60 overflow-y-auto pr-1">
-                {labels.map((label, idx) => (
-                  <div key={idx} className="flex items-center gap-3 bg-white/30 p-3 rounded-2xl border border-secondary/5">
-                    {/* Arabic Label */}
-                    <div className="flex-1 space-y-1">
-                      <input
-                        type="text"
-                        required
-                        dir="rtl"
-                        placeholder={t('arLabelPlaceholder')}
-                        value={label.label_ar}
-                        onChange={e => {
-                          const updated = [...labels];
-                          updated[idx] = { ...updated[idx], label_ar: e.target.value };
-                          setLabels(updated);
-                        }}
-                        className="w-full bg-white/50 border border-secondary/20 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary/30 text-right font-arabic"
-                      />
-                    </div>
-
-                    {/* English Label */}
-                    <div className="flex-1 space-y-1">
-                      <input
-                        type="text"
-                        required
-                        dir="ltr"
-                        placeholder={t('enLabelPlaceholder')}
-                        value={label.label_en}
-                        onChange={e => {
-                          const updated = [...labels];
-                          updated[idx] = { ...updated[idx], label_en: e.target.value };
-                          setLabels(updated);
-                        }}
-                        className="w-full bg-white/50 border border-secondary/20 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary/30"
-                      />
-                    </div>
-
-                    {/* Remove Button */}
-                    <button
-                      type="button"
-                      onClick={() => setLabels(prev => prev.filter((_, i) => i !== idx))}
-                      className="p-2 text-red-500 hover:bg-red-50 rounded-xl transition-all cursor-pointer"
+            {/* Option Type */}
+            <FormField
+              control={form.control}
+              name="type"
+              render={({ field }) => (
+                <FormItem className="space-y-2">
+                  <FormLabel className="text-sm font-medium text-secondary/80 ml-1 rtl:mr-1 rtl:ml-0">
+                    {t('optionType')} <span className="text-red-500">*</span>
+                  </FormLabel>
+                  <FormControl>
+                    <select
+                      {...field}
+                      className="w-full bg-white/50 border border-secondary/20 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-all text-secondary appearance-none cursor-pointer"
                     >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                ))}
+                      <option value="text">{t('optionTypeText')}</option>
+                      <option value="number">{t('optionTypeNumber')}</option>
+                      <option value="color">{t('optionTypeColor')}</option>
+                      <option value="employee">{t('optionTypeEmployee')}</option>
+                      <option value="list">{t('optionTypeSelect')}</option>
+                    </select>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
-                {labels.length === 0 && (
-                  <p className="text-center text-xs text-secondary/40 py-4">
-                    {t('noLabelsAdded')}
-                  </p>
-                )}
+            {/* is_required toggle switch */}
+            <FormField
+              control={form.control}
+              name="isRequired"
+              render={({ field }) => (
+                <FormItem className="pt-2 space-y-0">
+                  <FormControl>
+                    <ToggleSwitch
+                      checked={field.value}
+                      onChange={field.onChange}
+                      label={field.value ? t('optionRequired') : t('optional')}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {/* List Labels (only for 'list' type) */}
+            {typeValue === 'list' && (
+              <div className="space-y-4 pt-4 border-t border-secondary/10">
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium text-secondary/80">
+                    {t('listOptionsLabels')}
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setLabels(prev => [...prev, { label_ar: '', label_en: '' }])}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 text-primary rounded-xl text-xs font-semibold hover:bg-primary/20 transition-all cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    {t('addLabel')}
+                  </button>
+                </div>
+
+                <div className="space-y-3 max-h-60 overflow-y-auto pr-1">
+                  {labels.map((label, idx) => (
+                    <div key={idx} className="flex items-center gap-3 bg-white/30 p-3 rounded-2xl border border-secondary/5">
+                      {/* Arabic Label */}
+                      <div className="flex-1 space-y-1">
+                        <input
+                          type="text"
+                          required
+                          dir="rtl"
+                          placeholder={t('arLabelPlaceholder')}
+                          value={label.label_ar}
+                          onChange={e => {
+                            const updated = [...labels];
+                            updated[idx] = { ...updated[idx], label_ar: e.target.value };
+                            setLabels(updated);
+                          }}
+                          className="w-full bg-white/50 border border-secondary/20 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary/30 text-right font-arabic"
+                        />
+                      </div>
+
+                      {/* English Label */}
+                      <div className="flex-1 space-y-1">
+                        <input
+                          type="text"
+                          required
+                          dir="ltr"
+                          placeholder={t('enLabelPlaceholder')}
+                          value={label.label_en}
+                          onChange={e => {
+                            const updated = [...labels];
+                            updated[idx] = { ...updated[idx], label_en: e.target.value };
+                            setLabels(updated);
+                          }}
+                          className="w-full bg-white/50 border border-secondary/20 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary/30"
+                        />
+                      </div>
+
+                      {/* Remove Button */}
+                      <button
+                        type="button"
+                        onClick={() => setLabels(prev => prev.filter((_, i) => i !== idx))}
+                        className="p-2 text-red-500 hover:bg-red-50 rounded-xl transition-all cursor-pointer"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+
+                  {labels.length === 0 && (
+                    <p className="text-center text-xs text-secondary/40 py-4">
+                      {t('noLabelsAdded')}
+                    </p>
+                  )}
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          <div className="pt-4 border-t border-secondary/10 mt-8">
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-primary hover:bg-primary-dark text-white py-3.5 rounded-xl font-medium transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
-            >
-              {loading
-                ? <Loader2 className="w-5 h-5 animate-spin" />
-                : t('saveChanges')}
-            </button>
-          </div>
-        </form>
+            <div className="pt-4 border-t border-secondary/10 mt-8">
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full bg-primary hover:bg-primary-dark text-white py-3.5 rounded-xl font-medium transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {loading
+                  ? <Loader2 className="w-5 h-5 animate-spin" />
+                  : t('saveChanges')}
+              </button>
+            </div>
+          </form>
+        </Form>
       </div>
     </motion.div>
   );

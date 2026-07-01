@@ -1,8 +1,22 @@
+'use client';
+
 import React, { useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 import { motion } from 'motion/react';
 import { ChevronLeft, ChevronRight, Eye, EyeOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useLanguage } from '@/lib/i18n';
+
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/form';
 
 interface EmployeeEditFormProps {
   employee?: any;
@@ -10,26 +24,51 @@ interface EmployeeEditFormProps {
   onSave: (employee: any) => void;
 }
 
+interface FormValues {
+  name: string;
+  countryCode: string;
+  phone: string;
+  username: string;
+  password?: string;
+}
+
 export function EmployeeEditForm({ employee, onBack, onSave }: EmployeeEditFormProps) {
   const { t, dir, language } = useLanguage();
-  const [name, setName] = useState(employee?.name || '');
-  const [countryCode, setCountryCode] = useState(employee?.country_code || '+966');
-  const [phone, setPhone] = useState(employee?.phone || '');
-  const [username, setUsername] = useState(employee?.username || '');
-  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const schema = React.useMemo(() => z.object({
+    name: z.string().min(1, { message: t('nameRequired') }),
+    countryCode: z.string().min(1),
+    phone: z.string().min(1, { message: t('phoneRequired') }),
+    username: z.string().min(1, { message: t('usernameRequired') }),
+    password: z.string().optional().refine(val => {
+      if (!employee && (!val || val.trim() === '')) return false;
+      return true;
+    }, { message: t('passwordRequired') }),
+  }), [t, employee]);
+
+  // Initialize React Hook Form
+  const form = useForm<FormValues>({
+    resolver: zodResolver(schema),
+    defaultValues: {
+      name: employee?.name || '',
+      countryCode: employee?.country_code || '+966',
+      phone: employee?.phone || '',
+      username: employee?.username || '',
+      password: '',
+    },
+  });
+
+  const onSubmit = (values: FormValues) => {
     const payload: any = {
-      name,
-      username,
-      country_code: countryCode,
-      phone,
+      name: values.name,
+      username: values.username,
+      country_code: values.countryCode,
+      phone: values.phone,
     };
     // Only send password if filled (especially on edit)
-    if (password.trim() !== '') {
-      payload.password = password;
+    if (values.password && values.password.trim() !== '') {
+      payload.password = values.password;
     }
     onSave(payload);
   };
@@ -60,107 +99,150 @@ export function EmployeeEditForm({ employee, onBack, onSave }: EmployeeEditFormP
           {employee ? (t('editEmployee' as any) || 'Edit Employee') : (t('addEmployee' as any) || 'Add Employee')}
         </h2>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Full Name */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-secondary/80 ml-1 flex items-center gap-2">
-              {t('fullName' as any) || 'Full Name'} <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-              className="w-full bg-white/50 border border-secondary/20 focus:border-primary/50 focus:ring-2 focus:ring-primary/20 rounded-xl py-3 px-4 transition-all outline-none text-secondary"
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            {/* Full Name */}
+            <FormField
+              control={form.control}
+              name="name"
+              render={({ field }) => (
+                <FormItem className="space-y-2">
+                  <FormLabel className="text-sm font-medium text-secondary/80 ml-1 flex items-center gap-2">
+                    {t('fullName' as any) || 'Full Name'} <span className="text-red-500">*</span>
+                  </FormLabel>
+                  <FormControl>
+                    <input
+                      type="text"
+                      {...field}
+                      className="w-full bg-white/50 border border-secondary/20 focus:border-primary/50 focus:ring-2 focus:ring-primary/20 rounded-xl py-3 px-4 transition-all outline-none text-secondary"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
             />
-          </div>
 
-          {/* Phone Number */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-secondary/80 ml-1 flex items-center gap-2">
-              {t('phoneNumber' as any) || 'Phone Number'} <span className="text-red-500">*</span>
-            </label>
-            <div className="flex gap-2">
-              <div className="relative shrink-0 w-[140px]">
-                <select
-                  value={countryCode}
-                  onChange={e => setCountryCode(e.target.value)}
-                  className="w-full appearance-none bg-white/50 border border-secondary/20 focus:border-primary/50 focus:ring-2 focus:ring-primary/20 rounded-xl py-3 pl-4 pr-10 transition-all outline-none text-secondary text-sm font-medium h-full cursor-pointer"
-                >
-                  <option value="+966">SA (+966)</option>
-                  <option value="+965">KW (+965)</option>
-                </select>
-                <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-secondary/50">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>
-                </div>
+            {/* Phone Number */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-secondary/80 ml-1 flex items-center gap-2">
+                {t('phoneNumber' as any) || 'Phone Number'} <span className="text-red-500">*</span>
+              </label>
+              <div className="flex gap-2 items-start">
+                <FormField
+                  control={form.control}
+                  name="countryCode"
+                  render={({ field }) => (
+                    <FormItem className="shrink-0 w-[140px]">
+                      <div className="relative">
+                        <FormControl>
+                          <select
+                            {...field}
+                            className="w-full appearance-none bg-white/50 border border-secondary/20 focus:border-primary/50 focus:ring-2 focus:ring-primary/20 rounded-xl py-3 pl-4 pr-10 transition-all outline-none text-secondary text-sm font-medium h-[50px] cursor-pointer"
+                          >
+                            <option value="+966">SA (+966)</option>
+                            <option value="+965">KW (+965)</option>
+                          </select>
+                        </FormControl>
+                        <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-secondary/50">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>
+                        </div>
+                      </div>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="phone"
+                  render={({ field }) => (
+                    <FormItem className="flex-1 min-w-0">
+                      <FormControl>
+                        <input
+                          type="tel"
+                          {...field}
+                          dir="ltr"
+                          placeholder="500000000"
+                          className="w-full bg-white/50 border border-secondary/20 focus:border-primary/50 focus:ring-2 focus:ring-primary/20 rounded-xl py-3 px-4 transition-all outline-none text-secondary h-[50px]"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
               </div>
-              <input
-                type="tel"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                required
-                dir="ltr"
-                placeholder="500000000"
-                className="flex-1 min-w-0 bg-white/50 border border-secondary/20 focus:border-primary/50 focus:ring-2 focus:ring-primary/20 rounded-xl py-3 px-4 transition-all outline-none text-secondary"
-              />
             </div>
-          </div>
 
-          {/* Username */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-secondary/80 ml-1 flex items-center gap-2">
-              {t('username' as any) || 'Username'} <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              required
-              className="w-full bg-white/50 border border-secondary/20 focus:border-primary/50 focus:ring-2 focus:ring-primary/20 rounded-xl py-3 px-4 transition-all outline-none text-secondary"
+            {/* Username */}
+            <FormField
+              control={form.control}
+              name="username"
+              render={({ field }) => (
+                <FormItem className="space-y-2">
+                  <FormLabel className="text-sm font-medium text-secondary/80 ml-1 flex items-center gap-2">
+                    {t('username' as any) || 'Username'} <span className="text-red-500">*</span>
+                  </FormLabel>
+                  <FormControl>
+                    <input
+                      type="text"
+                      {...field}
+                      className="w-full bg-white/50 border border-secondary/20 focus:border-primary/50 focus:ring-2 focus:ring-primary/20 rounded-xl py-3 px-4 transition-all outline-none text-secondary"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
             />
-          </div>
 
-          {/* Password */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-secondary/80 ml-1 flex items-center gap-2">
-              {t('password' as any) || 'Password'} {!employee && <span className="text-red-500">*</span>}
-            </label>
-            <div className="relative">
-              <input
-                type={showPassword ? "text" : "password"}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required={!employee}
-                placeholder={employee ? (language === 'ar' ? 'اتركه فارغاً لإبقائه كما هو' : 'Leave empty to keep current') : ''}
-                className="w-full bg-white/50 border border-secondary/20 focus:border-primary/50 focus:ring-2 focus:ring-primary/20 rounded-xl py-3 px-4 pr-12 transition-all outline-none text-secondary font-mono"
-              />
+            {/* Password */}
+            <FormField
+              control={form.control}
+              name="password"
+              render={({ field }) => (
+                <FormItem className="space-y-2">
+                  <FormLabel className="text-sm font-medium text-secondary/80 ml-1 flex items-center gap-2">
+                    {t('password' as any) || 'Password'} {!employee && <span className="text-red-500">*</span>}
+                  </FormLabel>
+                  <div className="relative">
+                    <FormControl>
+                      <input
+                        type={showPassword ? "text" : "password"}
+                        {...field}
+                        placeholder={employee ? (language === 'ar' ? 'اتركه فارغاً لإبقائه كما هو' : 'Leave empty to keep current') : ''}
+                        className="w-full bg-white/50 border border-secondary/20 focus:border-primary/50 focus:ring-2 focus:ring-primary/20 rounded-xl py-3 px-4 pr-12 transition-all outline-none text-secondary font-mono"
+                      />
+                    </FormControl>
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute inset-y-0 right-0 px-3 flex items-center text-secondary/40 hover:text-secondary/60 cursor-pointer"
+                    >
+                      {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                    </button>
+                  </div>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {/* Form Actions */}
+            <div className="pt-4 flex flex-col sm:flex-row items-center gap-3 border-t border-secondary/10 mt-8 w-full">
               <button
                 type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute inset-y-0 right-0 px-3 flex items-center text-secondary/40 hover:text-secondary/60 cursor-pointer"
+                onClick={onBack}
+                className="w-full sm:flex-1 px-5 py-3.5 rounded-xl border border-secondary/20 bg-white/50 text-secondary hover:bg-white/80 font-medium transition-colors cursor-pointer"
               >
-                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                {t('cancel' as any) || 'Cancel'}
+              </button>
+              <button
+                type="submit"
+                className="w-full sm:flex-1 bg-primary hover:bg-primary-dark text-white py-3.5 rounded-xl font-medium transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 cursor-pointer"
+              >
+                {t('save' as any) || 'Save'}
               </button>
             </div>
-          </div>
-
-          {/* Form Actions */}
-          <div className="pt-4 flex flex-col sm:flex-row items-center gap-3 border-t border-secondary/10 mt-8 w-full">
-            <button
-              type="button"
-              onClick={onBack}
-              className="w-full sm:flex-1 px-5 py-3.5 rounded-xl border border-secondary/20 bg-white/50 text-secondary hover:bg-white/80 font-medium transition-colors cursor-pointer"
-            >
-              {t('cancel' as any) || 'Cancel'}
-            </button>
-            <button
-              type="submit"
-              className="w-full sm:flex-1 bg-primary hover:bg-primary-dark text-white py-3.5 rounded-xl font-medium transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 cursor-pointer"
-            >
-              {t('save' as any) || 'Save'}
-            </button>
-          </div>
-        </form>
+          </form>
+        </Form>
       </div>
     </motion.div>
   );

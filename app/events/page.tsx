@@ -17,7 +17,7 @@ export default async function Page() {
         name: apiEvent.name,
         creationDate: apiEvent.event_date || apiEvent.created_at || '',
         guests: apiEvent.guest_count,
-        invitationsCreated: !!apiEvent.invitations_created,
+        invitations_created: !!apiEvent.invitations_created,
         status: (apiEvent.status === 'cancelled' ? 'canceled' : apiEvent.status) as any,
         eventDate: apiEvent.event_date || undefined,
         eventTime: apiEvent.event_time || undefined,

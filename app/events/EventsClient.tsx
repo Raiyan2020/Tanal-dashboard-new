@@ -155,7 +155,7 @@ export default function EventsClient({
         name: apiEvent.name,
         creationDate: apiEvent.event_date || apiEvent.created_at || '',
         guests: apiEvent.guest_count,
-        invitationsCreated: !!apiEvent.invitations_created,
+        invitations_created: !!apiEvent.invitations_created,
         status: (apiEvent.status === 'cancelled' ? 'canceled' : apiEvent.status) as any,
         eventDate: apiEvent.event_date || undefined,
         eventTime: apiEvent.event_time || undefined,
@@ -460,7 +460,7 @@ export default function EventsClient({
 
                               <span className="hidden sm:block w-1 h-1 rounded-full bg-secondary/20 shrink-0" />
                               <div className="flex items-center gap-1.5 mt-0.5 sm:mt-0">
-                                {event.invitationsCreated ? (
+                                {event.invitations_created ? (
                                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-primary/10 text-primary text-xs font-medium">
                                     <Mail className="w-3 h-3" />
                                     {t('viewInvitations')}

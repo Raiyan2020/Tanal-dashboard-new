@@ -14,6 +14,7 @@ import { getToken } from '@/lib/auth';
 import { toast } from 'sonner';
 import { GuestEditForm, type Guest } from './GuestEditForm';
 import { ClientDetailModal } from './ClientDetailModal';
+import { CreateInvitationModal } from './CreateInvitationModal';
 
 function mapApiGuest(g: ApiGuest): Guest {
   return {
@@ -31,7 +32,7 @@ export interface AppEvent {
   name: string;
   creationDate: string;
   guests: number;
-  invitationsCreated: boolean;
+  invitations_created: boolean;
   status: 'completed' | 'paid' | 'installments' | 'unpaid' | 'canceled';
   eventDate?: string;
   eventTime?: string;
@@ -117,6 +118,7 @@ export function EventDetails({ event, onBack, onEdit, onDelete, onUpdateEvent }:
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [showCreateInvitation, setShowCreateInvitation] = useState(false);
 
   const handleUploadClick = () => {
     fileInputRef.current?.click();
@@ -622,7 +624,7 @@ export function EventDetails({ event, onBack, onEdit, onDelete, onUpdateEvent }:
                   <Mail className="w-5 h-5 text-primary" />
                   {dir === 'ltr' ? 'Invitations' : 'الدعوات'}
                 </h3>
-                {event.invitationsCreated || (detail?.invitations && detail.invitations.sent_whatsapp_count > 0) ? (
+                {event.invitations_created || (detail?.invitations && detail.invitations.sent_whatsapp_count > 0) ? (
                   <>
                     <div className="flex items-center justify-between p-4 rounded-2xl bg-white/50 border border-secondary/5">
                       <span className="text-sm font-medium text-secondary/70">
@@ -650,7 +652,9 @@ export function EventDetails({ event, onBack, onEdit, onDelete, onUpdateEvent }:
                         {dir === 'ltr' ? 'Not Created' : 'غير منشأ'}
                       </span>
                     </div>
-                    <button className="w-full py-3 bg-primary text-white font-medium rounded-xl hover:bg-primary-dark transition-colors flex items-center justify-center gap-2 shadow-sm cursor-pointer">
+                    <button
+                      onClick={() => setShowCreateInvitation(true)}
+                      className="w-full py-3 bg-primary text-white font-medium rounded-xl hover:bg-primary-dark transition-colors flex items-center justify-center gap-2 shadow-sm cursor-pointer">
                       <Plus className="w-4 h-4" />
                       {dir === 'ltr' ? 'Create Invitations' : 'إنشاء دعوات'}
                     </button>
@@ -1032,6 +1036,26 @@ export function EventDetails({ event, onBack, onEdit, onDelete, onUpdateEvent }:
         client={viewClient}
         onClose={() => setViewClient(null)}
       />
+
+      {/* Create Invitation Modal */}
+      {showCreateInvitation && (
+        <CreateInvitationModal
+          eventId={Number(event.id)}
+          eventName={event.name || String(event.id)}
+          onClose={() => setShowCreateInvitation(false)}
+          onCreated={() => {
+            // Refresh detail so the invitations panel updates
+            if (token && event.id) {
+              getEventById(Number(event.id), token)
+                .then(res => setDetail(res.data))
+                .catch(() => { });
+            }
+            if (onUpdateEvent) {
+              onUpdateEvent({ ...event, invitations_created: true });
+            }
+          }}
+        />
+      )}
 
     </motion.div>
   );

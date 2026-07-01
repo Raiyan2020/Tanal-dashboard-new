@@ -1,6 +1,9 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 import { useLanguage } from '@/lib/i18n';
 import { motion } from 'motion/react';
 import { cn } from '@/lib/utils';
@@ -10,21 +13,46 @@ import { useRouter } from 'next/navigation';
 import { loginAdmin } from '@/lib/api';
 import { saveToken, saveAdmin, savePermissions } from '@/lib/auth';
 
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/form';
+
+interface FormValues {
+  email: string;
+  password: string;
+}
+
 export default function LoginPage() {
   const { t, dir } = useLanguage();
   const router = useRouter();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const schema = React.useMemo(() => z.object({
+    email: z.string().min(1, { message: dir === 'ltr' ? 'Email is required' : 'البريد الإلكتروني مطلوب' }).email({ message: t('invalidEmail') }),
+    password: z.string().min(1, { message: t('passwordRequired') }),
+  }), [t, dir]);
+
+  // Initialize React Hook Form
+  const form = useForm<FormValues>({
+    resolver: zodResolver(schema),
+    defaultValues: {
+      email: '',
+      password: '',
+    },
+  });
+
+  const onSubmit = async (values: FormValues) => {
     setError(null);
     setLoading(true);
 
     try {
-      const res = await loginAdmin(email, password);
+      const res = await loginAdmin(values.email, values.password);
       const { token, admin, permissions } = res.data;
 
       // Persist auth data (localStorage + cookies for middleware)
@@ -71,93 +99,112 @@ export default function LoginPage() {
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-5">
-          {/* Error Banner */}
-          {error && (
-            <motion.div
-              initial={{ opacity: 0, y: -8 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="flex items-start gap-3 bg-red-50/80 border border-red-200/60 text-red-700 text-sm rounded-xl px-4 py-3"
-            >
-              <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
-              <span>{error}</span>
-            </motion.div>
-          )}
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-secondary/80 ml-1 rtl:mr-1 rtl:ml-0">
-              {t('email')}
-            </label>
-            <div className="relative group">
-              <div className="absolute inset-y-0 left-0 rtl:right-0 rtl:left-auto flex items-center px-4 pointer-events-none text-secondary/40 group-focus-within:text-primary transition-colors">
-                <Mail className="w-5 h-5" />
-              </div>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                className="w-full bg-white/50 border border-white/60 focus:border-primary/50 focus:ring-2 focus:ring-primary/20 rounded-xl py-3 pl-11 rtl:pr-11 rtl:pl-4 transition-all outline-none text-secondary"
-                placeholder="admin@tanal.com"
-                dir="ltr"
-              />
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-secondary/80 ml-1 rtl:mr-1 rtl:ml-0">
-              {t('password')}
-            </label>
-            <div className="relative group">
-              <div className="absolute inset-y-0 left-0 rtl:right-0 rtl:left-auto flex items-center px-4 pointer-events-none text-secondary/40 group-focus-within:text-primary transition-colors">
-                <Lock className="w-5 h-5" />
-              </div>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                className="w-full bg-white/50 border border-white/60 focus:border-primary/50 focus:ring-2 focus:ring-primary/20 rounded-xl py-3 pl-11 rtl:pr-11 rtl:pl-4 transition-all outline-none text-secondary"
-                placeholder="••••••••"
-                dir="ltr"
-              />
-            </div>
-          </div>
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full mt-8 bg-primary hover:bg-primary-dark disabled:opacity-60 disabled:cursor-not-allowed text-white rounded-xl py-3.5 font-medium transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5 flex justify-center items-center gap-2 group cursor-pointer"
-          >
-            {loading ? (
-              <Loader2 className="w-5 h-5 animate-spin" />
-            ) : (
-              <>
-                {t('signIn')}
-                {dir === 'ltr' ? (
-                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                ) : (
-                  <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
-                )}
-              </>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5 text-start">
+            {/* Error Banner */}
+            {error && (
+              <motion.div
+                initial={{ opacity: 0, y: -8 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex items-start gap-3 bg-red-50/80 border border-red-200/60 text-red-700 text-sm rounded-xl px-4 py-3"
+              >
+                <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                <span>{error}</span>
+              </motion.div>
             )}
-          </button>
 
-          <button
-            type="button"
-            onClick={() => router.push('/client-portal')}
-            className="w-full mt-4 bg-white/60 hover:bg-white border border-primary/20 text-primary-dark rounded-xl py-3.5 font-medium transition-all shadow-sm hover:shadow-md flex justify-center items-center gap-2 cursor-pointer"
-          >
-            {dir === 'ltr' ? 'Temporary Client Link' : 'رابط العميل التجريبي'}
-          </button>
+            {/* Email Field */}
+            <FormField
+              control={form.control}
+              name="email"
+              render={({ field }) => (
+                <FormItem className="space-y-2">
+                  <FormLabel className="text-sm font-medium text-secondary/80 ml-1 rtl:mr-1 rtl:ml-0">
+                    {t('email')}
+                  </FormLabel>
+                  <FormControl>
+                    <div className="relative group">
+                      <div className="absolute inset-y-0 left-0 rtl:right-0 rtl:left-auto flex items-center px-4 pointer-events-none text-secondary/40 group-focus-within:text-primary transition-colors">
+                        <Mail className="w-5 h-5" />
+                      </div>
+                      <input
+                        type="email"
+                        {...field}
+                        className="w-full bg-white/50 border border-white/60 focus:border-primary/50 focus:ring-2 focus:ring-primary/20 rounded-xl py-3 pl-11 rtl:pr-11 rtl:pl-4 transition-all outline-none text-secondary"
+                        placeholder="admin@tanal.com"
+                        dir="ltr"
+                      />
+                    </div>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
-          <button
-            type="button"
-            onClick={() => router.push('/guest-view')}
-            className="w-full mt-3 bg-secondary/5 hover:bg-secondary/10 border border-secondary/10 text-secondary-dark rounded-xl py-3.5 font-medium transition-all shadow-sm hover:shadow-md flex justify-center items-center gap-2 cursor-pointer"
-          >
-            {dir === 'ltr' ? 'Temporary Guest Link' : 'رابط الضيف التجريبي'}
-          </button>
-        </form>
+            {/* Password Field */}
+            <FormField
+              control={form.control}
+              name="password"
+              render={({ field }) => (
+                <FormItem className="space-y-2">
+                  <FormLabel className="text-sm font-medium text-secondary/80 ml-1 rtl:mr-1 rtl:ml-0">
+                    {t('password')}
+                  </FormLabel>
+                  <FormControl>
+                    <div className="relative group">
+                      <div className="absolute inset-y-0 left-0 rtl:right-0 rtl:left-auto flex items-center px-4 pointer-events-none text-secondary/40 group-focus-within:text-primary transition-colors">
+                        <Lock className="w-5 h-5" />
+                      </div>
+                      <input
+                        type="password"
+                        {...field}
+                        className="w-full bg-white/50 border border-white/60 focus:border-primary/50 focus:ring-2 focus:ring-primary/20 rounded-xl py-3 pl-11 rtl:pr-11 rtl:pl-4 transition-all outline-none text-secondary"
+                        placeholder="••••••••"
+                        dir="ltr"
+                      />
+                    </div>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full mt-8 bg-primary hover:bg-primary-dark disabled:opacity-60 disabled:cursor-not-allowed text-white rounded-xl py-3.5 font-medium transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5 flex justify-center items-center gap-2 group cursor-pointer"
+            >
+              {loading ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <>
+                  {t('signIn')}
+                  {dir === 'ltr' ? (
+                    <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                  ) : (
+                    <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
+                  )}
+                </>
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => router.push('/client-portal')}
+              className="w-full mt-4 bg-white/60 hover:bg-white border border-primary/20 text-primary-dark rounded-xl py-3.5 font-medium transition-all shadow-sm hover:shadow-md flex justify-center items-center gap-2 cursor-pointer"
+            >
+              {dir === 'ltr' ? 'Temporary Client Link' : 'رابط العميل التجريبي'}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => router.push('/guest-view')}
+              className="w-full mt-3 bg-secondary/5 hover:bg-secondary/10 border border-secondary/10 text-secondary-dark rounded-xl py-3.5 font-medium transition-all shadow-sm hover:shadow-md flex justify-center items-center gap-2 cursor-pointer"
+            >
+              {dir === 'ltr' ? 'Temporary Guest Link' : 'رابط الضيف التجريبي'}
+            </button>
+          </form>
+        </Form>
 
       </motion.div>
     </div>
