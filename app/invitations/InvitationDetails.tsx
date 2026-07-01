@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useLanguage } from '@/lib/i18n';
-import { Invitation } from './page';
+import { Invitation } from './InvitationsClient';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   CheckCircle2, XCircle, Eye, Clock, Send, MousePointerClick,

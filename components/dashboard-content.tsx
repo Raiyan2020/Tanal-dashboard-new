@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useLanguage } from '@/lib/i18n';
 import { motion } from 'motion/react';
 import {
@@ -19,14 +19,28 @@ import { getToken } from '@/lib/auth';
 
 type Period = 'this_year' | 'this_month' | 'last_12_months' | 'last_6months' | 'all_time';
 
-export function DashboardContent({ onNavigate, onCreateEvent }: { onNavigate?: (id: string) => void, onCreateEvent?: () => void }) {
+export function DashboardContent({
+  onNavigate,
+  onCreateEvent,
+  initialData,
+}: {
+  onNavigate?: (id: string) => void;
+  onCreateEvent?: () => void;
+  initialData?: DashboardData | null;
+}) {
   const { t, dir } = useLanguage();
   const [period, setPeriod] = useState<Period>('this_year');
-  const [data, setData] = useState<DashboardData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<DashboardData | null>(initialData ?? null);
+  const [loading, setLoading] = useState(!initialData);
   const [error, setError] = useState<string | null>(null);
 
+  const isInitialMount = useRef(true);
+
   const fetchDashboard = useCallback(async (selectedPeriod: Period) => {
+    if (isInitialMount.current && initialData && selectedPeriod === 'this_year') {
+      isInitialMount.current = false;
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -41,7 +55,7 @@ export function DashboardContent({ onNavigate, onCreateEvent }: { onNavigate?: (
     } finally {
       setLoading(false);
     }
-  }, [dir]);
+  }, [dir, initialData, t]);
 
   useEffect(() => {
     fetchDashboard(period);

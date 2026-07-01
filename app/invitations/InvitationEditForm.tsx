@@ -3,10 +3,14 @@ import { motion } from 'motion/react';
 import { ChevronLeft, ChevronRight, Upload, Ticket, Calendar, Clock, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useLanguage } from '@/lib/i18n';
-import { Invitation } from './page';
+import { Invitation } from './InvitationsClient';
 import { getEvents, getInvitationById, createInvitation, updateInvitation, type ApiEvent } from '@/lib/api';
 import { getToken } from '@/lib/auth';
 import { toast } from 'sonner';
+
+import { DayPicker } from '@daypicker/react';
+import '@daypicker/react/dist/style.css';
+import { ar } from 'date-fns/locale';
 
 interface InvitationEditFormProps {
   invitation?: Invitation | null;
@@ -30,6 +34,38 @@ export function InvitationEditForm({ invitation, onBack, onSave }: InvitationEdi
   const [eventsLoading, setEventsLoading] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  // Date picker states
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const datePickerRef = useRef<HTMLDivElement>(null);
+
+  // Close datepicker when clicking outside
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (datePickerRef.current && !datePickerRef.current.contains(e.target as Node)) {
+        setShowDatePicker(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, []);
+
+  const getMinAllowedDate = () => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return today;
+  };
+
+  const handleDateSelect = (date: Date | undefined) => {
+    if (!date) return;
+    const yyyy = date.getFullYear();
+    const mm = String(date.getMonth() + 1).padStart(2, '0');
+    const dd = String(date.getDate()).padStart(2, '0');
+    setDeadlineDate(`${yyyy}-${mm}-${dd}`);
+    setShowDatePicker(false);
+  };
+
+  const selectedDate = deadlineDate ? new Date(deadlineDate) : undefined;
 
   // Fetch events list for dropdown
   useEffect(() => {
@@ -73,6 +109,10 @@ export function InvitationEditForm({ invitation, onBack, onSave }: InvitationEdi
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!deadlineDate) {
+      toast.error(dir === 'ltr' ? 'Please select a deadline date' : 'يرجى اختيار تاريخ الموعد النهائي');
+      return;
+    }
     if (submitting) return;
 
     const mappedLogic = logic === 'strict' ? 'strict_action' : logic;
@@ -273,13 +313,29 @@ export function InvitationEditForm({ invitation, onBack, onSave }: InvitationEdi
                 <Calendar className="w-4 h-4 text-secondary/50" />
                 {t('deadline' as any) || (dir === 'ltr' ? 'Deadline' : 'الموعد النهائي')} <span className="text-red-500">*</span>
               </label>
-              <input
-                type="date"
-                required
-                value={deadlineDate}
-                onChange={e => setDeadlineDate(e.target.value)}
-                className="w-full bg-white/50 border border-secondary/20 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-all text-secondary"
-              />
+              <div className="relative" ref={datePickerRef}>
+                <button
+                  type="button"
+                  onClick={() => setShowDatePicker(!showDatePicker)}
+                  className="w-full bg-white/50 border border-secondary/20 rounded-xl px-4 py-3 text-start text-secondary focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-all flex justify-between items-center cursor-pointer font-medium text-sm h-[46px] sm:h-[50px]"
+                >
+                  <span>{deadlineDate || (dir === 'ltr' ? 'Select deadline date...' : 'اختر تاريخ الموعد النهائي...')}</span>
+                  <Calendar className="w-4 h-4 text-secondary/50 shrink-0" />
+                </button>
+
+                {showDatePicker && (
+                  <div className="absolute z-[60] mt-2 p-3 bg-white border border-secondary/15 rounded-2xl shadow-xl left-0 rtl:right-0">
+                    <DayPicker
+                      mode="single"
+                      selected={selectedDate}
+                      onSelect={handleDateSelect}
+                      disabled={{ before: getMinAllowedDate() }}
+                      locale={dir === 'rtl' ? ar : undefined}
+                      dir={dir}
+                    />
+                  </div>
+                )}
+              </div>
             </div>
             <div>
               <label className="block text-sm font-medium text-secondary/80 mb-1.5 ml-1 flex items-center gap-2">

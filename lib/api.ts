@@ -1598,6 +1598,20 @@ export async function deleteAdminServiceOrder(
   return apiRequest<any>(`/admin/service-orders/${id}`, { method: 'DELETE', token });
 }
 
+/** POST /admin/service-orders/:id/payment-status?_method=patch */
+export async function updateServiceOrderPaymentStatus(
+  id: number,
+  status: 'paid' | 'unpaid' | 'installments' | "rejected",
+  token: string
+): Promise<ApiResponse<unknown>> {
+  const formData = new FormData();
+  formData.append('status', status);
+  return apiRequest(`/admin/service-orders/${id}/payment-status?_method=patch`, {
+    method: 'POST',
+    body: formData,
+    token,
+  });
+}
 
 /** Option shape variants sent to POST /admin/service-orders */
 export interface CreateServiceOrderItemOptionValue {
@@ -1793,16 +1807,20 @@ export interface LandingHowItWorksStep {
   id: number;
   icon: string;
   icon_url: string;
-  title: string;
-  description: string;
+  title_ar: string;
+  title_en: string;
+  description_ar: string;
+  description_en: string;
   sort: number;
 }
 
 export interface LandingFeature {
   id: number;
   icon_url: string;
-  title: string;
-  description: string;
+  title_ar: string;
+  title_en: string;
+  description_ar: string;
+  description_en: string;
   sort: number;
 }
 
@@ -1822,9 +1840,9 @@ export interface LandingSocialLink {
 
 export interface LandingFooter {
   id: number;
-  brand_name: string;
-  tagline: string;
-  description: string;
+  brand_name: { ar: string; en: string };
+  tagline: { ar: string; en: string };
+  description: { ar: string; en: string };
   about_url?: string;
   privacy_url?: string;
   terms_url?: string;
@@ -1837,7 +1855,8 @@ export interface LandingContact {
   whatsapp_country_code: string;
   whatsapp_phone: string;
   whatsapp_full_number: string;
-  office_address: { ar: string; en: string };
+  office_address_ar: string;
+  office_address_en: string;
   google_maps_url: string;
   social_links: LandingSocialLink[];
 }
@@ -2038,4 +2057,90 @@ export async function deleteEventType(id: number, token: string): Promise<ApiRes
 }
 export async function reorderEventTypes(items: ReorderItem[], token: string): Promise<ApiResponse<any>> {
   return apiRequest('/admin/landing-page/event-types/reorder?_method=patch', { method: 'POST', body: { items } as any, token });
+}
+
+// ── Admin Settings ─────────────────────────────────────────────────────────────
+
+export interface SettingsData {
+  website_name: { ar: string; en: string };
+  contact_number: string;
+  contact_mail: string;
+  logo: string;
+  favicon: string;
+  commercial_register: string;
+  tax_number: string;
+  copy_right: string;
+  facebook: string;
+  instagram: string;
+  twitter: string;
+  whatsapp: string;
+  youtube: string;
+  linkedin: string;
+  privacy_policy: { ar: string; en: string };
+  terms_conditions: { ar: string; en: string };
+  about_us: { ar: string; en: string };
+  location: {
+    lat: string | number | null;
+    lng: string | number | null;
+    map_desc: { ar: string; en: string };
+  };
+}
+
+export async function getSettings(token: string): Promise<ApiResponse<SettingsData>> {
+  return apiRequest<SettingsData>('/admin/settings', { token });
+}
+
+export async function updateSettings(
+  fields: {
+    contact_number?: string;
+    contact_mail?: string;
+    commercial_register?: string;
+    tax_number?: string;
+    copy_right?: string;
+    facebook?: string;
+    instagram?: string;
+    twitter?: string;
+    whatsapp?: string;
+    youtube?: string;
+    linkedin?: string;
+    location_map_desc_ar?: string;
+    location_map_desc_en?: string;
+    location_lat?: string;
+    location_lng?: string;
+    privacy_policy_ar?: string;
+    privacy_policy_en?: string;
+    terms_conditions_ar?: string;
+    terms_conditions_en?: string;
+    about_us_ar?: string;
+    about_us_en?: string;
+    logo?: File;
+    favicon?: File;
+  },
+  token: string
+): Promise<ApiResponse<SettingsData>> {
+  const fd = new FormData();
+  if (fields.contact_number !== undefined) fd.append('contact_number', fields.contact_number);
+  if (fields.contact_mail !== undefined) fd.append('contact_mail', fields.contact_mail);
+  if (fields.commercial_register !== undefined) fd.append('commercial_register', fields.commercial_register);
+  if (fields.tax_number !== undefined) fd.append('tax_number', fields.tax_number);
+  if (fields.copy_right !== undefined) fd.append('copy_right', fields.copy_right);
+  if (fields.facebook !== undefined) fd.append('facebook', fields.facebook);
+  if (fields.instagram !== undefined) fd.append('instagram', fields.instagram);
+  if (fields.twitter !== undefined) fd.append('twitter', fields.twitter);
+  if (fields.whatsapp !== undefined) fd.append('whatsapp', fields.whatsapp);
+  if (fields.youtube !== undefined) fd.append('youtube', fields.youtube);
+  if (fields.linkedin !== undefined) fd.append('linkedin', fields.linkedin);
+  if (fields.location_map_desc_ar !== undefined) fd.append('location_map_desc[ar]', fields.location_map_desc_ar);
+  if (fields.location_map_desc_en !== undefined) fd.append('location_map_desc[en]', fields.location_map_desc_en);
+  if (fields.location_lat !== undefined) fd.append('location_lat', fields.location_lat);
+  if (fields.location_lng !== undefined) fd.append('location_lng', fields.location_lng);
+  if (fields.privacy_policy_ar !== undefined) fd.append('privacy_policy[ar]', fields.privacy_policy_ar);
+  if (fields.privacy_policy_en !== undefined) fd.append('privacy_policy[en]', fields.privacy_policy_en);
+  if (fields.terms_conditions_ar !== undefined) fd.append('terms_conditions[ar]', fields.terms_conditions_ar);
+  if (fields.terms_conditions_en !== undefined) fd.append('terms_conditions[en]', fields.terms_conditions_en);
+  if (fields.about_us_ar !== undefined) fd.append('about_us[ar]', fields.about_us_ar);
+  if (fields.about_us_en !== undefined) fd.append('about_us[en]', fields.about_us_en);
+  if (fields.logo) fd.append('logo', fields.logo);
+  if (fields.favicon) fd.append('favicon', fields.favicon);
+  return apiRequest<SettingsData>('/admin/settings?_method=put', { method: 'POST', body: fd, token });
 }

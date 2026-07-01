@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   X, User, Calendar, Clock, MapPin, Briefcase, DollarSign,
@@ -8,7 +8,9 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useLanguage } from '@/lib/i18n';
-import { ApiServiceOrderDetail, ServiceOrderStatus } from '@/lib/api';
+import { ApiServiceOrderDetail, ServiceOrderStatus, updateServiceOrderPaymentStatus } from '@/lib/api';
+import { getToken } from '@/lib/auth';
+import { toast } from 'sonner';
 import Image from 'next/image';
 
 const getStatusBadgeClass = (val: string) => {
@@ -37,6 +39,7 @@ interface OrderDetailModalProps {
   order: ApiServiceOrderDetail | null;
   loading: boolean;
   onClose: () => void;
+  onPaymentStatusChange?: (newStatus: string) => void;
 }
 
 function InfoRow({ icon: Icon, label, value }: { icon: any; label: string; value: React.ReactNode }) {
@@ -53,9 +56,16 @@ function InfoRow({ icon: Icon, label, value }: { icon: any; label: string; value
   );
 }
 
-export function OrderDetailModal({ order, loading, onClose }: OrderDetailModalProps) {
+export function OrderDetailModal({ order, loading, onClose, onPaymentStatusChange }: OrderDetailModalProps) {
   const { language, dir } = useLanguage();
   const isAr = language === 'ar';
+  const [token] = useState(() => getToken() ?? '');
+  const [updatingPayment, setUpdatingPayment] = useState(false);
+  const [localOrder, setLocalOrder] = useState<ApiServiceOrderDetail | null>(null);
+  const effectiveOrder = localOrder ?? order;
+
+  // Reset local order when the main order changes
+  React.useEffect(() => { setLocalOrder(null); }, [order?.id]);
 
   return (
     <AnimatePresence>
@@ -109,19 +119,70 @@ export function OrderDetailModal({ order, loading, onClose }: OrderDetailModalPr
                 </div>
               )}
 
-              {order && (
+              {effectiveOrder && (
                 <>
-                  {/* Status badges */}
-                  <div className="flex flex-wrap gap-2">
-                    {order.statuses.map((st, i) => (
-                      <span
-                        key={i}
-                        className={cn('inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-[11px] font-bold', getStatusBadgeClass(st.value))}
+                  {/* Status badges + payment status select */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    {effectiveOrder.statuses
+                      .filter(st => !['paid', 'unpaid', 'installments', 'rejected'].includes(st.value))
+                      .map((st, i) => (
+                        <span
+                          key={i}
+                          className={cn('inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-[11px] font-bold', getStatusBadgeClass(st.value))}
+                        >
+                          <span className={cn('w-1.5 h-1.5 rounded-full', getStatusDotClass(st.value))} />
+                          {st.label}
+                        </span>
+                      ))}
+
+                    {/* Payment status select — mirrors EventDetails pattern */}
+                    <div className="relative">
+                      {updatingPayment && (
+                        <div className="absolute inset-0 flex items-center justify-center z-10">
+                          <Loader2 className="w-3 h-3 animate-spin text-primary" />
+                        </div>
+                      )}
+                      <select
+                        disabled={updatingPayment}
+                        value={effectiveOrder.statuses.find(s => ['paid', 'unpaid', 'installments'].includes(s.value))?.value ?? (effectiveOrder.is_paid ? 'paid' : 'unpaid')}
+                        onChange={async (e) => {
+                          const nextStatus = e.target.value as 'paid' | 'unpaid' | 'installments';
+                          setUpdatingPayment(true);
+                          try {
+                            await updateServiceOrderPaymentStatus(effectiveOrder.id, nextStatus, token);
+                            toast.success(isAr ? 'تم تحديث حالة الدفع بنجاح' : 'Payment status updated successfully');
+                            const updatedStatuses = effectiveOrder.statuses.map(s =>
+                              ['paid', 'unpaid', 'installments'].includes(s.value) ? { ...s, value: nextStatus } : s
+                            );
+                            if (!updatedStatuses.some(s => ['paid', 'unpaid', 'installments'].includes(s.value))) {
+                              updatedStatuses.push({ value: nextStatus, label: nextStatus === 'paid' ? (isAr ? 'مدفوع' : 'Paid') : nextStatus === 'unpaid' ? (isAr ? 'غير مدفوع' : 'Unpaid') : (isAr ? 'أقساط' : 'Installments') });
+                            }
+                            const updated = { ...effectiveOrder, is_paid: nextStatus === 'paid', statuses: updatedStatuses };
+                            setLocalOrder(updated);
+                            if (onPaymentStatusChange) onPaymentStatusChange(nextStatus);
+                          } catch (err) {
+                            toast.error((err as Error).message || (isAr ? 'فشل في تحديث حالة الدفع' : 'Failed to update payment status'));
+                          } finally {
+                            setUpdatingPayment(false);
+                          }
+                        }}
+                        className={cn(
+                          'appearance-none cursor-pointer py-1 outline-none rounded-full text-[11px] font-medium ring-1 ring-inset whitespace-nowrap transition-opacity',
+                          dir === 'ltr' ? 'pl-2.5 pr-6' : 'pr-2.5 pl-6',
+                          updatingPayment && 'opacity-40 pointer-events-none',
+                          getStatusBadgeClass(
+                            effectiveOrder.statuses.find(s => ['paid', 'unpaid', 'installments'].includes(s.value))?.value ?? (effectiveOrder.is_paid ? 'paid' : 'unpaid')
+                          )
+                        )}
                       >
-                        <span className={cn('w-1.5 h-1.5 rounded-full', getStatusDotClass(st.value))} />
-                        {st.label}
-                      </span>
-                    ))}
+                        <option value="paid">{isAr ? 'مدفوع' : 'Paid'}</option>
+                        <option value="unpaid">{isAr ? 'غير مدفوع' : 'Unpaid'}</option>
+                        <option value="installments">{isAr ? 'أقساط' : 'Installments'}</option>
+                      </select>
+                      <div className={cn('pointer-events-none absolute inset-y-0 flex items-center', dir === 'ltr' ? 'right-2' : 'left-2')}>
+                        <svg className="w-3 h-3 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                      </div>
+                    </div>
                   </div>
 
                   {/* ── Client ── */}
@@ -130,19 +191,19 @@ export function OrderDetailModal({ order, loading, onClose }: OrderDetailModalPr
                       {isAr ? 'بيانات العميل' : 'Client'}
                     </h3>
                     <div className="bg-secondary/3 rounded-2xl px-4 py-1">
-                      <InfoRow icon={User} label={isAr ? 'الاسم' : 'Name'} value={order.client.name} />
+                      <InfoRow icon={User} label={isAr ? 'الاسم' : 'Name'} value={effectiveOrder.client.name} />
                       <InfoRow icon={Phone} label={isAr ? 'الهاتف' : 'Phone'} value={
-                        <a href={order.client.whatsapp_url} target="_blank" rel="noreferrer"
+                        <a href={effectiveOrder.client.whatsapp_url} target="_blank" rel="noreferrer"
                           className="inline-flex items-center gap-1 text-emerald-600 hover:underline">
-                          {order.client.full_phone}
+                          {effectiveOrder.client.full_phone}
                           <ExternalLink className="w-3 h-3" />
                         </a>
                       } />
-                      {order.client.email && (
-                        <InfoRow icon={Mail} label={isAr ? 'البريد' : 'Email'} value={order.client.email} />
+                      {effectiveOrder.client.email && (
+                        <InfoRow icon={Mail} label={isAr ? 'البريد' : 'Email'} value={effectiveOrder.client.email} />
                       )}
-                      {order.client.notes && (
-                        <InfoRow icon={Briefcase} label={isAr ? 'ملاحظات' : 'Notes'} value={order.client.notes} />
+                      {effectiveOrder.client.notes && (
+                        <InfoRow icon={Briefcase} label={isAr ? 'ملاحظات' : 'Notes'} value={effectiveOrder.client.notes} />
                       )}
                     </div>
                   </section>
@@ -153,12 +214,12 @@ export function OrderDetailModal({ order, loading, onClose }: OrderDetailModalPr
                       {isAr ? 'تفاصيل الفعالية' : 'Event Details'}
                     </h3>
                     <div className="bg-secondary/3 rounded-2xl px-4 py-1">
-                      <InfoRow icon={Calendar} label={isAr ? 'التاريخ' : 'Date'} value={order.event_date} />
-                      <InfoRow icon={Clock} label={isAr ? 'الوقت' : 'Time'} value={order.event_time?.slice(0, 5)} />
-                      <InfoRow icon={Briefcase} label={isAr ? 'القاعة' : 'Hall'} value={order.hall_name} />
-                      {order.location_url && (
+                      <InfoRow icon={Calendar} label={isAr ? 'التاريخ' : 'Date'} value={effectiveOrder.event_date} />
+                      <InfoRow icon={Clock} label={isAr ? 'الوقت' : 'Time'} value={effectiveOrder.event_time?.slice(0, 5)} />
+                      <InfoRow icon={Briefcase} label={isAr ? 'القاعة' : 'Hall'} value={effectiveOrder.hall_name} />
+                      {effectiveOrder.location_url && (
                         <InfoRow icon={MapPin} label={isAr ? 'الموقع' : 'Location'} value={
-                          <a href={order.location_url} target="_blank" rel="noreferrer"
+                          <a href={effectiveOrder.location_url} target="_blank" rel="noreferrer"
                             className="inline-flex items-center gap-1 text-primary hover:underline truncate max-w-[240px]">
                             {isAr ? 'عرض الخريطة' : 'View on Map'}
                             <ExternalLink className="w-3 h-3 shrink-0" />
@@ -176,35 +237,35 @@ export function OrderDetailModal({ order, loading, onClose }: OrderDetailModalPr
                     <div className="bg-secondary/3 rounded-2xl px-4 py-1">
                       <InfoRow icon={DollarSign} label={isAr ? 'الإجمالي' : 'Total'} value={
                         <span className="text-primary font-bold">
-                          {Number(order.total_amount).toLocaleString(isAr ? 'ar-EG' : 'en-US')}{' '}
+                          {Number(effectiveOrder.total_amount).toLocaleString(isAr ? 'ar-EG' : 'en-US')}{' '}
                           {isAr ? 'د.ك' : 'KD'}
                         </span>
                       } />
                       <InfoRow icon={DollarSign} label={isAr ? 'المدفوع' : 'Paid'} value={
                         <span className="text-emerald-600 font-bold">
-                          {Number(order.paid_amount).toLocaleString(isAr ? 'ar-EG' : 'en-US')}{' '}
+                          {Number(effectiveOrder.paid_amount).toLocaleString(isAr ? 'ar-EG' : 'en-US')}{' '}
                           {isAr ? 'د.ك' : 'KD'}
                         </span>
                       } />
                       <InfoRow
-                        icon={order.is_paid ? CheckCircle2 : XCircle}
+                        icon={effectiveOrder.is_paid ? CheckCircle2 : XCircle}
                         label={isAr ? 'حالة الدفع' : 'Payment Status'}
                         value={
-                          <span className={order.is_paid ? 'text-emerald-600' : 'text-orange-500'}>
-                            {order.is_paid
+                          <span className={effectiveOrder.is_paid ? 'text-emerald-600' : 'text-orange-500'}>
+                            {effectiveOrder.is_paid
                               ? (isAr ? 'مدفوع' : 'Paid')
                               : (isAr ? 'غير مدفوع' : 'Unpaid')}
                           </span>
                         }
                       />
                       <InfoRow icon={DollarSign} label={isAr ? 'طريقة الدفع' : 'Payment Type'} value={
-                        order.payment_type === 'single'
+                        effectiveOrder.payment_type === 'single'
                           ? (isAr ? 'دفعة واحدة' : 'Single Payment')
                           : (isAr ? 'دفعتان' : 'Two Installments')
                       } />
-                      {order.first_installment_amount && (
+                      {effectiveOrder.first_installment_amount && (
                         <InfoRow icon={DollarSign} label={isAr ? 'الدفعة الأولى' : '1st Installment'} value={
-                          `${Number(order.first_installment_amount).toLocaleString(isAr ? 'ar-EG' : 'en-US')} ${isAr ? 'د.ك' : 'KD'}`
+                          `${Number(effectiveOrder.first_installment_amount).toLocaleString(isAr ? 'ar-EG' : 'en-US')} ${isAr ? 'د.ك' : 'KD'}`
                         } />
                       )}
                     </div>
@@ -216,7 +277,7 @@ export function OrderDetailModal({ order, loading, onClose }: OrderDetailModalPr
                       {isAr ? 'الخدمات' : 'Services'}
                     </h3>
                     <div className="space-y-3">
-                      {order.items.map((item) => (
+                      {effectiveOrder.items.map((item) => (
                         <div key={item.id} className="bg-secondary/3 rounded-2xl p-4 space-y-3">
                           {/* Service header */}
                           <div className="flex items-start justify-between gap-2">
@@ -309,13 +370,13 @@ export function OrderDetailModal({ order, loading, onClose }: OrderDetailModalPr
                     </div>
                   </section>
 
-                  {order.notes && (
+                  {effectiveOrder.notes && (
                     <section>
                       <h3 className="text-xs font-bold text-secondary/40 uppercase tracking-wider mb-2">
                         {isAr ? 'ملاحظات' : 'Notes'}
                       </h3>
                       <p className="text-sm text-secondary/70 bg-secondary/3 rounded-2xl px-4 py-3">
-                        {order.notes}
+                        {effectiveOrder.notes}
                       </p>
                     </section>
                   )}
@@ -324,10 +385,10 @@ export function OrderDetailModal({ order, loading, onClose }: OrderDetailModalPr
             </div>
 
             {/* Footer actions */}
-            {order && (
+            {effectiveOrder && (
               <div className="px-6 py-4 border-t border-secondary/8 shrink-0 flex items-center gap-3">
                 <a
-                  href={order.whatsapp_url}
+                  href={effectiveOrder.whatsapp_url}
                   target="_blank"
                   rel="noreferrer"
                   className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-semibold transition-colors cursor-pointer"

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useLanguage } from '@/lib/i18n';
 import { motion, AnimatePresence } from 'motion/react';
 import {
@@ -7,7 +7,9 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Image from 'next/image';
-import { ApiServiceOrderItem, ServiceOrderStatus } from '@/lib/api';
+import { ApiServiceOrderItem, ServiceOrderStatus, updateServiceOrderPaymentStatus } from '@/lib/api';
+import { getToken } from '@/lib/auth';
+import { toast } from 'sonner';
 
 interface OrderListProps {
   orders: ApiServiceOrderItem[];
@@ -91,6 +93,11 @@ export function OrderList({
   onDelete,
 }: OrderListProps) {
   const { dir, t, language } = useLanguage();
+  const [token] = useState(() => getToken() ?? '');
+  // Track which orders are currently being payment-updated
+  const [updatingPayment, setUpdatingPayment] = useState<Record<number, boolean>>({});
+  // Local payment status overrides keyed by order id
+  const [paymentOverrides, setPaymentOverrides] = useState<Record<number, string>>({});
 
   const tabs = [
     { id: 'all', label: language === 'ar' ? 'الكل' : 'All' },
@@ -217,12 +224,65 @@ export function OrderList({
 
                     {/* Right badges + actions */}
                     <div className={cn("flex items-center gap-2 flex-wrap shrink-0", dir === 'rtl' ? 'flex-row-reverse' : '')}>
-                      {order.statuses.map((st, i) => (
-                        <span key={i} className={cn('inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold shrink-0', getStatusBadgeClass(st.value))}>
-                          <span className={cn('w-1.5 h-1.5 rounded-full shrink-0', getStatusDotClass(st.value))} />
-                          {st.label}
-                        </span>
-                      ))}
+                      {/* Non-payment status badges */}
+                      {order.statuses
+                        .filter(st => !['paid', 'unpaid', 'installments', 'rejected'].includes(st.value))
+                        .map((st, i) => (
+                          <span key={i} className={cn('inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold shrink-0', getStatusBadgeClass(st.value))}>
+                            <span className={cn('w-1.5 h-1.5 rounded-full shrink-0', getStatusDotClass(st.value))} />
+                            {st.label}
+                          </span>
+                        ))}
+
+                      {/* Payment status select */}
+                      {(() => {
+                        const currentPaymentStatus = paymentOverrides[order.id]
+                          ?? order.statuses.find(s => ['paid', 'unpaid', 'installments', 'rejected'].includes(s.value))?.value
+                          ?? 'unpaid';
+                        const isUpdating = !!updatingPayment[order.id];
+                        return (
+                          <div className="relative shrink-0">
+                            {isUpdating && (
+                              <div className="absolute inset-0 flex items-center justify-center z-10">
+                                <Loader2 className="w-3 h-3 animate-spin text-primary" />
+                              </div>
+                            )}
+                            <select
+                              disabled={isUpdating}
+                              value={currentPaymentStatus}
+                              onClick={e => e.stopPropagation()}
+                              onChange={async (e) => {
+                                e.stopPropagation();
+                                const nextStatus = e.target.value as 'paid' | 'unpaid' | 'installments' | "rejected";
+                                setUpdatingPayment(prev => ({ ...prev, [order.id]: true }));
+                                try {
+                                  await updateServiceOrderPaymentStatus(order.id, nextStatus, token);
+                                  toast.success(language === 'ar' ? 'تم تحديث حالة الدفع بنجاح' : 'Payment status updated successfully');
+                                  setPaymentOverrides(prev => ({ ...prev, [order.id]: nextStatus }));
+                                } catch (err) {
+                                  toast.error((err as Error).message || (language === 'ar' ? 'فشل في تحديث حالة الدفع' : 'Failed to update payment status'));
+                                } finally {
+                                  setUpdatingPayment(prev => ({ ...prev, [order.id]: false }));
+                                }
+                              }}
+                              className={cn(
+                                'appearance-none cursor-pointer py-0.5 outline-none rounded-full text-[10px] font-bold ring-1 ring-inset whitespace-nowrap transition-opacity shrink-0',
+                                dir === 'ltr' ? 'pl-2 pr-5' : 'pr-2 pl-5',
+                                isUpdating && 'opacity-40 pointer-events-none',
+                                getStatusBadgeClass(currentPaymentStatus)
+                              )}
+                            >
+                              <option value="paid">{language === 'ar' ? 'مدفوع' : 'Paid'}</option>
+                              <option value="unpaid">{language === 'ar' ? 'غير مدفوع' : 'Unpaid'}</option>
+                              <option value="installments">{language === 'ar' ? 'أقساط' : 'Installments'}</option>
+                              <option value="rejected">{language === 'ar' ? 'مرفوض' : 'Rejected'}</option>
+                            </select>
+                            <div className={cn('pointer-events-none absolute inset-y-0 flex items-center', dir === 'ltr' ? 'right-1.5' : 'left-1.5')}>
+                              <svg className="w-2.5 h-2.5 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                            </div>
+                          </div>
+                        );
+                      })()}
 
                       {/* Action buttons */}
                       <div className={cn("flex items-center gap-1 shrink-0", dir === 'rtl' ? 'border-r border-secondary/10 pr-2 mr-2' : 'border-l border-secondary/10 pl-2 ml-2')}>
