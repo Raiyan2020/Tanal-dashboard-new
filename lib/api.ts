@@ -18,6 +18,7 @@ export interface ApiResponse<T = unknown> {
 }
 
 export interface AdminRole {
+  id: number;
   name: string;
   display_name: string;
   is_super_admin: boolean;
@@ -271,7 +272,8 @@ export async function getDashboardData(
 /* ─── Roles ─────────────────────────────────────────────────── */
 export interface Role {
   id: number;
-  name: string;
+  name_en: string;
+  name_ar: string;
   is_protected: boolean;
   is_super_admin: boolean;
   admins_count: number;
@@ -295,6 +297,8 @@ export interface PermissionGroup {
 }
 
 export interface RoleDetail extends Role {
+  /** Merged display name returned by the detail endpoint */
+  name: string;
   permissions: Permission[];
 }
 

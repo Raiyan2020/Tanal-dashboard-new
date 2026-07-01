@@ -90,7 +90,7 @@ function AdminForm({ adminId, roles, rolesLoading, onBack, onSaved }: AdminFormP
 
   useEffect(() => {
     if (fetchedAdmin && roles.length > 0 && roleId === '') {
-      const match = roles.find(r => r.name === fetchedAdmin.role.name);
+      const match = roles.find(r => r.id === fetchedAdmin.role.id);
       if (match) setRoleId(match.id);
     }
   }, [roles, fetchedAdmin, roleId]);
@@ -215,7 +215,7 @@ function AdminForm({ adminId, roles, rolesLoading, onBack, onSaved }: AdminFormP
               >
                 <option value="">-- اختر الدور --</option>
                 {roles.map(r => (
-                  <option key={r.id} value={r.id}>{r.name}</option>
+                  <option key={r.id} value={r.id}>{dir === 'rtl' ? r.name_ar : r.name_en}</option>
                 ))}
               </select>
             )}
