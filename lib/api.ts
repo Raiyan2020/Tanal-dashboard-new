@@ -272,8 +272,11 @@ export async function getDashboardData(
 /* ─── Roles ─────────────────────────────────────────────────── */
 export interface Role {
   id: number;
-  name_en: string;
-  name_ar: string;
+  name: string;
+  /** @deprecated use name instead */
+  name_en?: string;
+  /** @deprecated use name instead */
+  name_ar?: string;
   is_protected: boolean;
   is_super_admin: boolean;
   admins_count: number;
@@ -636,10 +639,26 @@ export interface EventDetailData {
   invitations: {
     sent_whatsapp_count: number;
   };
-  employees: Array<{
+  payment_button?: {
+    state: string;
+    payable: boolean;
+    installment: string | null;
+    amount: number;
+    label: string;
+  };
+  /** @deprecated use related_employee instead */
+  employees?: Array<{
     id: number;
     name: string;
     phone?: string;
+  }>;
+  available_employees: Array<{
+    id: number;
+    name: string;
+  }>;
+  related_employee: Array<{
+    id: number;
+    name: string;
   }>;
   actions: {
     can_delete: boolean;
@@ -652,6 +671,8 @@ export interface EventDetailData {
 export async function getEventById(id: number, token: string): Promise<ApiResponse<EventDetailData>> {
   return apiRequest<EventDetailData>(`/admin/events/${id}`, { method: 'GET', token });
 }
+
+
 
 /** PATCH /admin/events/:id/payment-status */
 export async function updateEventPaymentStatus(
@@ -1252,6 +1273,21 @@ export async function getEmployees(
   }
   const qs = query.toString();
   return apiRequest<PaginatedItems<ApiEmployee>>(`/admin/employees${qs ? `?${qs}` : ''}`, { token });
+}
+
+/** POST /admin/events/:id/employees — assign employees to an event */
+export async function assignEventEmployees(
+  eventId: number,
+  employeeIds: number[],
+  token: string
+): Promise<ApiResponse<unknown>> {
+  const formData = new FormData();
+  employeeIds.forEach((id) => formData.append('employee_ids[]', String(id)));
+  return apiRequest(`/admin/events/${eventId}/employees`, {
+    method: 'POST',
+    body: formData,
+    token,
+  });
 }
 
 /** GET /admin/employees/:id */

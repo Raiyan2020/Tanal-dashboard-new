@@ -300,7 +300,7 @@ export function OrderForm({
                   )}
 
                   <div className="text-xs font-bold text-secondary/60">
-                    {language === 'ar' ? `الخدمة #${index + 1}` : `Service #${index + 1}`}
+                    {t('service') || 'Service'} #{index + 1}
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -352,7 +352,7 @@ export function OrderForm({
                   {svc.options.length > 0 && (
                     <div className="space-y-3 p-4 bg-white/40 border border-secondary/10 rounded-xl mt-3 text-start">
                       <h4 className="text-xs font-bold text-secondary/60 uppercase tracking-wider">
-                        {language === 'ar' ? 'خيارات الخدمة' : 'Service Options'}
+                        {t('serviceOptions') || 'Service Options'}
                       </h4>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         {svc.options.map((opt, optIdx) => {
@@ -484,7 +484,7 @@ export function OrderForm({
                                   }}
                                   className="w-full px-3 py-2 text-xs rounded-lg bg-white/50 border border-secondary/20 focus:border-primary/50 outline-none text-secondary cursor-pointer"
                                 >
-                                  <option value="">{language === 'ar' ? 'اختر خياراً...' : 'Select choice...'}</option>
+                                  <option value="">{t('selectChoice') || 'Select choice...'}</option>
                                   {(opt.values || []).map((label: any) => {
                                     const labelText = language === 'ar' ? label.label_ar : label.label_en;
                                     return (
@@ -522,7 +522,7 @@ export function OrderForm({
                                       })
                                     ) : (
                                       <span className="text-xs text-secondary/40 px-2 py-1">
-                                        {language === 'ar' ? 'لم يتم اختيار موظفين' : 'No employees selected'}
+                                        {t('noEmployeesSelected') || 'No employees selected'}
                                       </span>
                                     )}
                                   </div>
@@ -540,7 +540,7 @@ export function OrderForm({
                                     }}
                                     className="w-full px-3 py-2 text-xs rounded-lg bg-white/50 border border-secondary/20 focus:border-primary/50 outline-none text-secondary cursor-pointer"
                                   >
-                                    <option value="">{language === 'ar' ? 'اختر موظفاً لإضافته...' : 'Select employee to add...'}</option>
+                                    <option value="">{t('selectEmployeeToAdd') || 'Select employee to add...'}</option>
                                     {dbEmployees.map(emp => (
                                       <option key={emp.id} value={emp.id} disabled={(opt.selectedEmployeeIds || []).includes(emp.id)}>
                                         {emp.name}
@@ -559,14 +559,14 @@ export function OrderForm({
                   {/* Responsible Employee Configuration */}
                   <div className="space-y-3 pt-3 border-t border-secondary/10">
                     <label className="flex items-center gap-2 text-xs font-semibold text-secondary/70">
-                      <User className="w-4 h-4 text-secondary/40" /> {language === 'ar' ? 'الموظف المسؤول' : 'Responsible Employee'}
+                      <User className="w-4 h-4 text-secondary/40" /> {t('responsibleEmployee') || 'Responsible Employee'}
                     </label>
 
                     <div className="flex bg-secondary/5 rounded-xl p-0.5 gap-0.5 max-w-xs">
                       {([
-                        { id: 'none', label: language === 'ar' ? 'بلا تعيين' : 'Unassigned' },
-                        { id: 'employee', label: language === 'ar' ? 'موظف موجود' : 'Existing Staff' },
-                        { id: 'freelancer', label: language === 'ar' ? 'فريلانسر' : 'Freelancer' }
+                        { id: 'none', label: t('unassigned') || 'Unassigned' },
+                        { id: 'employee', label: t('existingStaff') || 'Existing Staff' },
+                        { id: 'freelancer', label: t('freelancer') || 'Freelancer' }
                       ] as const).map(mode => (
                         <button
                           key={mode.id}
@@ -610,7 +610,7 @@ export function OrderForm({
                     {svc.employeeType === 'freelancer' && (
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                         <div>
-                          <label className="text-[10px] text-secondary/50 font-bold block mb-1 uppercase">Username</label>
+                          <label className="text-[10px] text-secondary/50 font-bold block mb-1 uppercase">{t('username') || 'Username'}</label>
                           <input
                             type="text"
                             required
@@ -625,7 +625,7 @@ export function OrderForm({
                           />
                         </div>
                         <div>
-                          <label className="text-[10px] text-secondary/50 font-bold block mb-1 uppercase">Country Code</label>
+                          <label className="text-[10px] text-secondary/50 font-bold block mb-1 uppercase">{t('countryCode') || 'Country Code'}</label>
                           <input
                             type="text"
                             required
@@ -640,7 +640,7 @@ export function OrderForm({
                           />
                         </div>
                         <div>
-                          <label className="text-[10px] text-secondary/50 font-bold block mb-1 uppercase">Phone Number</label>
+                          <label className="text-[10px] text-secondary/50 font-bold block mb-1 uppercase">{t('phoneNumber') || 'Phone Number'}</label>
                           <input
                             type="tel"
                             required
@@ -685,7 +685,7 @@ export function OrderForm({
               className="w-full text-xs font-bold text-white bg-primary hover:bg-primary-dark flex items-center gap-1 justify-center py-2 rounded cursor-pointer"
             >
               <Plus className="w-4 h-4" />
-              {language === 'ar' ? 'إضافة خدمة أخرى' : 'Add Service'}
+              {t('addService') || 'Add Service'}
             </button>
           </div>
 
@@ -724,7 +724,7 @@ export function OrderForm({
           {form.paymentType === 'two-installments' && (
             <div className="space-y-1.5">
               <label className="text-sm font-medium text-secondary/80">
-                {language === 'ar' ? 'مبلغ الدفعة الأولى' : 'First Installment Amount'} (KD) <span className="text-red-500">*</span>
+                {t('firstInstallmentAmount') || 'First Installment Amount'} ({language === 'ar' ? 'د.ك' : 'KD'}) <span className="text-red-500">*</span>
               </label>
               <input
                 type="number"

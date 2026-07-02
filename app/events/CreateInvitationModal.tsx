@@ -30,6 +30,8 @@ interface CreateInvitationModalProps {
   eventId: number;
   /** Human-readable event name shown in the modal header */
   eventName: string;
+  /** Event date to limit deadline options */
+  eventDate?: string;
   onClose: () => void;
   /** Called after a successful creation so the parent can refresh state */
   onCreated: () => void;
@@ -45,6 +47,7 @@ interface FormValues {
 export function CreateInvitationModal({
   eventId,
   eventName,
+  eventDate,
   onClose,
   onCreated,
 }: CreateInvitationModalProps) {
@@ -102,6 +105,23 @@ export function CreateInvitationModal({
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     return today;
+  };
+
+  const getMaxAllowedDate = () => {
+    if (!eventDate) return undefined;
+    const d = new Date(eventDate);
+    if (isNaN(d.getTime())) return undefined;
+    d.setHours(0, 0, 0, 0);
+    return d;
+  };
+
+  const getDisabledDays = () => {
+    const minDate = getMinAllowedDate();
+    const maxDate = getMaxAllowedDate();
+    if (maxDate) {
+      return { before: minDate, after: maxDate };
+    }
+    return { before: minDate };
   };
 
   const handleDateSelect = (date: Date | undefined) => {
@@ -337,7 +357,7 @@ export function CreateInvitationModal({
                               mode="single"
                               selected={selectedDate}
                               onSelect={handleDateSelect}
-                              disabled={{ before: getMinAllowedDate() }}
+                              disabled={getDisabledDays()}
                               locale={dir === 'rtl' ? ar : undefined}
                               dir={dir}
                             />

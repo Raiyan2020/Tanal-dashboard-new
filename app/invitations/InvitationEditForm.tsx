@@ -54,6 +54,7 @@ export function InvitationEditForm({ invitation, onBack, onSave }: InvitationEdi
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [fileName, setFileName] = useState('');
+  const [fileError, setFileError] = useState<string | null>(null);
 
   const [events, setEvents] = useState<ApiEvent[]>([]);
   const [eventsLoading, setEventsLoading] = useState(false);
@@ -77,6 +78,9 @@ export function InvitationEditForm({ invitation, onBack, onSave }: InvitationEdi
 
   // Watch deadlineDate value to display it and feed the calendar
   const deadlineDateValue = form.watch('deadlineDate');
+  const selectedEventId = form.watch('eventId');
+  const selectedEvent = events.find(ev => String(ev.id) === selectedEventId);
+  const eventDate = selectedEvent?.event_date;
 
   // Close datepicker when clicking outside
   useEffect(() => {
@@ -93,6 +97,23 @@ export function InvitationEditForm({ invitation, onBack, onSave }: InvitationEdi
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     return today;
+  };
+
+  const getMaxAllowedDate = () => {
+    if (!eventDate) return undefined;
+    const d = new Date(eventDate);
+    if (isNaN(d.getTime())) return undefined;
+    d.setHours(0, 0, 0, 0);
+    return d;
+  };
+
+  const getDisabledDays = () => {
+    const minDate = getMinAllowedDate();
+    const maxDate = getMaxAllowedDate();
+    if (maxDate) {
+      return { before: minDate, after: maxDate };
+    }
+    return { before: minDate };
   };
 
   const selectedDate = deadlineDateValue ? new Date(deadlineDateValue) : undefined;
@@ -141,6 +162,12 @@ export function InvitationEditForm({ invitation, onBack, onSave }: InvitationEdi
 
   const onSubmit = async (values: FormValues) => {
     if (submitting) return;
+
+    if (!invitation && !selectedFile) {
+      setFileError(dir === 'ltr' ? 'Please upload a design file' : 'يرجى رفع ملف التصميم');
+      return;
+    }
+    setFileError(null);
 
     const mappedLogic = values.logic === 'strict' ? 'strict_action' : values.logic;
     const selectedEvent = events.find(ev => String(ev.id) === values.eventId);
@@ -211,6 +238,7 @@ export function InvitationEditForm({ invitation, onBack, onSave }: InvitationEdi
       const file = e.dataTransfer.files[0];
       setSelectedFile(file);
       setFileName(file.name);
+      setFileError(null);
     }
   };
 
@@ -219,6 +247,7 @@ export function InvitationEditForm({ invitation, onBack, onSave }: InvitationEdi
       const file = e.target.files[0];
       setSelectedFile(file);
       setFileName(file.name);
+      setFileError(null);
     }
   };
 
@@ -390,7 +419,7 @@ export function InvitationEditForm({ invitation, onBack, onSave }: InvitationEdi
                                 field.onChange(`${yyyy}-${mm}-${dd}`);
                                 setShowDatePicker(false);
                               }}
-                              disabled={{ before: getMinAllowedDate() }}
+                              disabled={getDisabledDays()}
                               locale={dir === 'rtl' ? ar : undefined}
                               dir={dir}
                             />
@@ -429,13 +458,18 @@ export function InvitationEditForm({ invitation, onBack, onSave }: InvitationEdi
             {/* Design Upload */}
             <div>
               <label className="block text-sm font-medium text-secondary/80 mb-1.5 ml-1">
-                {t('uploadDesign' as any) || (dir === 'ltr' ? 'Upload Design' : 'رفع التصميم')}
+                {t('uploadDesign' as any) || (dir === 'ltr' ? 'Upload Design' : 'رفع التصميم')} {!invitation && <span className="text-red-500">*</span>}
               </label>
               <div
                 onDragOver={e => e.preventDefault()}
                 onDrop={handleFileDrop}
                 onClick={() => fileInputRef.current?.click()}
-                className="w-full border-2 border-dashed border-secondary/20 rounded-2xl p-8 flex flex-col items-center justify-center text-center cursor-pointer hover:bg-white/50 hover:border-primary/30 transition-all bg-white/30"
+                className={cn(
+                  "w-full border-2 border-dashed rounded-2xl p-8 flex flex-col items-center justify-center text-center cursor-pointer transition-all bg-white/30",
+                  fileError
+                    ? "border-red-500 bg-red-50/20 hover:bg-red-50/30"
+                    : "border-secondary/20 hover:bg-white/50 hover:border-primary/30"
+                )}
               >
                 <input
                   type="file"
@@ -452,6 +486,9 @@ export function InvitationEditForm({ invitation, onBack, onSave }: InvitationEdi
                   {t('uploadDesignDesc' as any) || (dir === 'ltr' ? 'PNG, JPG, WEBP up to 10MB' : 'أقصى حجم 10 ميجابايت (PNG, JPG, WEBP)')}
                 </p>
               </div>
+              {fileError && (
+                <p className="text-xs text-red-500 mt-1.5 ml-1">{fileError}</p>
+              )}
             </div>
 
             {/* Buttons */}

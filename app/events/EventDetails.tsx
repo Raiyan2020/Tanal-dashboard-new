@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useLanguage } from '@/lib/i18n';
-import { getEventById, getClientById, updateEventPaymentStatus, getEventGuests, createEventGuest, importEventGuests, updateEventGuest, deleteEventGuest, type EventDetailData, type Client, type ApiGuest } from '@/lib/api';
+import { getEventById, getClientById, updateEventPaymentStatus, getEventGuests, createEventGuest, importEventGuests, updateEventGuest, deleteEventGuest, getEmployees, assignEventEmployees, type EventDetailData, type Client, type ApiGuest, type ApiEmployee } from '@/lib/api';
 import { COUNTRIES } from '@/app/clients/_client-form';
 import { getToken } from '@/lib/auth';
 import { toast } from 'sonner';
@@ -60,10 +60,6 @@ interface EventDetailsProps {
   onUpdateEvent?: (updatedEvent: AppEvent) => void;
 }
 
-const MOCK_EMPLOYEES = [
-  { id: '1', name: 'John Doe' },
-  { id: '2', name: 'Jane Smith' },
-];
 
 
 
@@ -77,6 +73,7 @@ export function EventDetails({ event, onBack, onEdit, onDelete, onUpdateEvent }:
   const [detail, setDetail] = useState<EventDetailData | null>(null);
   const [client, setClient] = useState<Client | null>(null);
   const [detailLoading, setDetailLoading] = useState(true);
+  const [pdfDownloading, setPdfDownloading] = useState(false);
 
   useEffect(() => {
     if (!token || !event.id) return;
@@ -119,6 +116,14 @@ export function EventDetails({ event, onBack, onEdit, onDelete, onUpdateEvent }:
   const [isUploading, setIsUploading] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [showCreateInvitation, setShowCreateInvitation] = useState(false);
+
+  // ── Assign-employees modal ──────────────────────────────────────────────────
+  const [showAssignModal, setShowAssignModal] = useState(false);
+  const [availableEmployees, setAvailableEmployees] = useState<ApiEmployee[]>([]);
+  const [empSearch, setEmpSearch] = useState('');
+  const [selectedEmpIds, setSelectedEmpIds] = useState<number[]>([]);
+  const [empLoading, setEmpLoading] = useState(false);
+  const [empSubmitting, setEmpSubmitting] = useState(false);
 
   const handleUploadClick = () => {
     fileInputRef.current?.click();
@@ -241,7 +246,484 @@ export function EventDetails({ event, onBack, onEdit, onDelete, onUpdateEvent }:
     }
   };
 
-  const onNavigateToEmployees = () => { /* implement navigation */ };
+  const openAssignModal = async () => {
+    setShowAssignModal(true);
+    // seed selected from currently assigned
+    const current = detail?.related_employee ?? detail?.employees ?? [];
+    setSelectedEmpIds(current.map((e) => e.id));
+
+    // use available_employees from detail if present, otherwise fetch
+    if (detail?.available_employees && detail.available_employees.length > 0) {
+      // merge with current related so they always appear in the list
+      const combined = [...detail.available_employees];
+      current.forEach((emp) => {
+        if (!combined.find((e) => e.id === emp.id)) combined.unshift(emp);
+      });
+      setAvailableEmployees(combined as ApiEmployee[]);
+      return;
+    }
+
+    setEmpLoading(true);
+    try {
+      const res = await getEmployees({ per_page: 100 }, token);
+      setAvailableEmployees(res.data.items);
+    } catch (err) {
+      toast.error((err as Error).message || (dir === 'ltr' ? 'Failed to load employees' : 'فشل تحميل الموظفين'));
+      setShowAssignModal(false);
+    } finally {
+      setEmpLoading(false);
+    }
+  };
+
+  const handleAssignSubmit = async () => {
+    setEmpSubmitting(true);
+    try {
+      await assignEventEmployees(Number(event.id), selectedEmpIds, token);
+      toast.success(dir === 'ltr' ? 'Employees assigned successfully' : 'تم تعيين الموظفين بنجاح');
+      setShowAssignModal(false);
+      // refresh detail to get updated related_employee list
+      const res = await getEventById(Number(event.id), token);
+      setDetail(res.data);
+    } catch (err) {
+      toast.error((err as Error).message || (dir === 'ltr' ? 'Failed to assign employees' : 'فشل تعيين الموظفين'));
+    } finally {
+      setEmpSubmitting(false);
+    }
+  };
+
+  const toggleEmpId = (id: number) => {
+    setSelectedEmpIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
+  const handleDownloadPdf = () => {
+    if (!detail) return;
+    setPdfDownloading(true);
+
+    const printFrame = document.createElement('iframe');
+    printFrame.style.position = 'fixed';
+    printFrame.style.right = '0';
+    printFrame.style.bottom = '0';
+    printFrame.style.width = '0';
+    printFrame.style.height = '0';
+    printFrame.style.border = '0';
+    document.body.appendChild(printFrame);
+
+    const doc = printFrame.contentWindow?.document || printFrame.contentDocument;
+    if (!doc) {
+      setPdfDownloading(false);
+      return;
+    }
+
+    const isRtl = dir === 'rtl';
+
+    // Format numbers
+    const formatKWD = (amountStr: string | null | undefined) => {
+      if (amountStr === null || amountStr === undefined) return '-';
+      const num = parseFloat(amountStr);
+      return isNaN(num) ? '-' : `${num.toFixed(3)} KWD`;
+    };
+
+    const clientName = detail.details.client_name || '-';
+    const eventDate = detail.details.event_date || '-';
+    const eventTime = detail.details.event_time || '-';
+    const hallName = detail.hall?.name || '-';
+    const trans = detail.financial_transaction;
+
+    const paymentTypeLabel = trans?.payment_type === 'single'
+      ? (isRtl ? 'دفعة واحدة' : 'One Payment')
+      : (isRtl ? 'قسطين' : 'Two Installments');
+
+    const paymentStatusLabel = trans?.status === 'paid'
+      ? (isRtl ? 'مدفوع' : 'Paid')
+      : trans?.status === 'installments'
+        ? (isRtl ? 'أقساط' : 'Installments')
+        : trans?.status === 'completed'
+          ? (isRtl ? 'مكتمل' : 'Completed')
+          : trans?.status === 'cancelled'
+            ? (isRtl ? 'ملغي' : 'Cancelled')
+            : (isRtl ? 'غير مدفوع' : 'Unpaid');
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html lang="${isRtl ? 'ar' : 'en'}" dir="${isRtl ? 'rtl' : 'ltr'}">
+        <head>
+          <meta charset="utf-8">
+          <title>${isRtl ? 'سند سداد الحفل' : 'Event Payment Receipt'}</title>
+          <link rel="preconnect" href="https://fonts.googleapis.com">
+          <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+          <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&family=Outfit:wght@400;600;700&display=swap" rel="stylesheet">
+          <style>
+            body {
+              font-family: ${isRtl ? "'Cairo', sans-serif" : "'Outfit', sans-serif"};
+              background-color: #ffffff;
+              color: #1e1e1e;
+              margin: 0;
+              padding: 40px;
+              line-height: 1.6;
+              font-size: 14px;
+            }
+            .receipt-container {
+              max-width: 800px;
+              margin: 0 auto;
+              border: 1px solid #e5e7eb;
+              border-radius: 24px;
+              padding: 40px;
+              box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+            }
+            .header {
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              border-bottom: 2px solid #857363;
+              padding-bottom: 24px;
+              margin-bottom: 30px;
+            }
+            .logo-container h1 {
+              font-size: 28px;
+              margin: 0;
+              color: #857363;
+              font-weight: 700;
+              letter-spacing: 2px;
+            }
+            .logo-container p {
+              margin: 4px 0 0 0;
+              font-size: 12px;
+              color: #6b7280;
+            }
+            .receipt-title {
+              text-align: right;
+            }
+            html[dir="rtl"] .receipt-title {
+              text-align: left;
+            }
+            .receipt-title h2 {
+              margin: 0;
+              font-size: 20px;
+              color: #1e1e1e;
+              font-weight: 600;
+            }
+            .receipt-title p {
+              margin: 4px 0 0 0;
+              font-size: 12px;
+              color: #6b7280;
+              font-family: monospace;
+            }
+            .meta-grid {
+              display: grid;
+              grid-template-cols: 1fr 1fr;
+              gap: 20px;
+              margin-bottom: 30px;
+            }
+            .meta-box {
+              background-color: #f9fafb;
+              border: 1px solid #f3f4f6;
+              border-radius: 16px;
+              padding: 20px;
+            }
+            .meta-box h3 {
+              margin: 0 0 12px 0;
+              font-size: 14px;
+              color: #857363;
+              border-bottom: 1px dashed #e5e7eb;
+              padding-bottom: 8px;
+            }
+            .meta-item {
+              display: flex;
+              justify-content: space-between;
+              margin-bottom: 8px;
+            }
+            .meta-item:last-child {
+              margin-bottom: 0;
+            }
+            .meta-label {
+              color: #6b7280;
+              font-size: 12px;
+            }
+            .meta-value {
+              font-weight: 600;
+              color: #1e1e1e;
+            }
+            .table-container {
+              margin-bottom: 30px;
+            }
+            table {
+              width: 100%;
+              border-collapse: collapse;
+              text-align: left;
+            }
+            html[dir="rtl"] table {
+              text-align: right;
+            }
+            th {
+              background-color: #f9fafb;
+              color: #6b7280;
+              font-weight: 600;
+              padding: 14px 16px;
+              border-bottom: 1px solid #e5e7eb;
+              font-size: 12px;
+            }
+            td {
+              padding: 16px;
+              border-bottom: 1px solid #e5e7eb;
+              color: #1e1e1e;
+            }
+            .status-badge {
+              display: inline-block;
+              padding: 4px 12px;
+              border-radius: 9999px;
+              font-size: 12px;
+              font-weight: 600;
+              text-transform: capitalize;
+            }
+            .status-paid {
+              background-color: #ecfdf5;
+              color: #059669;
+            }
+            .status-installments {
+              background-color: #fffbeb;
+              color: #d97706;
+            }
+            .status-unpaid {
+              background-color: #fef2f2;
+              color: #dc2626;
+            }
+            .summary-section {
+              display: flex;
+              justify-content: flex-end;
+              margin-bottom: 30px;
+            }
+            .summary-box {
+              width: 300px;
+            }
+            .summary-row {
+              display: flex;
+              justify-content: space-between;
+              padding: 10px 0;
+              border-bottom: 1px solid #f3f4f6;
+            }
+            .summary-row.total {
+              border-top: 2px solid #857363;
+              border-bottom: none;
+              padding-top: 14px;
+              margin-top: 6px;
+            }
+            .summary-row.total .val {
+              font-size: 18px;
+              font-weight: 700;
+              color: #857363;
+            }
+            .installments-section {
+              background-color: #fcfbfa;
+              border: 1px solid #f5f2ef;
+              border-radius: 16px;
+              padding: 20px;
+              margin-bottom: 30px;
+            }
+            .installments-section h4 {
+              margin: 0 0 12px 0;
+              color: #857363;
+              font-size: 14px;
+            }
+            .installment-grid {
+              display: grid;
+              grid-template-cols: 1fr 1fr;
+              gap: 20px;
+            }
+            .installment-card {
+              background: #ffffff;
+              border: 1px solid #e5e7eb;
+              border-radius: 12px;
+              padding: 12px 16px;
+            }
+            .installment-card.paid {
+              border-left: 4px solid #059669;
+            }
+            html[dir="rtl"] .installment-card.paid {
+              border-left: none;
+              border-right: 4px solid #059669;
+            }
+            .installment-card.pending {
+              border-left: 4px solid #d97706;
+            }
+            html[dir="rtl"] .installment-card.pending {
+              border-left: none;
+              border-right: 4px solid #d97706;
+            }
+            .inst-header {
+              display: flex;
+              justify-content: space-between;
+              font-size: 12px;
+              color: #6b7280;
+              margin-bottom: 6px;
+            }
+            .inst-amount {
+              font-size: 16px;
+              font-weight: 700;
+              color: #1e1e1e;
+            }
+            .footer {
+              text-align: center;
+              font-size: 12px;
+              color: #9ca3af;
+              margin-top: 50px;
+              border-top: 1px solid #e5e7eb;
+              padding-top: 20px;
+            }
+            @media print {
+              body {
+                padding: 0;
+              }
+              .receipt-container {
+                border: none;
+                box-shadow: none;
+                padding: 0;
+              }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="receipt-container">
+            <div class="header">
+              <div class="logo-container">
+                <h1>TANAL</h1>
+                <p>EVENTS MANAGEMENT</p>
+              </div>
+              <div class="receipt-title">
+                <h2>${isRtl ? 'سند سداد الحفل' : 'Event Payment Receipt'}</h2>
+                <p>#EV-${event.id}</p>
+              </div>
+            </div>
+
+            <div class="meta-grid">
+              <div class="meta-box">
+                <h3>${isRtl ? 'معلومات العميل' : 'Client Info'}</h3>
+                <div class="meta-item">
+                  <span class="meta-label">${isRtl ? 'اسم العميل:' : 'Client Name:'}</span>
+                  <span class="meta-value">${clientName}</span>
+                </div>
+                <div class="meta-item">
+                  <span class="meta-label">${isRtl ? 'رقم الهاتف:' : 'Phone Number:'}</span>
+                  <span class="meta-value" dir="ltr">${client?.full_phone || client?.phone || '-'}</span>
+                </div>
+              </div>
+              
+              <div class="meta-box">
+                <h3>${isRtl ? 'تفاصيل الحفل' : 'Event Details'}</h3>
+                <div class="meta-item">
+                  <span class="meta-label">${isRtl ? 'تاريخ الحفل:' : 'Event Date:'}</span>
+                  <span class="meta-value">${eventDate}</span>
+                </div>
+                <div class="meta-item">
+                  <span class="meta-label">${isRtl ? 'توقيت الحفل:' : 'Event Time:'}</span>
+                  <span class="meta-value" dir="ltr">${eventTime}</span>
+                </div>
+                <div class="meta-item">
+                  <span class="meta-label">${isRtl ? 'القاعة:' : 'Hall Name:'}</span>
+                  <span class="meta-value">${hallName}</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="table-container">
+              <table>
+                <thead>
+                  <tr>
+                    <th>${isRtl ? 'وصف المعاملة' : 'Transaction Description'}</th>
+                    <th>${isRtl ? 'نوع الدفع' : 'Payment Type'}</th>
+                    <th>${isRtl ? 'الحالة' : 'Status'}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>${isRtl ? `حجز حفل - ${clientName}` : `Event Booking - ${clientName}`}</td>
+                    <td>${paymentTypeLabel}</td>
+                    <td>
+                      <span class="status-badge ${trans?.status === 'paid' || trans?.status === 'completed' ? 'status-paid' : trans?.status === 'installments' ? 'status-installments' : 'status-unpaid'}">
+                        ${paymentStatusLabel}
+                      </span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            ${trans?.payment_type === 'two_installments' ? `
+              <div class="installments-section">
+                <h4>${isRtl ? 'تفاصيل الأقساط' : 'Installments Details'}</h4>
+                <div class="installment-grid">
+                  <div class="installment-card paid">
+                    <div class="inst-header">
+                      <span>${isRtl ? 'القسط الأول' : 'First Installment'}</span>
+                      <span style="color: #059669; font-weight: 600;">${isRtl ? 'مدفوع' : 'Paid'}</span>
+                    </div>
+                    <div class="inst-amount">${formatKWD(trans.first_installment_amount)}</div>
+                  </div>
+                  
+                  <div class="installment-card ${parseFloat(trans.remaining_amount) <= 0 ? 'paid' : 'pending'}">
+                    <div class="inst-header">
+                      <span>${isRtl ? 'القسط الثاني' : 'Second Installment'}</span>
+                      <span style="color: ${parseFloat(trans.remaining_amount) <= 0 ? '#059669' : '#d97706'}; font-weight: 600;">
+                        ${parseFloat(trans.remaining_amount) <= 0 ? (isRtl ? 'مدفوع' : 'Paid') : (isRtl ? 'مستحق' : 'Due')}
+                      </span>
+                    </div>
+                    <div class="inst-amount">${formatKWD(trans.second_installment_amount)}</div>
+                    ${trans.second_installment_due_date ? `
+                      <div style="font-size: 11px; color: #6b7280; margin-top: 4px;">
+                        ${isRtl ? 'تاريخ الاستحقاق:' : 'Due Date:'} ${trans.second_installment_due_date}
+                      </div>
+                    ` : ''}
+                  </div>
+                </div>
+              </div>
+            ` : ''}
+
+            <div class="summary-section">
+              <div class="summary-box">
+                <div class="summary-row">
+                  <span class="lbl">${isRtl ? 'المبلغ الإجمالي:' : 'Total Cost:'}</span>
+                  <span class="val">${formatKWD(trans?.total_cost)}</span>
+                </div>
+                <div class="summary-row">
+                  <span class="lbl" style="color: #059669; font-weight: 600;">${isRtl ? 'المدفوع:' : 'Paid Amount:'}</span>
+                  <span class="val" style="color: #059669; font-weight: 600;">${formatKWD(trans?.paid_amount)}</span>
+                </div>
+                <div class="summary-row">
+                  <span class="lbl" style="color: #d97706; font-weight: 600;">${isRtl ? 'المتبقي للتسديد:' : 'Remaining:'}</span>
+                  <span class="val" style="color: #d97706; font-weight: 600;">${formatKWD(trans?.remaining_amount)}</span>
+                </div>
+                <div class="summary-row total">
+                  <span class="lbl">${isRtl ? 'صافي الحساب:' : 'Final Settlement:'}</span>
+                  <span class="val">${formatKWD(trans?.paid_amount)}</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="footer">
+              <p>${isRtl ? 'شكراً لتعاملكم معنا. نتمنى لكم حفلًا رائعاً!' : 'Thank you for choosing TANAL. We wish you a wonderful event!'}</p>
+              <p style="font-size: 10px; margin-top: 10px; color: #d1d5db;">© ${new Date().getFullYear()} TANAL. All rights reserved.</p>
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+
+    doc.open();
+    doc.write(htmlContent);
+    doc.close();
+
+    printFrame.onload = () => {
+      setTimeout(() => {
+        printFrame.contentWindow?.focus();
+        printFrame.contentWindow?.print();
+        setTimeout(() => {
+          document.body.removeChild(printFrame);
+          setPdfDownloading(false);
+        }, 1000);
+      }, 500);
+    };
+  };
 
   if (detailLoading) {
     return (
@@ -551,71 +1033,61 @@ export function EventDetails({ event, onBack, onEdit, onDelete, onUpdateEvent }:
                 <div className="flex items-center justify-between gap-4">
                   <h3 className="font-semibold text-secondary flex items-center gap-2">
                     <User className="w-5 h-5 text-primary" />
-                    {dir === 'ltr' ? 'Assigned Employee' : 'الموظف المختص'}
+                    {dir === 'ltr' ? 'Assigned Employees' : 'الموظفون المختصون'}
+                    <span className="text-xs font-mono bg-secondary/10 px-2 py-0.5 rounded-full text-secondary/70">
+                      {(detail?.related_employee ?? detail?.employees ?? []).length}
+                    </span>
                   </h3>
-                  {!(detail?.employees && detail.employees.length > 0) && !event.assignedEmployeeId && (
-                    <button
-                      onClick={onNavigateToEmployees}
-                      className="px-3 py-1.5 text-xs font-medium bg-primary text-white hover:bg-primary-dark transition-colors rounded-lg shadow-sm cursor-pointer"
-                    >
-                      {dir === 'ltr' ? 'Assign' : 'تعيين'}
-                    </button>
-                  )}
+                  <button
+                    onClick={openAssignModal}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-primary text-white hover:bg-primary-dark transition-colors rounded-lg shadow-sm cursor-pointer"
+                  >
+                    <Edit2 className="w-3.5 h-3.5" />
+                    {dir === 'ltr' ? 'Manage' : 'إدارة'}
+                  </button>
                 </div>
 
-                {detail?.employees && detail.employees.length > 0 ? (
-                  detail.employees.map((emp) => (
-                    <div key={emp.id} className="p-4 rounded-2xl bg-white/40 border border-secondary/5 flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                        <User className="w-5 h-5" />
+                {(() => {
+                  const employees = detail?.related_employee ?? detail?.employees ?? [];
+                  if (employees.length > 0) {
+                    return (
+                      <div className="space-y-3">
+                        {employees.map((emp) => (
+                          <div key={emp.id} className="p-4 rounded-2xl bg-white/40 border border-secondary/5 flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                              <User className="w-5 h-5" />
+                            </div>
+                            <div className="flex flex-col min-w-0 flex-1">
+                              <h4 className="font-medium text-secondary truncate">
+                                {emp.name}
+                              </h4>
+                              <div className="flex items-center text-xs text-secondary/60 gap-1.5 mt-1">
+                                <span className="font-mono">#{emp.id}</span>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                      <div className="flex flex-col min-w-0 flex-1">
-                        <h4 className="font-medium text-secondary truncate">
-                          {emp.name}
-                        </h4>
-                        <div className="flex items-center text-xs text-secondary/60 gap-1.5 mt-1">
-                          <span className="font-mono">#{emp.id}</span>
-                        </div>
-                      </div>
+                    );
+                  }
+                  return (
+                    <div className="flex flex-col items-center justify-center py-6 px-4 text-center gap-3">
+                      <User className="w-10 h-10 text-secondary/20" />
+                      <p className="text-secondary/60 text-sm">
+                        {dir === 'ltr' ? 'No employee is currently assigned to this event.' : 'لا يوجد موظف مختص بهذه المناسبة حالياً.'}
+                      </p>
                       <button
-                        onClick={onNavigateToEmployees}
-                        className="p-2 text-secondary/40 hover:text-primary hover:bg-primary/5 rounded-xl transition-all cursor-pointer"
-                        title={dir === 'ltr' ? 'Change Employee' : 'تغيير الموظف'}
+                        onClick={openAssignModal}
+                        className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-primary text-white hover:bg-primary-dark transition-colors rounded-xl shadow-sm cursor-pointer"
                       >
-                        <Edit2 className="w-4 h-4" />
+                        <Plus className="w-4 h-4" />
+                        {dir === 'ltr' ? 'Assign Employee' : 'تعيين موظف'}
                       </button>
                     </div>
-                  ))
-                ) : event.assignedEmployeeId ? (
-                  <div className="p-4 rounded-2xl bg-white/40 border border-secondary/5 flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                      <User className="w-5 h-5" />
-                    </div>
-                    <div className="flex flex-col min-w-0 flex-1">
-                      <h4 className="font-medium text-secondary truncate">
-                        {MOCK_EMPLOYEES.find(e => e.id === event.assignedEmployeeId)?.name || (dir === 'ltr' ? 'Unknown Employee' : 'موظف غير معروف')}
-                      </h4>
-                      <div className="flex items-center text-xs text-secondary/60 gap-1.5 mt-1">
-                        <span className="font-mono">#{event.assignedEmployeeId}</span>
-                      </div>
-                    </div>
-                    <button
-                      onClick={onNavigateToEmployees}
-                      className="p-2 text-secondary/40 hover:text-primary hover:bg-primary/5 rounded-xl transition-all cursor-pointer"
-                      title={dir === 'ltr' ? 'Change Employee' : 'تغيير الموظف'}
-                    >
-                      <Edit2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center py-6 px-4 text-center">
-                    <User className="w-10 h-10 text-secondary/20 mb-2" />
-                    <p className="text-secondary/60 text-sm">
-                      {dir === 'ltr' ? 'No employee is currently assigned to this event.' : 'لا يوجد موظف مختص بهذه المناسبة حالياً.'}
-                    </p>
-                  </div>
-                )}
+                  );
+                })()}
               </div>
+
             </div>
 
             <div className="space-y-6">
@@ -668,8 +1140,16 @@ export function EventDetails({ event, onBack, onEdit, onDelete, onUpdateEvent }:
                     <Banknote className="w-5 h-5 text-primary" />
                     {dir === 'ltr' ? 'Transactions & Payments' : 'المعاملات والمدفوعات'}
                   </h3>
-                  <button className="flex items-center gap-1.5 px-3 py-1.5 bg-white/40 hover:bg-white/60 transition-colors rounded-lg text-xs font-medium text-secondary shadow-sm ring-1 ring-secondary/5 cursor-pointer">
-                    <Download className="w-3.5 h-3.5" />
+                  <button
+                    onClick={handleDownloadPdf}
+                    disabled={pdfDownloading}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-white/40 hover:bg-white/60 disabled:opacity-50 transition-colors rounded-lg text-xs font-medium text-secondary shadow-sm ring-1 ring-secondary/5 cursor-pointer"
+                  >
+                    {pdfDownloading ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Download className="w-3.5 h-3.5" />
+                    )}
                     {dir === 'ltr' ? 'Download PDF' : 'تحميل PDF'}
                   </button>
                 </div>
@@ -1042,6 +1522,7 @@ export function EventDetails({ event, onBack, onEdit, onDelete, onUpdateEvent }:
         <CreateInvitationModal
           eventId={Number(event.id)}
           eventName={event.name || String(event.id)}
+          eventDate={detail?.details?.event_date || event.eventDate}
           onClose={() => setShowCreateInvitation(false)}
           onCreated={() => {
             // Refresh detail so the invitations panel updates
@@ -1056,6 +1537,146 @@ export function EventDetails({ event, onBack, onEdit, onDelete, onUpdateEvent }:
           }}
         />
       )}
+
+      {/* Assign Employees Modal */}
+      <AnimatePresence>
+        {showAssignModal && (
+          <motion.div
+            key="assign-emp-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+            onClick={(e) => { if (e.target === e.currentTarget) setShowAssignModal(false); }}
+          >
+            <motion.div
+              key="assign-emp-panel"
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+              className="w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]"
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between px-6 py-5 border-b border-secondary/10">
+                <div className="flex items-center gap-2">
+                  <div className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+                    <Users className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-secondary text-sm">
+                      {dir === 'ltr' ? 'Assign Employees' : 'تعيين الموظفين'}
+                    </h3>
+                    <p className="text-xs text-secondary/50">
+                      {selectedEmpIds.length} {dir === 'ltr' ? 'selected' : 'محدد'}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowAssignModal(false)}
+                  className="w-8 h-8 flex items-center justify-center rounded-xl text-secondary/40 hover:text-secondary hover:bg-secondary/5 transition-all cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Search */}
+              <div className="px-6 py-4 border-b border-secondary/5">
+                <div className="relative">
+                  <Search className={cn('absolute top-1/2 -translate-y-1/2 w-4 h-4 text-secondary/40', dir === 'ltr' ? 'left-3' : 'right-3')} />
+                  <input
+                    type="text"
+                    value={empSearch}
+                    onChange={(e) => setEmpSearch(e.target.value)}
+                    placeholder={dir === 'ltr' ? 'Search employees…' : 'البحث عن موظف…'}
+                    className={cn(
+                      'w-full bg-secondary/5 rounded-xl py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all',
+                      dir === 'ltr' ? 'pl-9 pr-4' : 'pr-9 pl-4'
+                    )}
+                  />
+                </div>
+              </div>
+
+              {/* List */}
+              <div className="flex-1 overflow-y-auto px-6 py-4 space-y-2">
+                {empLoading ? (
+                  <div className="flex justify-center items-center py-12">
+                    <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                  </div>
+                ) : availableEmployees.filter((e) =>
+                    e.name.toLowerCase().includes(empSearch.toLowerCase())
+                  ).length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-10 text-secondary/40 gap-2">
+                    <Users className="w-10 h-10" />
+                    <p className="text-sm">{dir === 'ltr' ? 'No employees found' : 'لا يوجد موظفون'}</p>
+                  </div>
+                ) : (
+                  availableEmployees
+                    .filter((e) => e.name.toLowerCase().includes(empSearch.toLowerCase()))
+                    .map((emp) => {
+                      const checked = selectedEmpIds.includes(emp.id);
+                      return (
+                        <button
+                          key={emp.id}
+                          onClick={() => toggleEmpId(emp.id)}
+                          className={cn(
+                            'w-full flex items-center gap-3 p-3 rounded-2xl border transition-all text-left cursor-pointer',
+                            checked
+                              ? 'bg-primary/8 border-primary/30 ring-1 ring-primary/20'
+                              : 'bg-white border-secondary/10 hover:bg-secondary/5 hover:border-secondary/20'
+                          )}
+                        >
+                          <div className={cn(
+                            'w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-colors',
+                            checked ? 'bg-primary text-white' : 'bg-secondary/8 text-secondary/50'
+                          )}>
+                            {checked ? <CheckCircle2 className="w-5 h-5" /> : <User className="w-5 h-5" />}
+                          </div>
+                          <div className="flex flex-col min-w-0 flex-1">
+                            <span className="font-medium text-secondary text-sm truncate">{emp.name}</span>
+                            <span className="text-xs text-secondary/50 font-mono">#{emp.id}</span>
+                          </div>
+                          <div className={cn(
+                            'w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 transition-all',
+                            checked ? 'bg-primary border-primary' : 'border-secondary/30'
+                          )}>
+                            {checked && (
+                              <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                              </svg>
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="px-6 py-4 border-t border-secondary/10 flex items-center gap-3">
+                <button
+                  onClick={() => setShowAssignModal(false)}
+                  className="flex-1 py-2.5 rounded-xl border border-secondary/15 text-secondary/70 text-sm font-medium hover:bg-secondary/5 transition-colors cursor-pointer"
+                >
+                  {dir === 'ltr' ? 'Cancel' : 'إلغاء'}
+                </button>
+                <button
+                  onClick={handleAssignSubmit}
+                  disabled={empSubmitting}
+                  className="flex-1 py-2.5 rounded-xl bg-primary text-white text-sm font-medium hover:bg-primary-dark transition-colors shadow-sm disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  {empSubmitting ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <CheckCircle2 className="w-4 h-4" />
+                  )}
+                  {dir === 'ltr' ? 'Save' : 'حفظ'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
     </motion.div>
   );

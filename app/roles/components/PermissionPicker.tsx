@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLanguage } from '@/lib/i18n';
 import { AnimatePresence, motion } from 'motion/react';
 import { Search, CheckSquare, Square, ChevronDown, ChevronUp } from 'lucide-react';
@@ -19,13 +19,34 @@ export function PermissionPicker({ groups, selected, onChange }: PermPickerProps
   const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState('');
 
-  const toggle = (id: number) => {
+  useEffect(() => {
+    // Collect dashboard permission IDs that are missing from selected Set
+    const dashIds: number[] = [];
+    groups.forEach(g => {
+      if (g.module === 'dashboard') {
+        g.permissions.forEach(p => {
+          if (!selected.has(p.id)) {
+            dashIds.push(p.id);
+          }
+        });
+      }
+    });
+    if (dashIds.length > 0) {
+      const next = new Set(selected);
+      dashIds.forEach(id => next.add(id));
+      onChange(next);
+    }
+  }, [groups, selected, onChange]);
+
+  const toggle = (id: number, isDashboard?: boolean) => {
+    if (isDashboard) return;
     const next = new Set(selected);
     next.has(id) ? next.delete(id) : next.add(id);
     onChange(next);
   };
 
   const toggleGroup = (group: PermissionGroup) => {
+    if (group.module === 'dashboard') return;
     const ids = group.permissions.map(p => p.id);
     const allOn = ids.every(id => selected.has(id));
     const next = new Set(selected);
@@ -44,7 +65,16 @@ export function PermissionPicker({ groups, selected, onChange }: PermPickerProps
     const all = groups.flatMap(g => g.permissions.map(p => p.id));
     onChange(new Set(all));
   };
-  const clearAll = () => onChange(new Set());
+
+  const clearAll = () => {
+    const next = new Set<number>();
+    groups.forEach(g => {
+      if (g.module === 'dashboard') {
+        g.permissions.forEach(p => next.add(p.id));
+      }
+    });
+    onChange(next);
+  };
 
   const filtered = search.trim()
     ? groups.map(g => ({
@@ -90,6 +120,7 @@ export function PermissionPicker({ groups, selected, onChange }: PermPickerProps
           const allChecked = checkedCount === groupIds.length;
           const someChecked = checkedCount > 0 && !allChecked;
           const isOpen = openGroups.has(group.module);
+          const isDashGroup = group.module === 'dashboard';
 
           return (
             <div key={group.module} className="rounded-2xl border border-secondary/8 bg-white/30 overflow-hidden">
@@ -97,7 +128,8 @@ export function PermissionPicker({ groups, selected, onChange }: PermPickerProps
                 <button
                   type="button"
                   onClick={() => toggleGroup(group)}
-                  className="flex items-center gap-2 cursor-pointer"
+                  disabled={isDashGroup}
+                  className={cn("flex items-center gap-2", isDashGroup ? "cursor-not-allowed opacity-80" : "cursor-pointer")}
                 >
                   <span className={cn(
                     'w-4.5 h-4.5 rounded border flex items-center justify-center shrink-0 transition-colors',
@@ -126,34 +158,44 @@ export function PermissionPicker({ groups, selected, onChange }: PermPickerProps
                     className="overflow-hidden"
                   >
                     <div className="px-4 pb-3 grid grid-cols-1 sm:grid-cols-2 gap-2 border-t border-secondary/8 pt-3">
-                      {group.permissions.map(perm => (
-                        <button
-                          key={perm.id}
-                          type="button"
-                          onClick={() => toggle(perm.id)}
-                          className={cn(
-                            'flex items-center gap-2.5 p-2.5 rounded-xl border text-sm transition-all cursor-pointer text-start',
-                            selected.has(perm.id)
-                              ? 'bg-primary/8 border-primary/30 text-primary'
-                              : 'bg-white/50 border-secondary/10 text-secondary/70 hover:border-secondary/20 hover:bg-white/70'
-                          )}
-                        >
-                          <span className={cn(
-                            'w-4 h-4 rounded border shrink-0 flex items-center justify-center transition-colors',
-                            selected.has(perm.id) ? 'bg-primary border-primary' : 'border-secondary/30 bg-white'
-                          )}>
-                            {selected.has(perm.id) && (
-                              <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 10 8">
-                                <path d="M1 4l3 3 5-6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                              </svg>
+                      {group.permissions.map(perm => {
+                        const isDash = perm.module === 'dashboard' || perm.name === 'dashboard';
+                        return (
+                          <button
+                            key={perm.id}
+                            type="button"
+                            onClick={() => toggle(perm.id, isDash)}
+                            disabled={isDash}
+                            className={cn(
+                              'flex items-center gap-2.5 p-2.5 rounded-xl border text-sm transition-all text-start',
+                              isDash
+                                ? 'bg-primary/5 border-primary/20 text-primary/70 cursor-not-allowed opacity-80'
+                                : selected.has(perm.id)
+                                  ? 'bg-primary/8 border-primary/30 text-primary cursor-pointer'
+                                  : 'bg-white/50 border-secondary/10 text-secondary/70 hover:border-secondary/20 hover:bg-white/70 cursor-pointer'
                             )}
-                          </span>
-                          <span className="flex-1 leading-snug">{perm.label}</span>
-                          <span className={cn('text-[10px] px-1.5 py-0.5 rounded-full border shrink-0', actionColor(perm.action))}>
-                            {perm.action}
-                          </span>
-                        </button>
-                      ))}
+                          >
+                            <span className={cn(
+                              'w-4 h-4 rounded border shrink-0 flex items-center justify-center transition-colors',
+                              selected.has(perm.id) ? 'bg-primary border-primary' : 'border-secondary/30 bg-white'
+                            )}>
+                              {selected.has(perm.id) && (
+                                <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 10 8">
+                                  <path d="M1 4l3 3 5-6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                                </svg>
+                              )}
+                            </span>
+                            <span className="flex-1 leading-snug">{perm.label}</span>
+                            {isDash ? (
+                              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-primary/75 shrink-0"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                            ) : (
+                              <span className={cn('text-[10px] px-1.5 py-0.5 rounded-full border shrink-0', actionColor(perm.action))}>
+                                {perm.action}
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
                     </div>
                   </motion.div>
                 )}

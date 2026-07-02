@@ -44,11 +44,11 @@ export default function InvitationsClient({
 
   const [invitations, setInvitations] = useState<Invitation[]>(initialData ?? []);
   const [invitationToDelete, setInvitationToDelete] = useState<string | null>(null);
-  
+
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingInvitation, setEditingInvitation] = useState<Invitation | null>(null);
   const [viewingInvitation, setViewingInvitation] = useState<Invitation | null>(null);
-  
+
   const [createdInvitationData, setCreatedInvitationData] = useState<any | null>(null);
 
   const [page, setPage] = useState(1);
@@ -71,10 +71,10 @@ export default function InvitationsClient({
     if (!token) return;
     setListLoading(true);
     try {
-      const periodParam = 
-        primaryFilter === 'past' ? 'previous' 
-        : primaryFilter === 'upcoming' ? 'upcoming' 
-        : undefined;
+      const periodParam =
+        primaryFilter === 'past' ? 'previous'
+          : primaryFilter === 'upcoming' ? 'upcoming'
+            : undefined;
 
       const res = await getInvitations(token, {
         page,
@@ -139,22 +139,22 @@ export default function InvitationsClient({
   const getStatusDisplay = (status: InvitationStatus) => {
     switch (status) {
       case 'sent':
-        return { 
-          icon: Send, 
-          label: t('sent' as any) || (dir === 'ltr' ? 'Sent' : 'مرسلة'), 
-          colors: 'text-emerald-600 bg-emerald-50 ring-emerald-500/20' 
+        return {
+          icon: Send,
+          label: t('sent' as any) || (dir === 'ltr' ? 'Sent' : 'مرسلة'),
+          colors: 'text-emerald-600 bg-emerald-50 ring-emerald-500/20'
         };
       case 'unsent':
-        return { 
-          icon: Clock, 
-          label: t('unsent' as any) || (dir === 'ltr' ? 'Unsent' : 'غير مرسلة'), 
-          colors: 'text-amber-600 bg-amber-50 ring-amber-500/20' 
+        return {
+          icon: Clock,
+          label: t('unsent' as any) || (dir === 'ltr' ? 'Unsent' : 'غير مرسلة'),
+          colors: 'text-amber-600 bg-amber-50 ring-amber-500/20'
         };
       case 'past':
-        return { 
-          icon: Calendar, 
-          label: t('past' as any) || (dir === 'ltr' ? 'Past' : 'سابقة'), 
-          colors: 'text-gray-600 bg-gray-50 ring-gray-500/20' 
+        return {
+          icon: Calendar,
+          label: t('past' as any) || (dir === 'ltr' ? 'Past' : 'سابقة'),
+          colors: 'text-gray-600 bg-gray-50 ring-gray-500/20'
         };
     }
   };
@@ -183,7 +183,7 @@ export default function InvitationsClient({
 
   if (isCreateModalOpen || editingInvitation) {
     return (
-      <InvitationEditForm 
+      <InvitationEditForm
         invitation={editingInvitation}
         onBack={() => {
           setIsCreateModalOpen(false);
@@ -193,7 +193,7 @@ export default function InvitationsClient({
           if (editingInvitation) {
             setInvitations(invitations.map(inv => inv.id === savedInvitation.id ? savedInvitation : inv));
             if (viewingInvitation?.id === savedInvitation.id) {
-               setViewingInvitation(savedInvitation);
+              setViewingInvitation(savedInvitation);
             }
           } else {
             if (rawData) {
@@ -210,9 +210,9 @@ export default function InvitationsClient({
 
   if (viewingInvitation) {
     return (
-      <InvitationDetails 
-        invitation={viewingInvitation} 
-        onBack={() => setViewingInvitation(null)} 
+      <InvitationDetails
+        invitation={viewingInvitation}
+        onBack={() => setViewingInvitation(null)}
         onNavigateToEventGuests={(eventId) => {
           router.push(`/events?eventId=${eventId}`);
         }}
@@ -332,24 +332,24 @@ export default function InvitationsClient({
                             {statusInfo.label}
                           </span>
                         </div>
-                        
+
                         <div className="flex flex-col sm:flex-row sm:items-center text-sm text-secondary/60 gap-2 sm:gap-4 mt-1">
                           <div className="flex items-center gap-1.5">
-                             <Calendar className="w-3.5 h-3.5 shrink-0" />
-                             <span>{t('deadline' as any) || (dir === 'ltr' ? 'Deadline' : 'الموعد النهائي')}: {invitation.deadlineDate}</span>
+                            <Calendar className="w-3.5 h-3.5 shrink-0" />
+                            <span>{t('deadline' as any) || (dir === 'ltr' ? 'Deadline' : 'الموعد النهائي')}: {invitation.deadlineDate}</span>
                           </div>
                           <span className="hidden sm:block w-1 h-1 rounded-full bg-secondary/20 shrink-0" />
                           <div className="flex items-center gap-1.5">
-                             <Users className="w-3.5 h-3.5 shrink-0" />
-                             <span>{invitation.guestsNumber} {t('guests' as any) || (dir === 'ltr' ? 'Guests' : 'الضيوف')}</span>
+                            <Users className="w-3.5 h-3.5 shrink-0" />
+                            <span>{invitation.guestsNumber} {t('guests' as any) || (dir === 'ltr' ? 'Guests' : 'الضيوف')}</span>
                           </div>
                           <span className="hidden sm:block w-1 h-1 rounded-full bg-secondary/20 shrink-0" />
                           <span className="font-mono text-xs">{invitation.id}</span>
                         </div>
                       </div>
-                      
+
                       <div className="flex items-center gap-2 mt-3 md:mt-0 border-t border-secondary/5 md:border-none pt-3 md:pt-0 justify-end shrink-0" onClick={e => e.stopPropagation()}>
-                        <button 
+                        <button
                           title={dir === 'ltr' ? "View" : "عرض"}
                           onClick={() => setViewingInvitation(invitation)}
                           className="p-2 sm:p-2.5 bg-white text-blue-500 border border-transparent hover:bg-blue-50 hover:border-blue-200 hover:text-blue-600 hover:-translate-y-[2px] hover:scale-[1.03] hover:shadow-md active:scale-95 active:translate-y-0 rounded-xl transition-all duration-200 ease-out flex items-center justify-center cursor-pointer"
@@ -357,7 +357,7 @@ export default function InvitationsClient({
                           <Eye className="w-4 h-4" />
                         </button>
                         {invitation.status !== 'past' && (
-                          <button 
+                          <button
                             title={t('edit' as any) || (dir === 'ltr' ? 'Edit' : 'تعديل')}
                             onClick={() => setEditingInvitation(invitation)}
                             className="p-2 sm:p-2.5 bg-white text-yellow-500 border border-transparent hover:bg-yellow-50 hover:border-yellow-200 hover:text-yellow-600 hover:-translate-y-[2px] hover:scale-[1.03] hover:shadow-md active:scale-95 active:translate-y-0 rounded-xl transition-all duration-200 ease-out flex items-center justify-center cursor-pointer"
@@ -366,7 +366,7 @@ export default function InvitationsClient({
                           </button>
                         )}
                         {invitation.status === 'unsent' && (
-                          <button 
+                          <button
                             title={t('remove' as any) || (dir === 'ltr' ? 'Remove' : 'إزالة')}
                             onClick={() => setInvitationToDelete(invitation.id)}
                             className="p-2 sm:p-2.5 bg-white text-red-500 border border-transparent hover:bg-red-50 hover:border-red-200 hover:text-red-600 hover:-translate-y-[2px] hover:scale-[1.03] hover:shadow-md active:scale-95 active:translate-y-0 rounded-xl transition-all duration-200 ease-out flex items-center justify-center cursor-pointer"
@@ -379,7 +379,7 @@ export default function InvitationsClient({
                   );
                 })
               ) : (
-                <motion.div 
+                <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   className="flex flex-col items-center justify-center py-12 text-secondary/40 text-center px-4"
@@ -452,12 +452,19 @@ export default function InvitationsClient({
                 </div>
                 <div className="flex justify-between items-center py-2 border-b border-secondary/5 text-sm">
                   <span className="text-secondary/60 font-medium">{dir === 'ltr' ? 'Event Name' : 'اسم الحفل'}</span>
-                  <span className="font-bold text-secondary max-w-[200px] truncate">{createdInvitationData.name || (createdInvitationData.event && createdInvitationData.event.name)}</span>
+                  <span className="font-bold text-secondary max-w-[300px] truncate">{createdInvitationData.name || (createdInvitationData.event && createdInvitationData.event.name)}</span>
                 </div>
                 <div className="flex justify-between items-center py-2 border-b border-secondary/5 text-sm">
                   <span className="text-secondary/60 font-medium">{dir === 'ltr' ? 'Logic Type' : 'منطق الدعوة'}</span>
                   <span className="font-bold text-secondary bg-primary/10 text-primary px-2.5 py-0.5 rounded-full text-xs">
-                    {createdInvitationData.logic_type}
+                    {(() => {
+                      const type = createdInvitationData.logic_type;
+                      const isRtl = dir === 'rtl';
+                      if (type === 'strict' || type === 'strict_action') return isRtl ? 'إجراء صارم' : 'Strict Action';
+                      if (type === 'default_accept') return isRtl ? 'قبول تلقائي' : 'Default Accept';
+                      if (type === 'view_only') return isRtl ? 'للعرض فقط' : 'View Only';
+                      return type;
+                    })()}
                   </span>
                 </div>
                 <div className="flex justify-between items-center py-2 border-b border-secondary/5 text-sm">
