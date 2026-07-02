@@ -464,6 +464,8 @@ const translations: Record<Language, Record<string, string>> = {
     selectChoice: 'Select choice...',
     selectEmployeeToAdd: 'Select employee to add...',
     noEmployeesSelected: 'No employees selected',
+    nameMax30: 'Name must not exceed 30 characters',
+    usernameMax30: 'Username must not exceed 30 characters',
   },
   ar: {
     dashboard: 'لوحة التحكم',
@@ -923,6 +925,8 @@ const translations: Record<Language, Record<string, string>> = {
     selectChoice: 'اختر خياراً...',
     selectEmployeeToAdd: 'اختر موظفاً لإضافته...',
     noEmployeesSelected: 'لم يتم اختيار موظفين',
+    nameMax30: 'يجب ألا يتجاوز الاسم 30 حرفاً',
+    usernameMax30: 'يجب ألا يتجاوز اسم المستخدم 30 حرفاً',
   }
 };
 

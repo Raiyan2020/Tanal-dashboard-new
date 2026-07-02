@@ -8,6 +8,7 @@ import { motion } from 'motion/react';
 import { ChevronLeft, ChevronRight, Eye, EyeOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useLanguage } from '@/lib/i18n';
+import { COUNTRIES } from '@/app/clients/_client-form';
 
 import {
   Form,
@@ -37,10 +38,14 @@ export function EmployeeEditForm({ employee, onBack, onSave }: EmployeeEditFormP
   const [showPassword, setShowPassword] = useState(false);
 
   const schema = React.useMemo(() => z.object({
-    name: z.string().min(1, { message: t('nameRequired') }),
+    name: z.string()
+      .min(1, { message: t('nameRequired') })
+      .max(30, { message: t('nameMax30') }),
     countryCode: z.string().min(1),
     phone: z.string().min(1, { message: t('phoneRequired') }),
-    username: z.string().min(1, { message: t('usernameRequired') }),
+    username: z.string()
+      .min(1, { message: t('usernameRequired') })
+      .max(30, { message: t('usernameMax30') }),
     password: z.string().optional().refine(val => {
       if (!employee && (!val || val.trim() === '')) return false;
       return true;
@@ -137,14 +142,19 @@ export function EmployeeEditForm({ employee, onBack, onSave }: EmployeeEditFormP
                         <FormControl>
                           <select
                             {...field}
-                            className="w-full appearance-none bg-white/50 border border-secondary/20 focus:border-primary/50 focus:ring-2 focus:ring-primary/20 rounded-xl py-3 pl-4 pr-10 transition-all outline-none text-secondary text-sm font-medium h-[50px] cursor-pointer"
+                            className="w-full appearance-none bg-white/50 border border-secondary/20 focus:border-primary/50 focus:ring-2 focus:ring-primary/20 rounded-xl py-3 ps-3 pe-8 transition-all outline-none text-secondary text-sm font-medium h-[50px] cursor-pointer"
                           >
-                            <option value="+966">SA (+966)</option>
-                            <option value="+965">KW (+965)</option>
+                            {COUNTRIES.map(c => (
+                              <option key={c.iso} value={c.code}>
+                                {c.flag} {c.code} ({dir === 'ltr' ? c.name : c.nameAr})
+                              </option>
+                            ))}
                           </select>
                         </FormControl>
-                        <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-secondary/50">
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>
+                        <div className="absolute inset-y-0 end-0 flex items-center pe-2.5 pointer-events-none text-secondary/50">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="m6 9 6 6 6-6" />
+                          </svg>
                         </div>
                       </div>
                       <FormMessage />

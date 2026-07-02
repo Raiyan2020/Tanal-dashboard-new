@@ -187,22 +187,6 @@ export default function LoginPage() {
                 </>
               )}
             </button>
-
-            <button
-              type="button"
-              onClick={() => router.push('/client-portal')}
-              className="w-full mt-4 bg-white/60 hover:bg-white border border-primary/20 text-primary-dark rounded-xl py-3.5 font-medium transition-all shadow-sm hover:shadow-md flex justify-center items-center gap-2 cursor-pointer"
-            >
-              {dir === 'ltr' ? 'Temporary Client Link' : 'رابط العميل التجريبي'}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => router.push('/guest-view')}
-              className="w-full mt-3 bg-secondary/5 hover:bg-secondary/10 border border-secondary/10 text-secondary-dark rounded-xl py-3.5 font-medium transition-all shadow-sm hover:shadow-md flex justify-center items-center gap-2 cursor-pointer"
-            >
-              {dir === 'ltr' ? 'Temporary Guest Link' : 'رابط الضيف التجريبي'}
-            </button>
           </form>
         </Form>
 

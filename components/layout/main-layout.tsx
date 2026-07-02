@@ -36,19 +36,19 @@ import { ProfileEditDialog } from './profile-edit-dialog';
  * `permission: null` means always visible (e.g. dashboard).
  */
 const navItems = [
-  { icon: LayoutDashboard, id: 'dashboard',     permission: null },
-  { icon: UserCog,         id: 'admins',         permission: 'admins' },
-  { icon: ShieldCheck,     id: 'roles',          permission: 'roles' },
-  { icon: Users,           id: 'clients',        permission: 'clients' },
-  { icon: CalendarDays,    id: 'events',         permission: 'events' },
-  { icon: MailPlus,        id: 'invitations',    permission: 'invitations' },
-  { icon: ShoppingBag,     id: 'serviceOrders',  permission: 'service-orders' },
-  { icon: Layers,          id: 'services',       permission: 'services' },
+  { icon: LayoutDashboard, id: 'dashboard', permission: null },
+  { icon: UserCog, id: 'admins', permission: 'admins' },
+  { icon: ShieldCheck, id: 'roles', permission: 'roles' },
+  { icon: Users, id: 'clients', permission: 'clients' },
+  { icon: CalendarDays, id: 'events', permission: 'events' },
+  { icon: MailPlus, id: 'invitations', permission: 'invitations' },
+  { icon: ShoppingBag, id: 'serviceOrders', permission: 'service-orders' },
+  { icon: Layers, id: 'services', permission: 'services' },
   { icon: SlidersHorizontal, id: 'serviceOptions', permission: 'service-options' },
-  { icon: Briefcase,       id: 'employees',      permission: 'employees' },
-  { icon: Wallet,          id: 'financial',      permission: 'finance' },
-  { icon: Globe,           id: 'landingPage',    permission: 'landing-page' },
-  { icon: Settings,        id: 'settings',       permission: 'show-settings' },
+  { icon: Briefcase, id: 'employees', permission: 'employees' },
+  { icon: Wallet, id: 'financial', permission: 'finance' },
+  { icon: Globe, id: 'landingPage', permission: 'landing-page' },
+  { icon: Settings, id: 'settings', permission: 'show-settings' },
 ];
 
 // Map nav ids that differ from their URL segment

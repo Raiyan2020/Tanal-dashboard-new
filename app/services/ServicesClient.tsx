@@ -9,6 +9,17 @@ import {
   GripVertical, Loader2, UploadCloud
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/form';
 import { OptionType, OPTION_TYPE_LABELS, type ServiceOptionSelectValue } from '@/lib/serviceOptionsStore';
 import {
   getServices, getServiceById, createService, updateService, deleteService,
@@ -75,6 +86,10 @@ function OptionModal({
   };
 
   const handleConfirmSave = async () => {
+    if (selectedIds.length === 0) {
+      toast.error(language === 'ar' ? 'يجب اختيار خيار واحد على الأقل' : 'Please select at least one option');
+      return;
+    }
     setSaving(true);
     try {
       await assignServiceOptions(Number(serviceId), selectedIds, token);
@@ -125,36 +140,43 @@ function OptionModal({
               {language === 'ar' ? 'لا توجد خيارات خدمة مضافة حالياً. يرجى إضافتها أولاً.' : 'No service options available yet.'}
             </p>
           ) : (
-            <div className="space-y-2">
-              {globalOptions.map(opt => {
-                const isChecked = selectedIds.includes(opt.id);
-                return (
-                  <button
-                    key={opt.id}
-                    type="button"
-                    onClick={() => toggleOption(opt.id)}
-                    className={cn(
-                      "w-full flex items-center justify-between p-4 rounded-2xl border transition-all text-start cursor-pointer",
-                      isChecked
-                        ? "border-primary bg-primary/5 text-secondary font-semibold"
-                        : "border-secondary/10 hover:bg-secondary/5 text-secondary/70"
-                    )}
-                  >
-                    <div className="flex flex-col">
-                      <span className="text-sm font-medium">{opt.name}</span>
-                      <span className="text-[10px] text-secondary/50 mt-1 uppercase font-semibold">
-                        {opt.type} • {opt.is_required ? t('optionRequired') : (language === 'ar' ? 'اختياري' : 'Optional')}
-                      </span>
-                    </div>
-                    <div className={cn(
-                      "w-5 h-5 rounded-md border flex items-center justify-center transition-colors",
-                      isChecked ? "bg-primary border-primary text-white" : "border-secondary/20 bg-white"
-                    )}>
-                      {isChecked && <Check className="w-3.5 h-3.5" />}
-                    </div>
-                  </button>
-                );
-              })}
+            <div className="space-y-4">
+              <div className="space-y-2">
+                {globalOptions.map(opt => {
+                  const isChecked = selectedIds.includes(opt.id);
+                  return (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => toggleOption(opt.id)}
+                      className={cn(
+                        "w-full flex items-center justify-between p-4 rounded-2xl border transition-all text-start cursor-pointer",
+                        isChecked
+                          ? "border-primary bg-primary/5 text-secondary font-semibold"
+                          : "border-secondary/10 hover:bg-secondary/5 text-secondary/70"
+                      )}
+                    >
+                      <div className="flex flex-col">
+                        <span className="text-sm font-medium">{opt.name}</span>
+                        <span className="text-[10px] text-secondary/50 mt-1 uppercase font-semibold">
+                          {opt.type} • {opt.is_required ? t('optionRequired') : (language === 'ar' ? 'اختياري' : 'Optional')}
+                        </span>
+                      </div>
+                      <div className={cn(
+                        "w-5 h-5 rounded-md border flex items-center justify-center transition-colors",
+                        isChecked ? "bg-primary border-primary text-white" : "border-secondary/20 bg-white"
+                      )}>
+                        {isChecked && <Check className="w-3.5 h-3.5" />}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+              {selectedIds.length === 0 && (
+                <p className="text-xs text-red-500 font-semibold text-center mt-1">
+                  {language === 'ar' ? 'يجب تحديد خيار خدمة واحد على الأقل.' : 'At least one service option must be selected.'}
+                </p>
+              )}
             </div>
           )}
         </div>
@@ -165,9 +187,9 @@ function OptionModal({
           </button>
           <button
             type="button"
-            disabled={loading || saving}
+            disabled={loading || saving || selectedIds.length === 0}
             onClick={handleConfirmSave}
-            className="flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-white bg-primary hover:bg-primary/90 disabled:opacity-50 rounded-xl transition-colors cursor-pointer shadow-sm shadow-primary/20"
+            className="flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-white bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-colors cursor-pointer shadow-sm shadow-primary/20"
           >
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
             {t('saveChanges')}
@@ -748,9 +770,11 @@ export default function ServicesClient({
           </span>
           <div className="flex gap-2 flex-wrap">
             {(Object.keys(OPTION_TYPE_LABELS) as OptionType[]).map(type => {
+              const meta = OPTION_TYPE_LABELS[type];
+              const displayLabel = meta ? (language === 'ar' ? meta.ar : meta.en) : type;
               return (
                 <span key={type} className={cn('flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold', TYPE_COLORS[type])}>
-                  {type}
+                  {displayLabel}
                 </span>
               );
             })}
@@ -772,29 +796,61 @@ function ServiceModal({
   language: string;
 }) {
   const { t, dir } = useLanguage();
-  const [nameAr, setNameAr] = useState(initial?.name_ar || '');
-  const [nameEn, setNameEn] = useState(initial?.name_en || '');
-  const [descriptionAr, setDescriptionAr] = useState(initial?.description_ar || '');
-  const [descriptionEn, setDescriptionEn] = useState(initial?.description_en || '');
-  const [sortOrder, setSortOrder] = useState(initial?.sort_order ?? 0);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(initial?.image_url || null);
+  const [imageError, setImageError] = useState<string | null>(null);
+
+  const schema = React.useMemo(() => z.object({
+    name_ar: z.string().min(1, { message: dir === 'ltr' ? 'Arabic name is required' : 'الاسم بالعربية مطلوب' }),
+    name_en: z.string().min(1, { message: dir === 'ltr' ? 'English name is required' : 'الاسم بالإنجليزية مطلوب' }),
+    description_ar: z.string().min(1, { message: dir === 'ltr' ? 'Arabic description is required' : 'الوصف بالعربية مطلوب' }),
+    description_en: z.string().min(1, { message: dir === 'ltr' ? 'English description is required' : 'الوصف بالإنجليزية مطلوب' }),
+    sort_order: z.preprocess(
+      (val) => (val === '' || val === undefined) ? 0 : Number(val),
+      z.number().int().min(0, { message: dir === 'ltr' ? 'Must be 0 or greater' : 'يجب أن يكون 0 أو أكثر' })
+    ).default(0),
+  }), [dir]);
+
+  interface FormValues {
+    name_ar: string;
+    name_en: string;
+    description_ar: string;
+    description_en: string;
+    sort_order: number;
+  }
+
+  const form = useForm<FormValues>({
+    resolver: zodResolver(schema) as any,
+    defaultValues: {
+      name_ar: initial?.name_ar || '',
+      name_en: initial?.name_en || '',
+      description_ar: initial?.description_ar || '',
+      description_en: initial?.description_en || '',
+      sort_order: initial?.sort_order ?? 0,
+    },
+  });
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       setImageFile(file);
       setImagePreview(URL.createObjectURL(file));
+      setImageError(null);
     }
   };
 
-  const handleSave = () => {
+  const onSubmit = (values: FormValues) => {
+    if (!imagePreview) {
+      setImageError(dir === 'ltr' ? 'Service image is required' : 'صورة الخدمة مطلوبة');
+      return;
+    }
+    setImageError(null);
     onSave({
-      name_ar: nameAr,
-      name_en: nameEn,
-      description_ar: descriptionAr,
-      description_en: descriptionEn,
-      sort_order: sortOrder,
+      name_ar: values.name_ar,
+      name_en: values.name_en,
+      description_ar: values.description_ar,
+      description_en: values.description_en,
+      sort_order: values.sort_order,
       image: imageFile || undefined
     });
   };
@@ -811,51 +867,155 @@ function ServiceModal({
           </button>
         </div>
 
-        <div className="p-6 space-y-4 overflow-y-auto flex-1">
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-secondary/50 uppercase tracking-wider">{t('serviceNameAr')}</label>
-            <input type="text" dir="rtl" value={nameAr} onChange={e => setNameAr(e.target.value)} className="w-full px-4 py-2.5 rounded-xl bg-white/60 border border-secondary/15 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none text-sm text-secondary font-arabic" />
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-secondary/50 uppercase tracking-wider">{t('serviceNameEn')}</label>
-            <input type="text" dir="ltr" value={nameEn} onChange={e => setNameEn(e.target.value)} className="w-full px-4 py-2.5 rounded-xl bg-white/60 border border-secondary/15 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none text-sm text-secondary" />
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-secondary/50 uppercase tracking-wider">{t('serviceDescAr')}</label>
-            <textarea rows={3} dir="rtl" value={descriptionAr} onChange={e => setDescriptionAr(e.target.value)} className="w-full px-4 py-2.5 rounded-xl bg-white/60 border border-secondary/15 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none text-sm text-secondary resize-none font-arabic" />
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-secondary/50 uppercase tracking-wider">{t('serviceDescEn')}</label>
-            <textarea rows={3} dir="ltr" value={descriptionEn} onChange={e => setDescriptionEn(e.target.value)} className="w-full px-4 py-2.5 rounded-xl bg-white/60 border border-secondary/15 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none text-sm text-secondary resize-none" />
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-secondary/50 uppercase tracking-wider">{t('sortOrder')}</label>
-            <input type="number" value={sortOrder} onChange={e => setSortOrder(Number(e.target.value))} className="w-full px-4 py-2.5 rounded-xl bg-white/60 border border-secondary/15 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none text-sm text-secondary" />
-          </div>
-          <div className="space-y-2">
-            <label className="text-xs font-bold text-secondary/50 uppercase tracking-wider">{t('serviceImage')}</label>
-            <div className="relative rounded-2xl overflow-hidden border-2 border-dashed border-secondary/20 bg-secondary/5 aspect-video flex items-center justify-center cursor-pointer" onClick={() => document.getElementById('svc-img')?.click()}>
-              {imagePreview ? (
-                <img src={imagePreview} alt="Preview" className="object-contain max-h-full max-w-full p-2" />
-              ) : (
-                <div className="flex flex-col items-center text-secondary/40">
-                  <UploadCloud className="w-8 h-8 mb-1" />
-                  <span className="text-xs">{t('clickToUpload')}</span>
-                </div>
-              )}
-            </div>
-            <input type="file" id="svc-img" accept="image/*" onChange={handleImageChange} className="hidden" />
-          </div>
-        </div>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col flex-1 overflow-hidden">
+            <div className="p-6 space-y-4 overflow-y-auto flex-1">
 
-        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-secondary/10 bg-secondary/5 shrink-0">
-          <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-secondary/70 bg-white border border-secondary/15 rounded-xl transition-colors cursor-pointer">
-            {t('cancel')}
-          </button>
-          <button onClick={handleSave} className="px-5 py-2.5 text-sm font-medium text-white bg-primary hover:bg-primary/90 rounded-xl transition-colors cursor-pointer shadow-md">
-            {t('save')}
-          </button>
-        </div>
+              {/* Name Ar */}
+              <FormField
+                control={form.control}
+                name="name_ar"
+                render={({ field }) => (
+                  <FormItem className="space-y-1.5">
+                    <FormLabel className="text-xs font-bold text-secondary/50 uppercase tracking-wider">
+                      {t('serviceNameAr')} <span className="text-red-500">*</span>
+                    </FormLabel>
+                    <FormControl>
+                      <input
+                        type="text"
+                        dir="rtl"
+                        placeholder="مثال: تصوير فوتوغرافي"
+                        {...field}
+                        className="w-full px-4 py-2.5 rounded-xl bg-white/60 border border-secondary/15 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none text-sm text-secondary font-arabic"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {/* Name En */}
+              <FormField
+                control={form.control}
+                name="name_en"
+                render={({ field }) => (
+                  <FormItem className="space-y-1.5">
+                    <FormLabel className="text-xs font-bold text-secondary/50 uppercase tracking-wider">
+                      {t('serviceNameEn')} <span className="text-red-500">*</span>
+                    </FormLabel>
+                    <FormControl>
+                      <input
+                        type="text"
+                        dir="ltr"
+                        placeholder="e.g. Professional Photography"
+                        {...field}
+                        className="w-full px-4 py-2.5 rounded-xl bg-white/60 border border-secondary/15 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none text-sm text-secondary"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {/* Desc Ar */}
+              <FormField
+                control={form.control}
+                name="description_ar"
+                render={({ field }) => (
+                  <FormItem className="space-y-1.5">
+                    <FormLabel className="text-xs font-bold text-secondary/50 uppercase tracking-wider">
+                      {t('serviceDescAr')} <span className="text-red-500">*</span>
+                    </FormLabel>
+                    <FormControl>
+                      <textarea
+                        rows={3}
+                        dir="rtl"
+                        placeholder="اكتب وصفاً للخدمة وتفاصيلها هنا..."
+                        {...field}
+                        className="w-full px-4 py-2.5 rounded-xl bg-white/60 border border-secondary/15 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none text-sm text-secondary resize-none font-arabic"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {/* Desc En */}
+              <FormField
+                control={form.control}
+                name="description_en"
+                render={({ field }) => (
+                  <FormItem className="space-y-1.5">
+                    <FormLabel className="text-xs font-bold text-secondary/50 uppercase tracking-wider">
+                      {t('serviceDescEn')} <span className="text-red-500">*</span>
+                    </FormLabel>
+                    <FormControl>
+                      <textarea
+                        rows={3}
+                        dir="ltr"
+                        placeholder="Write service description and details here..."
+                        {...field}
+                        className="w-full px-4 py-2.5 rounded-xl bg-white/60 border border-secondary/15 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none text-sm text-secondary resize-none"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {/* Sort Order */}
+              <FormField
+                control={form.control}
+                name="sort_order"
+                render={({ field }) => (
+                  <FormItem className="space-y-1.5">
+                    <FormLabel className="text-xs font-bold text-secondary/50 uppercase tracking-wider">
+                      {t('sortOrder')}
+                    </FormLabel>
+                    <FormControl>
+                      <input
+                        type="number"
+                        placeholder="0"
+                        {...field}
+                        onChange={e => field.onChange(e.target.value === '' ? '' : Number(e.target.value))}
+                        className="w-full px-4 py-2.5 rounded-xl bg-white/60 border border-secondary/15 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none text-sm text-secondary"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {/* Image Upload */}
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-secondary/50 uppercase tracking-wider">
+                  {t('serviceImage')} <span className="text-red-500">*</span>
+                </label>
+                <div className="relative rounded-2xl overflow-hidden border-2 border-dashed border-secondary/20 bg-secondary/5 aspect-video flex items-center justify-center cursor-pointer" onClick={() => document.getElementById('svc-img')?.click()}>
+                  {imagePreview ? (
+                    <img src={imagePreview} alt="Preview" className="object-contain max-h-full max-w-full p-2" />
+                  ) : (
+                    <div className="flex flex-col items-center text-secondary/40">
+                      <UploadCloud className="w-8 h-8 mb-1" />
+                      <span className="text-xs">{t('clickToUpload')}</span>
+                    </div>
+                  )}
+                </div>
+                <input type="file" id="svc-img" accept="image/*" onChange={handleImageChange} className="hidden" />
+                {imageError && <p className="text-xs text-red-500 mt-1 font-semibold">{imageError}</p>}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-secondary/10 bg-secondary/5 shrink-0">
+              <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-medium text-secondary/70 bg-white border border-secondary/15 rounded-xl transition-colors cursor-pointer">
+                {t('cancel')}
+              </button>
+              <button type="submit" className="px-5 py-2.5 text-sm font-medium text-white bg-primary hover:bg-primary/90 rounded-xl transition-colors cursor-pointer shadow-md">
+                {t('save')}
+              </button>
+            </div>
+          </form>
+        </Form>
       </div>
     </div>
   );
