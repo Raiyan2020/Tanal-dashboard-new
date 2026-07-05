@@ -15,6 +15,23 @@ import {
   getServiceById
 } from '@/lib/api';
 import { type ServiceOrder } from '@/lib/orderStore';
+import { getMockDataForService } from '@/lib/mockServicesStore';
+
+export interface ServicePackage {
+  id: number;
+  name_ar: string;
+  name_en: string;
+  description_ar?: string;
+  description_en?: string;
+  price: number;
+}
+
+export interface ServiceAddon {
+  id: number;
+  name_ar: string;
+  name_en: string;
+  price: number;
+}
 
 export interface FormServiceItemOption {
   service_option_id: number;
@@ -41,6 +58,10 @@ export interface FormServiceItem {
   freelancerUsername?: string;
   freelancerCountryCode?: string;
   freelancerPhone?: string;
+  selectedPackageId?: number;
+  selectedAddonIds?: number[];
+  packages?: ServicePackage[];
+  addons?: ServiceAddon[];
 }
 
 export type FormState = {
@@ -63,10 +84,13 @@ export const createEmptyServiceItem = (): FormServiceItem => ({
   serviceId: '',
   serviceName: '',
   serviceNameAr: '',
-  price: '',
+  price: '0',
   description: '',
   options: [],
   employeeType: 'none',
+  selectedAddonIds: [],
+  packages: [],
+  addons: [],
 });
 
 const PRESET_COLORS = [
@@ -135,6 +159,61 @@ export function OrderForm({
       });
   }, [token]);
 
+  const getServicePackagesAndAddons = (serviceId: number, apiData: any) => {
+    if (apiData?.packages && apiData.packages.length > 0) {
+      return {
+        packages: apiData.packages as ServicePackage[],
+        addons: apiData.addons as ServiceAddon[]
+      };
+    }
+    // Fetch from shared mock store
+    return getMockDataForService(serviceId);
+  };
+
+  const recalculateServicePrice = (item: FormServiceItem): string => {
+    const selectedPackage = item.packages?.find(p => p.id === item.selectedPackageId);
+    const basePrice = selectedPackage ? selectedPackage.price : 0;
+    const addonsPrice = (item.selectedAddonIds || []).reduce((sum, id) => {
+      const addon = item.addons?.find(a => a.id === id);
+      return sum + (addon ? addon.price : 0);
+    }, 0);
+    return String(basePrice + addonsPrice);
+  };
+
+  const handlePackageSelect = (index: number, packageId: number) => {
+    setForm(prev => {
+      const copy = [...prev.services];
+      if (copy[index]) {
+        const updatedItem = {
+          ...copy[index],
+          selectedPackageId: packageId,
+        };
+        updatedItem.price = recalculateServicePrice(updatedItem);
+        copy[index] = updatedItem;
+      }
+      return { ...prev, services: copy };
+    });
+  };
+
+  const handleAddonToggle = (index: number, addonId: number) => {
+    setForm(prev => {
+      const copy = [...prev.services];
+      if (copy[index]) {
+        const prevAddons = copy[index].selectedAddonIds || [];
+        const nextAddons = prevAddons.includes(addonId)
+          ? prevAddons.filter(id => id !== addonId)
+          : [...prevAddons, addonId];
+        const updatedItem = {
+          ...copy[index],
+          selectedAddonIds: nextAddons,
+        };
+        updatedItem.price = recalculateServicePrice(updatedItem);
+        copy[index] = updatedItem;
+      }
+      return { ...prev, services: copy };
+    });
+  };
+
   // Fetch options for selected service item
   const handleServiceSelect = async (index: number, service: any) => {
     const updatedServices = [...form.services];
@@ -143,7 +222,7 @@ export function OrderForm({
       serviceId: String(service.id),
       serviceName: service.name,
       serviceNameAr: service.name,
-      price: '',
+      price: '0',
       options: [],
     };
     setForm({ ...form, services: updatedServices });
@@ -152,12 +231,15 @@ export function OrderForm({
       const res = await getServiceById(service.id, token);
       const optionsData = res.data.options || [];
 
+      const { packages, addons } = getServicePackagesAndAddons(Number(service.id), res.data);
+      const defaultPackage = packages[0];
+      const defaultPrice = defaultPackage ? String(defaultPackage.price) : '0';
+
       const optionsState: FormServiceItemOption[] = optionsData.map(opt => {
         const optionName = language === 'ar'
           ? ((opt as any).name_ar || opt.name)
           : ((opt as any).name_en || opt.name);
 
-        // Available choices — colors come in `values`, list choices come in `labels`
         const availableChoices = (opt as any).labels || opt.values || [];
 
         return {
@@ -166,7 +248,6 @@ export function OrderForm({
           name: optionName,
           is_required: opt.is_required,
           values: availableChoices,
-          // For color with no API palette, pre-fill a default hex so the picker isn't blank
           value: opt.type === 'number'
             ? ''
             : (opt.type === 'color' && availableChoices.length === 0)
@@ -187,6 +268,11 @@ export function OrderForm({
         const copy = [...prev.services];
         if (copy[index] && copy[index].serviceId === String(service.id)) {
           copy[index].options = optionsState;
+          copy[index].packages = packages;
+          copy[index].addons = addons;
+          copy[index].selectedPackageId = defaultPackage?.id;
+          copy[index].selectedAddonIds = [];
+          copy[index].price = defaultPrice;
         }
         return { ...prev, services: copy };
       });
@@ -320,33 +406,96 @@ export function OrderForm({
                       />
                     </div>
 
-                    {/* Custom Price for this service */}
-                    <div className="space-y-1.5 text-start">
-                      <label className="flex items-center gap-2 text-sm font-medium text-secondary/80">
-                        <DollarSign className="w-4 h-4 text-secondary/40" /> {t('price') || 'Price'} (KD) <span className="text-red-500">*</span>
-                      </label>
-                      <div className="relative">
-                        <input
-                          type="number"
-                          required
-                          min="0"
-                          step="0.01"
-                          placeholder="0.00"
-                          value={svc.price}
-                          onChange={e => {
-                            const copy = [...form.services];
-                            copy[index] = { ...copy[index], price: e.target.value };
-                            setForm({ ...form, services: copy });
-                          }}
-                          dir="ltr"
-                          className={cn("w-full py-3 rounded-xl bg-white/50 border border-white/60 focus:border-primary/50 focus:ring-2 focus:ring-primary/20 outline-none text-secondary text-sm", dir === 'rtl' ? 'pr-14 pl-4' : 'pl-14 pr-4')}
-                        />
-                        <span className={cn("absolute top-1/2 -translate-y-1/2 text-sm font-semibold text-secondary/40 pointer-events-none", dir === 'rtl' ? 'right-4' : 'left-4')}>
-                          {language === 'ar' ? 'د.ك' : 'KD'}
-                        </span>
+                    {/* Select Package Dropdown */}
+                    {svc.packages && svc.packages.length > 0 ? (
+                      <div className="space-y-1.5 text-start">
+                        <label className="flex items-center gap-2 text-sm font-medium text-secondary/80">
+                          <Briefcase className="w-4 h-4 text-secondary/40" /> {language === 'ar' ? 'الباقة' : 'Package'} <span className="text-red-500">*</span>
+                        </label>
+                        <select
+                          value={svc.selectedPackageId || ''}
+                          onChange={e => handlePackageSelect(index, Number(e.target.value))}
+                          className="w-full px-4 py-3 rounded-xl bg-white/50 border border-white/60 focus:border-primary/50 focus:ring-2 focus:ring-primary/20 outline-none text-secondary text-sm cursor-pointer"
+                        >
+                          {svc.packages.map(p => {
+                            const packageName = language === 'ar' ? p.name_ar : p.name_en;
+                            return (
+                              <option key={p.id} value={p.id}>
+                                {packageName} ({p.price} {language === 'ar' ? 'د.ك' : 'KD'})
+                              </option>
+                            );
+                          })}
+                        </select>
                       </div>
-                    </div>
+                    ) : (
+                      /* Fallback placeholder if no packages have been loaded yet */
+                      <div className="space-y-1.5 text-start opacity-50">
+                        <label className="flex items-center gap-2 text-sm font-medium text-secondary/80">
+                          <Briefcase className="w-4 h-4 text-secondary/40" /> {language === 'ar' ? 'الباقة' : 'Package'}
+                        </label>
+                        <div className="w-full px-4 py-3 rounded-xl bg-secondary/5 border border-secondary/10 text-secondary/50 text-sm">
+                          {language === 'ar' ? 'يرجى اختيار الخدمة أولاً' : 'Select a service first'}
+                        </div>
+                      </div>
+                    )}
                   </div>
+
+                  {/* Calculated Price & Add-ons Grid */}
+                  {svc.serviceId && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                      {/* Calculated Price */}
+                      <div className="space-y-1.5 text-start">
+                        <label className="flex items-center gap-2 text-sm font-medium text-secondary/80">
+                          <DollarSign className="w-4 h-4 text-secondary/40" /> {t('price') || 'Price'} (KD)
+                        </label>
+                        <div className="relative">
+                          <input
+                            type="text"
+                            readOnly
+                            value={svc.price || '0.000'}
+                            dir="ltr"
+                            className={cn(
+                              "w-full py-3 rounded-xl bg-secondary/5 border border-secondary/10 outline-none text-secondary font-bold text-sm cursor-not-allowed",
+                              dir === 'rtl' ? 'pr-14 pl-4' : 'pl-14 pr-4'
+                            )}
+                          />
+                          <span className={cn("absolute top-1/2 -translate-y-1/2 text-sm font-semibold text-secondary/40 pointer-events-none", dir === 'rtl' ? 'right-4' : 'left-4')}>
+                            {language === 'ar' ? 'د.ك' : 'KD'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Add-ons Multi-Select Badges */}
+                      {svc.addons && svc.addons.length > 0 && (
+                        <div className="space-y-1.5 text-start">
+                          <label className="flex items-center gap-2 text-sm font-medium text-secondary/80">
+                            {language === 'ar' ? 'الاضافات الاختيارية (Add-ons)' : 'Optional Add-ons'}
+                          </label>
+                          <div className="flex flex-wrap gap-1.5 p-1.5 bg-white/30 border border-secondary/15 rounded-xl min-h-[46px]">
+                            {svc.addons.map(addon => {
+                              const isSelected = (svc.selectedAddonIds || []).includes(addon.id);
+                              const addonName = language === 'ar' ? addon.name_ar : addon.name_en;
+                              return (
+                                <button
+                                  key={addon.id}
+                                  type="button"
+                                  onClick={() => handleAddonToggle(index, addon.id)}
+                                  className={cn(
+                                    "inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-lg border transition-all cursor-pointer",
+                                    isSelected
+                                      ? "bg-primary/10 border-primary/20 text-primary"
+                                      : "bg-white/50 border-secondary/10 text-secondary/50 hover:bg-white"
+                                  )}
+                                >
+                                  {addonName} (+{addon.price} KD)
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {/* Dynamic Options UI rendering */}
                   {svc.options.length > 0 && (

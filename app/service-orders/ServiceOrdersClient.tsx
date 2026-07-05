@@ -312,6 +312,8 @@ export default function ServiceOrdersClient({
             price: Number(s.price),
             options: optionsPayload,
             employee: employeePayload,
+            service_package_id: s.selectedPackageId ? Number(s.selectedPackageId) : undefined,
+            addon_ids: s.selectedAddonIds ? s.selectedAddonIds.map(Number) : [],
           };
         });
 

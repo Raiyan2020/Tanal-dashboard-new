@@ -1695,6 +1695,8 @@ export interface CreateServiceOrderItem {
   price: number;
   options: CreateServiceOrderItemOption[];
   employee?: CreateServiceOrderItemEmployee;
+  service_package_id?: number;
+  addon_ids?: number[];
 }
 
 export interface CreateServiceOrderPayload {
