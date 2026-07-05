@@ -450,9 +450,9 @@ export default function InvitationsClient({
                   <span className="text-secondary/60 font-medium">{dir === 'ltr' ? 'Reference Code' : 'رمز الدعوة'}</span>
                   <span className="font-mono font-bold text-secondary">{createdInvitationData.reference_code}</span>
                 </div>
-                <div className="flex justify-between items-center py-2 border-b border-secondary/5 text-sm">
-                  <span className="text-secondary/60 font-medium">{dir === 'ltr' ? 'Event Name' : 'اسم الحفل'}</span>
-                  <span className="font-bold text-secondary max-w-[300px] truncate">{createdInvitationData.name || (createdInvitationData.event && createdInvitationData.event.name)}</span>
+                <div className="flex justify-between items-start gap-4 py-2 border-b border-secondary/5 text-sm">
+                  <span className="text-secondary/60 font-medium shrink-0">{dir === 'ltr' ? 'Event Name' : 'اسم الحفل'}</span>
+                  <span className="font-bold text-secondary text-end">{createdInvitationData.name || (createdInvitationData.event && createdInvitationData.event.name)}</span>
                 </div>
                 <div className="flex justify-between items-center py-2 border-b border-secondary/5 text-sm">
                   <span className="text-secondary/60 font-medium">{dir === 'ltr' ? 'Logic Type' : 'منطق الدعوة'}</span>

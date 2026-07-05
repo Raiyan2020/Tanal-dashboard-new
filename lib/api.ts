@@ -323,8 +323,9 @@ export async function getRoles(token: string): Promise<ApiResponse<PaginatedItem
 }
 
 /** GET /admin/roles/:id */
-export async function getRoleById(id: number, token: string): Promise<ApiResponse<RoleDetail>> {
-  return apiRequest<RoleDetail>(`/admin/roles/${id}`, { token });
+export async function getRoleById(id: number, token: string, lang?: string): Promise<ApiResponse<RoleDetail>> {
+  const headers = lang ? { 'Accept-Language': lang, lang } : undefined;
+  return apiRequest<RoleDetail>(`/admin/roles/${id}`, { token, headers });
 }
 
 /** GET /admin/permissions */
@@ -1834,11 +1835,11 @@ export async function settleFinancialRecord(
 
 // ── Types ────────────────────────────────────────────────────────────────────
 export interface LandingHero {
-  title: { ar: string; en: string };
-  subtitle: { ar: string; en: string };
-  primary_cta_label: { ar: string; en: string };
+  title: string;
+  subtitle: string;
+  primary_cta_label: string;
   primary_cta_url: string;
-  secondary_cta_label: { ar: string; en: string };
+  secondary_cta_label: string;
   secondary_cta_url: string;
   image: string | null;
 }
@@ -1847,21 +1848,26 @@ export interface LandingHowItWorksStep {
   id: number;
   icon: string;
   icon_url: string;
+  title: string;
+  description: string;
+  sort: number;
   title_ar: string;
   title_en: string;
   description_ar: string;
   description_en: string;
-  sort: number;
 }
 
 export interface LandingFeature {
   id: number;
-  icon_url: string;
+  icon: string;
+  icon_url?: string;
+  title: string;
+  description: string;
+  sort: number;
   title_ar: string;
   title_en: string;
   description_ar: string;
   description_en: string;
-  sort: number;
 }
 
 export interface LandingPortfolioItem {
@@ -1869,6 +1875,8 @@ export interface LandingPortfolioItem {
   image: string | null;
   name: string;
   sort: number;
+  name_ar: string;
+  name_en: string;
 }
 
 export interface LandingSocialLink {
@@ -1911,8 +1919,9 @@ export interface LandingEventType {
 interface ReorderItem { id: number; sort: number }
 
 // ── Hero ─────────────────────────────────────────────────────────────────────
-export async function getLandingHero(token: string): Promise<ApiResponse<{ data: LandingHero }>> {
-  return apiRequest('/admin/landing-page/hero', { token });
+export async function getLandingHero(token: string, lang?: string): Promise<ApiResponse<LandingHero>> {
+  const headers = lang ? { 'Accept-Language': lang, lang } : undefined;
+  return apiRequest<LandingHero>('/admin/landing-page/hero', { token, headers });
 }
 export async function updateLandingHero(fields: {
   title_ar: string; title_en: string;
@@ -1937,8 +1946,9 @@ export async function updateLandingHero(fields: {
 }
 
 // ── How It Works ──────────────────────────────────────────────────────────────
-export async function getLandingHowItWorks(token: string): Promise<ApiResponse<{ items: LandingHowItWorksStep[] }>> {
-  return apiRequest('/admin/landing-page/how-it-works', { token });
+export async function getLandingHowItWorks(token: string, lang?: string): Promise<ApiResponse<{ items: LandingHowItWorksStep[] }>> {
+  const headers = lang ? { 'Accept-Language': lang, lang } : undefined;
+  return apiRequest('/admin/landing-page/how-it-works', { token, headers });
 }
 export async function createHowItWorksStep(fields: { title_ar: string; title_en: string; description_ar: string; description_en: string; icon?: File }, token: string): Promise<ApiResponse<LandingHowItWorksStep>> {
   const fd = new FormData();
@@ -1965,9 +1975,9 @@ export async function reorderHowItWorks(items: ReorderItem[], token: string): Pr
   return apiRequest('/admin/landing-page/how-it-works/reorder', { method: 'PATCH', body: { items } as any, token });
 }
 
-// ── Features ──────────────────────────────────────────────────────────────────
-export async function getLandingFeatures(token: string): Promise<ApiResponse<{ items: LandingFeature[] }>> {
-  return apiRequest('/admin/landing-page/features', { token });
+export async function getLandingFeatures(token: string, lang?: string): Promise<ApiResponse<{ items: LandingFeature[] }>> {
+  const headers = lang ? { 'Accept-Language': lang, lang } : undefined;
+  return apiRequest('/admin/landing-page/features', { token, headers });
 }
 export async function createFeature(fields: { title_ar: string; title_en: string; description_ar: string; description_en: string; sort?: number; icon?: File }, token: string): Promise<ApiResponse<LandingFeature>> {
   const fd = new FormData();
@@ -1997,8 +2007,9 @@ export async function reorderFeatures(items: ReorderItem[], token: string): Prom
 }
 
 // ── Portfolio ─────────────────────────────────────────────────────────────────
-export async function getLandingPortfolio(token: string): Promise<ApiResponse<{ items: LandingPortfolioItem[] }>> {
-  return apiRequest('/admin/landing-page/portfolio', { token });
+export async function getLandingPortfolio(token: string, lang?: string): Promise<ApiResponse<{ items: LandingPortfolioItem[] }>> {
+  const headers = lang ? { 'Accept-Language': lang, lang } : undefined;
+  return apiRequest('/admin/landing-page/portfolio', { token, headers });
 }
 export async function createPortfolioItem(fields: { name_ar: string; name_en: string; sort?: number; status?: number; image?: File }, token: string): Promise<ApiResponse<LandingPortfolioItem>> {
   const fd = new FormData();
@@ -2102,28 +2113,9 @@ export async function reorderEventTypes(items: ReorderItem[], token: string): Pr
 // ── Admin Settings ─────────────────────────────────────────────────────────────
 
 export interface SettingsData {
-  website_name: { ar: string; en: string };
-  contact_number: string;
-  contact_mail: string;
-  logo: string;
-  favicon: string;
-  commercial_register: string;
-  tax_number: string;
-  copy_right: string;
-  facebook: string;
-  instagram: string;
-  twitter: string;
-  whatsapp: string;
-  youtube: string;
-  linkedin: string;
   privacy_policy: { ar: string; en: string };
   terms_conditions: { ar: string; en: string };
   about_us: { ar: string; en: string };
-  location: {
-    lat: string | number | null;
-    lng: string | number | null;
-    map_desc: { ar: string; en: string };
-  };
 }
 
 export async function getSettings(token: string): Promise<ApiResponse<SettingsData>> {
@@ -2132,55 +2124,21 @@ export async function getSettings(token: string): Promise<ApiResponse<SettingsDa
 
 export async function updateSettings(
   fields: {
-    contact_number?: string;
-    contact_mail?: string;
-    commercial_register?: string;
-    tax_number?: string;
-    copy_right?: string;
-    facebook?: string;
-    instagram?: string;
-    twitter?: string;
-    whatsapp?: string;
-    youtube?: string;
-    linkedin?: string;
-    location_map_desc_ar?: string;
-    location_map_desc_en?: string;
-    location_lat?: string;
-    location_lng?: string;
     privacy_policy_ar?: string;
     privacy_policy_en?: string;
     terms_conditions_ar?: string;
     terms_conditions_en?: string;
     about_us_ar?: string;
     about_us_en?: string;
-    logo?: File;
-    favicon?: File;
   },
   token: string
 ): Promise<ApiResponse<SettingsData>> {
   const fd = new FormData();
-  if (fields.contact_number !== undefined) fd.append('contact_number', fields.contact_number);
-  if (fields.contact_mail !== undefined) fd.append('contact_mail', fields.contact_mail);
-  if (fields.commercial_register !== undefined) fd.append('commercial_register', fields.commercial_register);
-  if (fields.tax_number !== undefined) fd.append('tax_number', fields.tax_number);
-  if (fields.copy_right !== undefined) fd.append('copy_right', fields.copy_right);
-  if (fields.facebook !== undefined) fd.append('facebook', fields.facebook);
-  if (fields.instagram !== undefined) fd.append('instagram', fields.instagram);
-  if (fields.twitter !== undefined) fd.append('twitter', fields.twitter);
-  if (fields.whatsapp !== undefined) fd.append('whatsapp', fields.whatsapp);
-  if (fields.youtube !== undefined) fd.append('youtube', fields.youtube);
-  if (fields.linkedin !== undefined) fd.append('linkedin', fields.linkedin);
-  if (fields.location_map_desc_ar !== undefined) fd.append('location_map_desc[ar]', fields.location_map_desc_ar);
-  if (fields.location_map_desc_en !== undefined) fd.append('location_map_desc[en]', fields.location_map_desc_en);
-  if (fields.location_lat !== undefined) fd.append('location_lat', fields.location_lat);
-  if (fields.location_lng !== undefined) fd.append('location_lng', fields.location_lng);
   if (fields.privacy_policy_ar !== undefined) fd.append('privacy_policy[ar]', fields.privacy_policy_ar);
   if (fields.privacy_policy_en !== undefined) fd.append('privacy_policy[en]', fields.privacy_policy_en);
   if (fields.terms_conditions_ar !== undefined) fd.append('terms_conditions[ar]', fields.terms_conditions_ar);
   if (fields.terms_conditions_en !== undefined) fd.append('terms_conditions[en]', fields.terms_conditions_en);
   if (fields.about_us_ar !== undefined) fd.append('about_us[ar]', fields.about_us_ar);
   if (fields.about_us_en !== undefined) fd.append('about_us[en]', fields.about_us_en);
-  if (fields.logo) fd.append('logo', fields.logo);
-  if (fields.favicon) fd.append('favicon', fields.favicon);
   return apiRequest<SettingsData>('/admin/settings?_method=put', { method: 'POST', body: fd, token });
 }

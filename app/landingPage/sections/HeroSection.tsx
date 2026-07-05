@@ -8,17 +8,46 @@ import { Save, Loader2 } from 'lucide-react';
 import { getLandingHero, updateLandingHero, type LandingHero } from '@/lib/api';
 import { BilingualField, ImageUploadBox, SectionSkeleton, inputClass, labelClass } from './shared';
 
+interface BilingualHero {
+  title: { ar: string; en: string };
+  subtitle: { ar: string; en: string };
+  primary_cta_label: { ar: string; en: string };
+  primary_cta_url: string;
+  secondary_cta_label: { ar: string; en: string };
+  secondary_cta_url: string;
+  image: string | null;
+}
+
 export default function HeroSection({ token }: { token: string }) {
   const { t } = useLanguage();
-  const [hero, setHero] = useState<LandingHero | null>(null);
+  const [hero, setHero] = useState<BilingualHero | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    getLandingHero(token)
-      .then(r => setHero(r.data?.data ?? null))
+    Promise.all([
+      getLandingHero(token, 'ar'),
+      getLandingHero(token, 'en')
+    ])
+      .then(([resAr, resEn]) => {
+        const arData = resAr.data;
+        const enData = resEn.data;
+        if (arData && enData) {
+          setHero({
+            title: { ar: arData.title || '', en: enData.title || '' },
+            subtitle: { ar: arData.subtitle || '', en: enData.subtitle || '' },
+            primary_cta_label: { ar: arData.primary_cta_label || '', en: enData.primary_cta_label || '' },
+            primary_cta_url: arData.primary_cta_url || enData.primary_cta_url || '',
+            secondary_cta_label: { ar: arData.secondary_cta_label || '', en: enData.secondary_cta_label || '' },
+            secondary_cta_url: arData.secondary_cta_url || enData.secondary_cta_url || '',
+            image: arData.image || enData.image || null,
+          });
+        } else {
+          toast.error(t('noDataFound'));
+        }
+      })
       .catch(() => toast.error(t('noDataFound')))
       .finally(() => setLoading(false));
   }, [token, t]);

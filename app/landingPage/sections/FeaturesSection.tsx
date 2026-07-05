@@ -42,8 +42,29 @@ export default function FeaturesSection({ token }: { token: string }) {
 
   const load = useCallback(() => {
     setLoading(true);
-    getLandingFeatures(token)
-      .then(r => setFeatures(r.data?.items ?? []))
+    Promise.all([
+      getLandingFeatures(token, 'ar'),
+      getLandingFeatures(token, 'en')
+    ])
+      .then(([resAr, resEn]) => {
+        const arItems = resAr.data?.items || [];
+        const enItems = resEn.data?.items || [];
+        const enMap = new Map(enItems.map(item => [item.id, item]));
+
+        const merged: LandingFeature[] = arItems.map(arItem => {
+          const enItem = enMap.get(arItem.id);
+          const iconName = arItem.icon || '';
+          return {
+            ...arItem,
+            icon_url: iconName ? (iconName.startsWith('http') ? iconName : `https://portal.tanal.raiyan.cc/storage/images/landing/features/${iconName}`) : '',
+            title_ar: arItem.title || '',
+            title_en: enItem?.title || '',
+            description_ar: arItem.description || '',
+            description_en: enItem?.description || '',
+          };
+        });
+        setFeatures(merged);
+      })
       .catch(() => toast.error(t('noDataFound')))
       .finally(() => setLoading(false));
   }, [token, t]);

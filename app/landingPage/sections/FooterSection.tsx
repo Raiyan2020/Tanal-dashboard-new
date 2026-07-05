@@ -49,6 +49,17 @@ export default function FooterSection({ token }: { token: string }) {
 
   return (
     <div className="space-y-6">
+      <div className="flex justify-end border-b border-secondary/5 pb-4">
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="flex items-center gap-2 px-6 py-2.5 bg-primary hover:bg-primary-dark text-white rounded-xl text-sm font-semibold transition-colors shadow-sm cursor-pointer disabled:opacity-60"
+        >
+          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+          {saving ? t('lpSaving') : t('lpSaveChanges')}
+        </button>
+      </div>
+
       <BilingualField
         labelEn={`${t('lpBrandName')} (EN)`}
         labelAr={`${t('lpBrandName')} (AR)`}
@@ -101,17 +112,6 @@ export default function FooterSection({ token }: { token: string }) {
           setLogoPreview(null);
         }}
       />
-
-      <div className="flex justify-end pt-2">
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="flex items-center gap-2 px-6 py-2.5 bg-primary hover:bg-primary-dark text-white rounded-xl text-sm font-semibold transition-colors shadow-sm cursor-pointer disabled:opacity-60"
-        >
-          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-          {saving ? t('lpSaving') : t('lpSaveChanges')}
-        </button>
-      </div>
     </div>
   );
 }

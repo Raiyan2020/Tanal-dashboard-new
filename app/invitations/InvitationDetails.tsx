@@ -738,9 +738,9 @@ export function InvitationDetails({ invitation, onBack, onNavigateToEventGuests,
                   <span className="text-secondary/60 font-medium">{dir === 'ltr' ? 'Reference Code' : 'رمز الدعوة'}</span>
                   <span className="font-mono font-bold text-secondary">{sentInvitationData.reference_code}</span>
                 </div>
-                <div className="flex justify-between items-center py-2 border-b border-secondary/5 text-sm">
-                  <span className="text-secondary/60 font-medium">{dir === 'ltr' ? 'Event Name' : 'اسم الحفل'}</span>
-                  <span className="font-bold text-secondary max-w-[200px] truncate">{sentInvitationData.name || (sentInvitationData.event && sentInvitationData.event.name)}</span>
+                <div className="flex justify-between items-start gap-4 py-2 border-b border-secondary/5 text-sm">
+                  <span className="text-secondary/60 font-medium shrink-0">{dir === 'ltr' ? 'Event Name' : 'اسم الحفل'}</span>
+                  <span className="font-bold text-secondary text-end">{sentInvitationData.name || (sentInvitationData.event && sentInvitationData.event.name)}</span>
                 </div>
                 <div className="flex justify-between items-center py-2 border-b border-secondary/5 text-sm">
                   <span className="text-secondary/60 font-medium">{dir === 'ltr' ? 'Status' : 'حالة الدعوة'}</span>

@@ -91,8 +91,8 @@ function OptionForm({ option, onBack, onSaved }: OptionFormProps) {
   const [labels, setLabels] = useState<Array<{ label_ar: string; label_en: string }>>([]);
 
   const schema = React.useMemo(() => z.object({
-    nameAr: z.string().min(1, { message: t('nameArRequired') }),
-    nameEn: z.string().min(1, { message: t('nameEnRequired') }),
+    nameAr: z.string().min(1, { message: t('nameArRequired') }).max(30, { message: t('nameMaxLength') }),
+    nameEn: z.string().min(1, { message: t('nameEnRequired') }).max(30, { message: t('nameMaxLength') }),
     type: z.enum(['text', 'number', 'color', 'employee', 'list']),
     isRequired: z.boolean(),
   }), [t]);
@@ -155,6 +155,18 @@ function OptionForm({ option, onBack, onSaved }: OptionFormProps) {
   }, [option, token, form]);
 
   const onSubmit = async (values: OptionFormValues) => {
+    if (values.type === 'list') {
+      if (labels.length === 0) {
+        toast.error(t('mustAddOneLabelAtLeast'));
+        return;
+      }
+      const hasEmpty = labels.some(l => !l.label_ar.trim() || !l.label_en.trim());
+      if (hasEmpty) {
+        toast.error(t('labelsCannotBeEmpty'));
+        return;
+      }
+    }
+
     setLoading(true);
     try {
       let res;
@@ -238,6 +250,8 @@ function OptionForm({ option, onBack, onSaved }: OptionFormProps) {
                     <input
                       type="text"
                       {...field}
+                      placeholder={dir === 'ltr' ? 'Name in Arabic (e.g. الحجم)' : 'الاسم باللغة العربية (مثال: الحجم)'}
+                      dir="rtl"
                       className="w-full bg-white/50 border border-secondary/20 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-all text-secondary"
                     />
                   </FormControl>
@@ -259,6 +273,8 @@ function OptionForm({ option, onBack, onSaved }: OptionFormProps) {
                     <input
                       type="text"
                       {...field}
+                      placeholder={dir === 'ltr' ? 'Name in English (e.g. Size)' : 'الاسم باللغة الإنجليزية (مثال: Size)'}
+                      dir="ltr"
                       className="w-full bg-white/50 border border-secondary/20 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-all text-secondary"
                     />
                   </FormControl>

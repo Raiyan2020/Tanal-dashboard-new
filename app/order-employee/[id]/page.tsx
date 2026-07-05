@@ -8,7 +8,7 @@ import Image from 'next/image';
 import { cn } from '@/lib/utils';
 import { useLanguage } from '@/lib/i18n';
 import { ServiceOrder, OrderStatus, getOrderById, updateServiceItemStatus } from '@/lib/orderStore';
-
+import logo from "@/public/logo.webp"
 // Helper function to format date dynamically based on language
 const getFormattedDate = (dateStr: string, lang: string) => {
   if (!dateStr) return '';
@@ -50,9 +50,9 @@ function EmployeeOrderPageContent() {
 
   // Linear progression steps translated
   const steps = useMemo(() => [
-    { id: 'coming' as OrderStatus,      label: t('coming'),      sub: t('orderConfirmed'),      color: 'bg-blue-500',    ring: 'ring-blue-200' },
-    { id: 'in-progress' as OrderStatus,  label: t('inProgress'),  sub: t('currentlyWorking'),    color: 'bg-amber-500',   ring: 'ring-amber-200' },
-    { id: 'finished' as OrderStatus,    label: t('finished'),    sub: t('completed'),            color: 'bg-emerald-500', ring: 'ring-emerald-200' },
+    { id: 'coming' as OrderStatus, label: t('coming'), sub: t('orderConfirmed'), color: 'bg-blue-500', ring: 'ring-blue-200' },
+    { id: 'in-progress' as OrderStatus, label: t('inProgress'), sub: t('currentlyWorking'), color: 'bg-amber-500', ring: 'ring-amber-200' },
+    { id: 'finished' as OrderStatus, label: t('finished'), sub: t('completed'), color: 'bg-emerald-500', ring: 'ring-emerald-200' },
   ], [t]);
 
   useEffect(() => {
@@ -126,7 +126,7 @@ function EmployeeOrderPageContent() {
       <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-lg border-b border-slate-100 px-5 py-4">
         <div className="max-w-lg mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Image src="https://raiyansoft.com/wp-content/uploads/2026/05/logo-2.png" alt="Tanal"
+            <Image src={logo} alt="Tanal"
               width={26} height={34} className="object-contain" referrerPolicy="no-referrer" />
             <span className="text-base font-semibold text-slate-700">Tanal</span>
           </div>

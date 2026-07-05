@@ -73,13 +73,17 @@ export function RoleForm({ roleId, onBack, onSaved }: RoleFormProps) {
   useEffect(() => {
     if (roleId === null) return;
     setFetchLoading(true);
-    getRoleById(roleId, token)
-      .then(res => {
-        const r = res.data;
+    Promise.all([
+      getRoleById(roleId, token, 'ar'),
+      getRoleById(roleId, token, 'en')
+    ])
+      .then(([resAr, resEn]) => {
+        const arData = resAr.data;
+        const enData = resEn.data;
         form.reset({
-          nameAr: r.name_ar,
-          nameEn: r.name_en,
-          permissionIds: r.permissions.map(p => p.id),
+          nameAr: arData?.name || '',
+          nameEn: enData?.name || '',
+          permissionIds: (arData?.permissions || []).map(p => p.id),
         });
       })
       .catch(err => toast.error((err as Error).message))

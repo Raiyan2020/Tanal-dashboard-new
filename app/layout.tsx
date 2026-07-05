@@ -26,9 +26,9 @@ export const metadata: Metadata = {
   description: 'A smart platform for managing weddings and events.',
 };
 
-export default function RootLayout({children}: {children: React.ReactNode}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${inter.variable} ${playfair.variable} ${tajawal.variable}`}>
+    <html lang="ar" dir="rtl" className={`${inter.variable} ${playfair.variable} ${tajawal.variable}`}>
       <body className="antialiased selection:bg-primary/20 selection:text-primary-dark" suppressHydrationWarning>
         <Toaster position="top-center" richColors closeButton />
         <LanguageProvider>

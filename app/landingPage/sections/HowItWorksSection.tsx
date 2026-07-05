@@ -42,8 +42,27 @@ export default function HowItWorksSection({ token }: { token: string }) {
 
   const load = useCallback(() => {
     setLoading(true);
-    getLandingHowItWorks(token)
-      .then(r => setSteps(r.data?.items ?? []))
+    Promise.all([
+      getLandingHowItWorks(token, 'ar'),
+      getLandingHowItWorks(token, 'en')
+    ])
+      .then(([resAr, resEn]) => {
+        const arItems = resAr.data?.items || [];
+        const enItems = resEn.data?.items || [];
+        const enMap = new Map(enItems.map(item => [item.id, item]));
+
+        const merged: LandingHowItWorksStep[] = arItems.map(arItem => {
+          const enItem = enMap.get(arItem.id);
+          return {
+            ...arItem,
+            title_ar: arItem.title || '',
+            title_en: enItem?.title || '',
+            description_ar: arItem.description || '',
+            description_en: enItem?.description || '',
+          };
+        });
+        setSteps(merged);
+      })
       .catch(() => toast.error(t('noDataFound')))
       .finally(() => setLoading(false));
   }, [token, t]);

@@ -76,7 +76,7 @@ export function RoleDetailView({ roleId, onBack, onEdit, onDelete }: RoleDetailV
             <ShieldCheck className="w-7 h-7 text-primary" />
           </div>
           <div className="flex-1">
-            <h2 className={cn('text-2xl font-bold text-secondary', dir === 'rtl' ? 'font-arabic' : 'font-serif')}>{dir === 'rtl' ? role.name_ar : role.name_en}</h2>
+            <h2 className={cn('text-2xl font-bold text-secondary', dir === 'rtl' ? 'font-arabic' : 'font-serif')}>{role.name}</h2>
             <div className="flex flex-wrap gap-3 mt-3">
               <span className="inline-flex items-center gap-1.5 text-sm text-secondary/60 bg-secondary/8 px-3 py-1 rounded-full">
                 <Users className="w-4 h-4" /> {role.admins_count} {t('adminCount')}

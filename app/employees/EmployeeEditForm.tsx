@@ -119,6 +119,7 @@ export function EmployeeEditForm({ employee, onBack, onSave }: EmployeeEditFormP
                     <input
                       type="text"
                       {...field}
+                      placeholder={language === 'ar' ? 'أدخل الاسم الكامل' : 'Enter full name'}
                       className="w-full bg-white/50 border border-secondary/20 focus:border-primary/50 focus:ring-2 focus:ring-primary/20 rounded-xl py-3 px-4 transition-all outline-none text-secondary"
                     />
                   </FormControl>
@@ -196,6 +197,7 @@ export function EmployeeEditForm({ employee, onBack, onSave }: EmployeeEditFormP
                     <input
                       type="text"
                       {...field}
+                      placeholder={language === 'ar' ? 'أدخل اسم المستخدم' : 'Enter username'}
                       className="w-full bg-white/50 border border-secondary/20 focus:border-primary/50 focus:ring-2 focus:ring-primary/20 rounded-xl py-3 px-4 transition-all outline-none text-secondary"
                     />
                   </FormControl>
@@ -218,7 +220,7 @@ export function EmployeeEditForm({ employee, onBack, onSave }: EmployeeEditFormP
                       <input
                         type={showPassword ? "text" : "password"}
                         {...field}
-                        placeholder={employee ? (language === 'ar' ? 'اتركه فارغاً لإبقائه كما هو' : 'Leave empty to keep current') : ''}
+                        placeholder={employee ? (language === 'ar' ? 'اتركه فارغاً لإبقائه كما هو' : 'Leave empty to keep current') : (language === 'ar' ? 'أدخل كلمة المرور' : 'Enter password')}
                         className="w-full bg-white/50 border border-secondary/20 focus:border-primary/50 focus:ring-2 focus:ring-primary/20 rounded-xl py-3 px-4 pr-12 transition-all outline-none text-secondary font-mono"
                       />
                     </FormControl>

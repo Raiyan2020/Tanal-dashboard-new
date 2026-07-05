@@ -38,8 +38,25 @@ export default function PortfolioSection({ token }: { token: string }) {
 
   const load = useCallback(() => {
     setLoading(true);
-    getLandingPortfolio(token)
-      .then(r => setItems(r.data?.items ?? []))
+    Promise.all([
+      getLandingPortfolio(token, 'ar'),
+      getLandingPortfolio(token, 'en')
+    ])
+      .then(([resAr, resEn]) => {
+        const arItems = resAr.data?.items || [];
+        const enItems = resEn.data?.items || [];
+        const enMap = new Map(enItems.map(item => [item.id, item]));
+
+        const merged: LandingPortfolioItem[] = arItems.map(arItem => {
+          const enItem = enMap.get(arItem.id);
+          return {
+            ...arItem,
+            name_ar: arItem.name || '',
+            name_en: enItem?.name || '',
+          };
+        });
+        setItems(merged);
+      })
       .catch(() => toast.error(t('lpErrorPortfolio')))
       .finally(() => setLoading(false));
   }, [token, t]);
@@ -145,7 +162,7 @@ export default function PortfolioSection({ token }: { token: string }) {
                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                   <button
                     onClick={() => {
-                      setForm({ name_ar: item.name, name_en: item.name });
+                      setForm({ name_ar: item.name_ar, name_en: item.name_en });
                       setModal({ mode: 'edit', item });
                     }}
                     className="p-2 bg-white rounded-xl cursor-pointer hover:bg-secondary/10 transition-colors"

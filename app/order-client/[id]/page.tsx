@@ -8,11 +8,11 @@ import Image from 'next/image';
 import { cn } from '@/lib/utils';
 import { useLanguage } from '@/lib/i18n';
 import { ServiceOrder, getOrderById, updatePaymentStatus } from '@/lib/orderStore';
-
+import logo from "@/public/logo.webp"
 // Inline SVG Components for high fidelity and zero external image assets dependencies
 const VisaLogo = () => (
   <svg className="h-3.5 w-auto" viewBox="0 0 24 8" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M3.385 7.643h1.365L6.34 2.109H4.975l-1.59 5.534zm5.836-5.328c-.287-.107-.736-.222-1.294-.222-1.42 0-2.42.717-2.427 1.745-.008.758.718 1.18 1.264 1.433.56.26.75.426.75.658 0 .356-.45.52-.863.52-.576 0-1.026-.145-1.564-.37L4.793 7.15c.343.149.98.278 1.635.283 1.51 0 2.493-.71 2.506-1.808.012-.603-.382-1.06-1.222-1.442-.505-.246-.816-.412-.816-.662 0-.227.265-.47.838-.47.468-.008.81.096 1.076.2l.255.12.362-1.056zm2.463 3.65c.101-.26.49-1.258.49-1.258-.026.044.1.264.161.444l.27 1.238.163-.162h-1.084zm1.968-3.856H12.63c-.347 0-.61.1-.762.443L9.75 7.643h1.431s.233-.306.287-.447h1.742c.04.175.163.447.163.447h1.266L13.652 2.309zm4.27 5.334c.383-.984.773-1.983 1.144-2.923.064-.176.12-.338.12-.338l.643 2.9c.074.329.28.361.503.361h2.1l-2.023-5.334H19.06c-.302 0-.558.172-.676.438L15.932 7.643h1.442z" fill="#1A1F71"/>
+    <path d="M3.385 7.643h1.365L6.34 2.109H4.975l-1.59 5.534zm5.836-5.328c-.287-.107-.736-.222-1.294-.222-1.42 0-2.42.717-2.427 1.745-.008.758.718 1.18 1.264 1.433.56.26.75.426.75.658 0 .356-.45.52-.863.52-.576 0-1.026-.145-1.564-.37L4.793 7.15c.343.149.98.278 1.635.283 1.51 0 2.493-.71 2.506-1.808.012-.603-.382-1.06-1.222-1.442-.505-.246-.816-.412-.816-.662 0-.227.265-.47.838-.47.468-.008.81.096 1.076.2l.255.12.362-1.056zm2.463 3.65c.101-.26.49-1.258.49-1.258-.026.044.1.264.161.444l.27 1.238.163-.162h-1.084zm1.968-3.856H12.63c-.347 0-.61.1-.762.443L9.75 7.643h1.431s.233-.306.287-.447h1.742c.04.175.163.447.163.447h1.266L13.652 2.309zm4.27 5.334c.383-.984.773-1.983 1.144-2.923.064-.176.12-.338.12-.338l.643 2.9c.074.329.28.361.503.361h2.1l-2.023-5.334H19.06c-.302 0-.558.172-.676.438L15.932 7.643h1.442z" fill="#1A1F71" />
   </svg>
 );
 
@@ -107,9 +107,9 @@ export default function ClientOrderPage() {
 
   // Load gateway list with translated labels
   const gateways = useMemo(() => [
-    { 
-      id: 'visa-mastercard', 
-      name: t('visaMaster'), 
+    {
+      id: 'visa-mastercard',
+      name: t('visaMaster'),
       logo: (
         <div className="flex items-center gap-1.5 bg-white border border-stone-200/50 shadow-sm px-2 py-1 rounded-xl h-8">
           <VisaLogo />
@@ -117,54 +117,54 @@ export default function ClientOrderPage() {
         </div>
       )
     },
-    { 
-      id: 'knet', 
-      name: t('knet'), 
+    {
+      id: 'knet',
+      name: t('knet'),
       logo: (
         <div className="flex items-center bg-white border border-stone-200/50 shadow-sm px-2.5 py-1 rounded-xl h-8">
           <KnetLogo />
         </div>
       )
     },
-    { 
-      id: 'apple-pay', 
-      name: t('applePay'), 
+    {
+      id: 'apple-pay',
+      name: t('applePay'),
       logo: (
         <div className="flex items-center text-black bg-white border border-stone-200/50 shadow-sm px-3 py-1 rounded-xl h-8">
           <ApplePayLogo />
         </div>
       )
     },
-    { 
-      id: 'dima', 
-      name: t('dima'), 
+    {
+      id: 'dima',
+      name: t('dima'),
       logo: (
         <div className="flex items-center bg-white border border-stone-200/50 shadow-sm px-2 py-1 rounded-xl h-8">
           <DimaLogo />
         </div>
       )
     },
-    { 
-      id: 'tally', 
-      name: t('tally'), 
+    {
+      id: 'tally',
+      name: t('tally'),
       logo: (
         <div className="flex items-center bg-white border border-stone-200/50 shadow-sm px-2 py-1 rounded-xl h-8">
           <TallyLogo />
         </div>
       )
     },
-    { 
-      id: 'cod', 
-      name: t('cod'), 
+    {
+      id: 'cod',
+      name: t('cod'),
       logo: (
         <div className="flex items-center justify-center bg-white border border-stone-200/50 shadow-sm p-1 px-2.5 rounded-xl w-14 h-8">
           <CodLogo />
         </div>
       )
     },
-    { 
-      id: 'pay-by-link', 
-      name: t('payByLink'), 
+    {
+      id: 'pay-by-link',
+      name: t('payByLink'),
       logo: (
         <div className="flex items-center justify-center bg-white border border-stone-200/50 shadow-sm p-1 px-2.5 rounded-xl w-14 h-8">
           <LinkLogo />
@@ -227,7 +227,7 @@ export default function ClientOrderPage() {
       <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-lg border-b border-stone-100 px-5 py-4">
         <div className="max-w-lg mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Image src="https://raiyansoft.com/wp-content/uploads/2026/05/logo-2.png" alt="Tanal"
+            <Image src={logo} alt="Tanal"
               width={26} height={34} className="object-contain" referrerPolicy="no-referrer" />
             <span className="text-base font-semibold text-stone-700 tracking-tight">Tanal</span>
           </div>
@@ -352,7 +352,7 @@ export default function ClientOrderPage() {
             {!paid ? (
               <motion.div key="gateways" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-4">
                 <p className="text-sm text-stone-500 font-medium text-start">{t('selectPaymentMethod')}</p>
-                
+
                 <div className="flex flex-col gap-3">
                   {gateways.map(gw => {
                     const isSelected = selectedGateway === gw.id;

@@ -12,7 +12,7 @@ import { Mail, Lock, ArrowRight, ArrowLeft, Loader2, AlertCircle } from 'lucide-
 import { useRouter } from 'next/navigation';
 import { loginAdmin } from '@/lib/api';
 import { saveToken, saveAdmin, savePermissions } from '@/lib/auth';
-
+import logo from "@/public/logo.webp"
 import {
   Form,
   FormControl,
@@ -28,7 +28,7 @@ interface FormValues {
 }
 
 export default function LoginPage() {
-  const { t, dir } = useLanguage();
+  const { t, dir, language, setLanguage } = useLanguage();
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -71,6 +71,17 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center luxury-gradient relative overflow-hidden text-secondary">
+      {/* Language Toggle Button */}
+      <div className={cn("absolute top-6 z-20", dir === 'ltr' ? 'right-6' : 'left-6')}>
+        <button
+          onClick={() => setLanguage(language === 'en' ? 'ar' : 'en')}
+          className="px-4 py-2 bg-white/50 hover:bg-white/80 border border-white/60 text-secondary rounded-xl text-sm font-medium transition-all shadow-sm cursor-pointer hover:-translate-y-0.5 active:scale-95 flex items-center gap-1.5"
+        >
+          <span className="text-xs">🌐</span>
+          <span>{language === 'en' ? 'العربية' : 'English'}</span>
+        </button>
+      </div>
+
       {/* Decorative Background Elements */}
       <div className="absolute top-[-10%] right-[-5%] w-[600px] h-[600px] bg-primary/10 rounded-full blur-[100px] pointer-events-none mix-blend-multiply" />
       <div className="absolute bottom-[-10%] left-[-5%] w-[500px] h-[500px] bg-accent/20 rounded-full blur-[100px] pointer-events-none mix-blend-multiply" />
@@ -84,7 +95,7 @@ export default function LoginPage() {
       >
         <div className="flex flex-col items-center mb-8">
           <Image
-            src="https://raiyansoft.com/wp-content/uploads/2026/05/logo-2.png"
+            src={logo}
             alt="Tanal Logo"
             width={72}
             height={72}

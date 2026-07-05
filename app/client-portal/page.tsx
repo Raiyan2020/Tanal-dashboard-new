@@ -22,6 +22,7 @@ import {
   MapPin,
   Users
 } from 'lucide-react';
+import logo from "@/public/logo.webp"
 
 const mockEvent = {
   nameEn: 'Royal Wedding - Salem & Sara',
@@ -102,7 +103,7 @@ export default function ClientPortal() {
         <div className="flex items-center px-6 mb-8 mt-2 overflow-hidden justify-between w-full h-8 relative">
           <div className="flex items-center gap-3">
             <Image
-              src="https://raiyansoft.com/wp-content/uploads/2026/05/logo-2.png"
+              src={logo}
               alt="Tanal Logo"
               width={30}
               height={40}
@@ -171,7 +172,7 @@ export default function ClientPortal() {
           </div>
           <div className="flex items-center gap-3">
             <Image
-              src="https://raiyansoft.com/wp-content/uploads/2026/05/logo-2.png"
+              src={logo}
               alt="Tanal Logo"
               width={40}
               height={40}

@@ -44,6 +44,17 @@ export default function ContactSection({ token }: { token: string }) {
 
   return (
     <div className="space-y-6">
+      <div className="flex justify-end border-b border-secondary/5 pb-4">
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="flex items-center gap-2 px-6 py-2.5 bg-primary hover:bg-primary-dark text-white rounded-xl text-sm font-semibold transition-colors shadow-sm cursor-pointer disabled:opacity-60"
+        >
+          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+          {saving ? t('lpSaving') : t('lpSaveChanges')}
+        </button>
+      </div>
+
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label className={labelClass}>{t('lpCountryCode')}</label>
@@ -64,6 +75,7 @@ export default function ContactSection({ token }: { token: string }) {
             onChange={e => setContact(c => c ? { ...c, whatsapp_phone: e.target.value } : c)}
             dir="ltr"
             className={inputClass}
+            placeholder="xxxxxxxx"
           />
         </div>
       </div>
@@ -89,12 +101,9 @@ export default function ContactSection({ token }: { token: string }) {
         />
       </div>
 
-      {/* Social links (read-only display — managed in the Social Links section) */}
-      {contact.social_links.length > 0 && (
-        <div className="bg-secondary/3 rounded-2xl p-4 space-y-2">
-          <p className="text-xs font-bold text-secondary/40 uppercase tracking-wider mb-3">
-            {t('lpLinkedSocialLinks')}
-          </p>
+      {contact.social_links && contact.social_links.length > 0 && (
+        <div className="space-y-3 pt-2">
+          <label className={labelClass}>{t('lpSocialLinks')}</label>
           {contact.social_links.map(sl => {
             const Icon = getSocialIcon(sl.platform);
             return (
@@ -113,17 +122,6 @@ export default function ContactSection({ token }: { token: string }) {
           })}
         </div>
       )}
-
-      <div className="flex justify-end pt-2">
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="flex items-center gap-2 px-6 py-2.5 bg-primary hover:bg-primary-dark text-white rounded-xl text-sm font-semibold transition-colors shadow-sm cursor-pointer disabled:opacity-60"
-        >
-          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-          {saving ? t('lpSaving') : t('lpSaveChanges')}
-        </button>
-      </div>
     </div>
   );
 }

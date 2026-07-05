@@ -6,6 +6,7 @@ import { motion } from 'motion/react';
 import { cn } from '@/lib/utils';
 import Image from 'next/image';
 import { MapPin, Calendar, Clock, Download, Globe, Phone } from 'lucide-react';
+import logo from "@/public/logo.webp";
 
 export default function GuestViewPage() {
   const { t, dir, language, setLanguage } = useLanguage();
@@ -25,7 +26,6 @@ export default function GuestViewPage() {
   const guestPhone = "+965 1234 5678";
 
   const hostPhone = "+965 9876 5432";
-  const hostEmail = "host@example.com";
 
   return (
     <div className="min-h-screen luxury-gradient text-secondary relative pb-20">
@@ -81,7 +81,7 @@ export default function GuestViewPage() {
 
         <div className="absolute left-1/2 -translate-x-1/2 top-4 sm:top-6 pt-1 sm:pt-0">
           <Image
-            src="https://raiyansoft.com/wp-content/uploads/2026/05/logo-2.png"
+            src={logo}
             alt="Tanal"
             width={60}
             height={60}
