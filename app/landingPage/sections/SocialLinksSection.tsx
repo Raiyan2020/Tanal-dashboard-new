@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useLanguage } from '@/lib/i18n';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
+import { z } from 'zod';
 import {
   Loader2, RefreshCw, Plus, ArrowUp, ArrowDown, Link as LinkIcon, Pencil, Trash2, X, Save
 } from 'lucide-react';
@@ -30,7 +31,7 @@ const emptySLForm = (): SLForm => ({
 });
 
 export default function SocialLinksSection({ token }: { token: string }) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const [links, setLinks] = useState<LandingSocialLink[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -74,6 +75,27 @@ export default function SocialLinksSection({ token }: { token: string }) {
   };
 
   const submitForm = async () => {
+    const schema = z.object({
+      platform: z.string().min(1, { message: language === 'ar' ? 'المنصة مطلوبة' : 'Platform is required' }),
+      url: z.string().url({ message: language === 'ar' ? 'رابط المنصة غير صالح' : 'Invalid URL' }),
+      labelAr: z.string().min(1, { message: language === 'ar' ? 'الاسم بالعربية مطلوب' : 'Label in Arabic is required' })
+        .max(40, { message: language === 'ar' ? 'الاسم لا يمكن أن يتجاوز 40 حرفاً' : 'Label must not exceed 40 characters' }),
+      labelEn: z.string().min(1, { message: language === 'ar' ? 'الاسم بالإنجليزية مطلوب' : 'Label in English is required' })
+        .max(40, { message: language === 'ar' ? 'الاسم لا يمكن أن يتجاوز 40 حرفاً' : 'Label must not exceed 40 characters' }),
+    });
+
+    const result = schema.safeParse({
+      platform: form.platform,
+      url: form.url,
+      labelAr: form.label_ar,
+      labelEn: form.label_en,
+    });
+
+    if (!result.success) {
+      toast.error(result.error.issues[0].message);
+      return;
+    }
+
     setFormSaving(true);
     try {
       if (modal?.mode === 'add') {
@@ -85,7 +107,12 @@ export default function SocialLinksSection({ token }: { token: string }) {
       setModal(null);
       load();
     } catch (e) {
-      toast.error((e as Error).message);
+      const msg = (e as Error).message;
+      if (msg.includes(', ')) {
+        msg.split(', ').forEach(err => toast.error(err));
+      } else {
+        toast.error(msg);
+      }
     } finally {
       setFormSaving(false);
     }
@@ -181,7 +208,12 @@ export default function SocialLinksSection({ token }: { token: string }) {
                 <div className="flex items-center gap-1.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button
                     onClick={() => {
-                      setForm({ platform: link.platform, url: link.url, label_ar: '', label_en: '' });
+                      setForm({
+                        platform: link.platform,
+                        url: link.url,
+                        label_ar: link.label_ar ?? '',
+                        label_en: link.label_en ?? '',
+                      });
                       setModal({ mode: 'edit', link });
                     }}
                     className="flex items-center gap-1 px-2.5 py-1.5 bg-primary/10 text-primary rounded-lg text-xs font-medium cursor-pointer hover:bg-primary/20 transition-colors"

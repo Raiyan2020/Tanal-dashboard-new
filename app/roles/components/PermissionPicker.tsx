@@ -15,7 +15,7 @@ interface PermPickerProps {
 }
 
 export function PermissionPicker({ groups, selected, onChange }: PermPickerProps) {
-  const { t, dir } = useLanguage();
+  const { t, dir, language } = useLanguage();
   const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState('');
 
@@ -80,7 +80,7 @@ export function PermissionPicker({ groups, selected, onChange }: PermPickerProps
     ? groups.map(g => ({
       ...g,
       permissions: g.permissions.filter(p =>
-        p.label.toLowerCase().includes(search.toLowerCase()) ||
+        (language === 'ar' ? p.label_ar : p.label_en).toLowerCase().includes(search.toLowerCase()) ||
         p.action.toLowerCase().includes(search.toLowerCase())
       ),
     })).filter(g => g.permissions.length > 0)
@@ -138,7 +138,9 @@ export function PermissionPicker({ groups, selected, onChange }: PermPickerProps
                     {allChecked && <CheckSquare className="w-3.5 h-3.5 text-white" />}
                     {someChecked && <Square className="w-3.5 h-3.5 text-primary" />}
                   </span>
-                  <span className="font-medium text-sm text-secondary">{group.label}</span>
+                  <span className="font-medium text-sm text-secondary">
+                    {language === 'ar' ? group.module_label_ar : group.module_label_en}
+                  </span>
                   <span className="text-xs text-secondary/40 bg-secondary/8 px-2 py-0.5 rounded-full">
                     {checkedCount}/{groupIds.length}
                   </span>
@@ -185,7 +187,9 @@ export function PermissionPicker({ groups, selected, onChange }: PermPickerProps
                                 </svg>
                               )}
                             </span>
-                            <span className="flex-1 leading-snug">{perm.label}</span>
+                            <span className="flex-1 leading-snug">
+                              {language === 'ar' ? perm.label_ar : perm.label_en}
+                            </span>
                             {isDash ? (
                               <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-primary/75 shrink-0"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
                             ) : (

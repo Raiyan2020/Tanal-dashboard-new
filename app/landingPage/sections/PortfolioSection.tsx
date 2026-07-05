@@ -5,6 +5,7 @@ import { useLanguage } from '@/lib/i18n';
 import { motion, AnimatePresence } from 'motion/react';
 import Image from 'next/image';
 import { toast } from 'sonner';
+import { z } from 'zod';
 import {
   Loader2, RefreshCw, Plus, LayoutGrid, Pencil, Trash2, ArrowUp, ArrowDown, X, Save
 } from 'lucide-react';
@@ -27,7 +28,7 @@ const emptyPortfolioForm = (): PortfolioForm => ({
 });
 
 export default function PortfolioSection({ token }: { token: string }) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const [items, setItems] = useState<LandingPortfolioItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -72,10 +73,10 @@ export default function PortfolioSection({ token }: { token: string }) {
     } else if (dir === 'down' && idx < arr.length - 1) {
       [arr[idx + 1], arr[idx]] = [arr[idx], arr[idx + 1]];
     }
-    
+
     setItems(arr);
     setSaving(true);
-    
+
     try {
       await reorderPortfolio(arr.map((it, i) => ({ id: it.id, sort: i })), token);
       toast.success(t('lpSavedOrder'));
@@ -88,6 +89,25 @@ export default function PortfolioSection({ token }: { token: string }) {
   };
 
   const submitForm = async () => {
+    const schema = z.object({
+      nameAr: z.string().min(1, { message: language === 'ar' ? 'الاسم بالعربية مطلوب' : 'Name in Arabic is required' })
+        .max(40, { message: language === 'ar' ? 'الاسم لا يمكن أن يتجاوز 40 حرفاً' : 'Name must not exceed 40 characters' }),
+      nameEn: z.string().min(1, { message: language === 'ar' ? 'الاسم بالإنجليزية مطلوب' : 'Name in English is required' })
+        .max(40, { message: language === 'ar' ? 'الاسم لا يمكن أن يتجاوز 40 حرفاً' : 'Name must not exceed 40 characters' }),
+      image: z.any().refine(val => val !== null && val !== undefined, { message: language === 'ar' ? 'صورة المعرض مطلوبة' : 'Portfolio image is required' }),
+    });
+
+    const result = schema.safeParse({
+      nameAr: form.name_ar,
+      nameEn: form.name_en,
+      image: form.imageFile || (modal?.mode === 'edit' ? modal.item.image : null),
+    });
+
+    if (!result.success) {
+      toast.error(result.error.issues[0].message);
+      return;
+    }
+
     setFormSaving(true);
     try {
       if (modal?.mode === 'add') {
@@ -99,7 +119,12 @@ export default function PortfolioSection({ token }: { token: string }) {
       setModal(null);
       load();
     } catch (e) {
-      toast.error((e as Error).message);
+      const msg = (e as Error).message;
+      if (msg.includes(', ')) {
+        msg.split(', ').forEach(err => toast.error(err));
+      } else {
+        toast.error(msg);
+      }
     } finally {
       setFormSaving(false);
     }

@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useLanguage } from '@/lib/i18n';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
+import { z } from 'zod';
 import {
   Loader2, RefreshCw, Plus, ArrowUp, ArrowDown, Pencil, Trash2, X, Save
 } from 'lucide-react';
@@ -24,7 +25,7 @@ const emptyETForm = (): ETForm => ({
 });
 
 export default function EventTypesSection({ token }: { token: string }) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const [types, setTypes] = useState<LandingEventType[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -37,9 +38,9 @@ export default function EventTypesSection({ token }: { token: string }) {
     setLoading(true);
     getLandingEventTypes(token)
       .then(r => setTypes(r.data?.items ?? []))
-      .catch(() => toast.error('فشل جلب أنواع الفعاليات'))
+      .catch(() => toast.error(t('lpFailedToLoadEventTypes')))
       .finally(() => setLoading(false));
-  }, [token]);
+  }, [token, t]);
 
   useEffect(() => {
     load();
@@ -59,7 +60,7 @@ export default function EventTypesSection({ token }: { token: string }) {
     setSaving(true);
     try {
       await reorderEventTypes(types.map((t, i) => ({ id: t.id, sort: i })), token);
-      toast.success('تم إعادة الترتيب');
+      toast.success(t('lpSavedOrder'));
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -68,6 +69,23 @@ export default function EventTypesSection({ token }: { token: string }) {
   };
 
   const submitForm = async () => {
+    const schema = z.object({
+      nameAr: z.string().min(1, { message: language === 'ar' ? 'الاسم بالعربية مطلوب' : 'Name in Arabic is required' })
+        .max(40, { message: language === 'ar' ? 'الاسم لا يمكن أن يتجاوز 40 حرفاً' : 'Name must not exceed 40 characters' }),
+      nameEn: z.string().min(1, { message: language === 'ar' ? 'الاسم بالإنجليزية مطلوب' : 'Name in English is required' })
+        .max(40, { message: language === 'ar' ? 'الاسم لا يمكن أن يتجاوز 40 حرفاً' : 'Name must not exceed 40 characters' }),
+    });
+
+    const result = schema.safeParse({
+      nameAr: form.name_ar,
+      nameEn: form.name_en,
+    });
+
+    if (!result.success) {
+      toast.error(result.error.issues[0].message);
+      return;
+    }
+
     setFormSaving(true);
     try {
       if (modal?.mode === 'add') {
@@ -75,11 +93,16 @@ export default function EventTypesSection({ token }: { token: string }) {
       } else if (modal?.mode === 'edit') {
         await updateEventType(modal.et.id, form, token);
       }
-      toast.success('تم الحفظ');
+      toast.success(t('lpSavedOk'));
       setModal(null);
       load();
     } catch (e) {
-      toast.error((e as Error).message);
+      const msg = (e as Error).message;
+      if (msg.includes(', ')) {
+        msg.split(', ').forEach(err => toast.error(err));
+      } else {
+        toast.error(msg);
+      }
     } finally {
       setFormSaving(false);
     }
@@ -90,7 +113,7 @@ export default function EventTypesSection({ token }: { token: string }) {
     setDeleting(true);
     try {
       await deleteEventType(modal.et.id, token);
-      toast.success('تم الحذف');
+      toast.success(t('lpDeleted'));
       setModal(null);
       load();
     } catch (e) {
@@ -104,7 +127,7 @@ export default function EventTypesSection({ token }: { token: string }) {
     <div className="space-y-4">
       <div className="flex items-center justify-between bg-secondary/5 p-4 rounded-2xl border border-secondary/10">
         <span className="font-semibold text-secondary">
-          أنواع الفعاليات <span className="text-secondary/40 font-normal text-sm">({types.length})</span>
+          {t('lpEventTypes')} <span className="text-secondary/40 font-normal text-sm">({types.length})</span>
         </span>
         <div className="flex gap-2">
           <button
@@ -113,7 +136,7 @@ export default function EventTypesSection({ token }: { token: string }) {
             className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-secondary/20 rounded-xl text-sm font-medium text-secondary/70 hover:text-secondary transition-colors cursor-pointer disabled:opacity-50 shadow-sm"
           >
             {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}{' '}
-            حفظ الترتيب
+            {t('lpSaveOrder')}
           </button>
           <button
             onClick={() => {
@@ -122,7 +145,7 @@ export default function EventTypesSection({ token }: { token: string }) {
             }}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-white rounded-xl text-sm font-medium cursor-pointer hover:bg-primary-dark transition-colors shadow-sm"
           >
-            <Plus className="w-4 h-4" /> إضافة نوع
+            <Plus className="w-4 h-4" /> {t('lpAddType')}
           </button>
         </div>
       </div>
@@ -157,22 +180,24 @@ export default function EventTypesSection({ token }: { token: string }) {
               <span className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center text-xs font-bold text-primary shrink-0">
                 {idx + 1}
               </span>
-              <p className="flex-1 font-semibold text-secondary text-sm">{et.name}</p>
+              <p className="flex-1 font-semibold text-secondary text-sm">
+                {language === 'ar' ? et.name_ar : et.name_en}
+              </p>
               <div className="flex items-center gap-1.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
                 <button
                   onClick={() => {
-                    setForm({ name_ar: et.name, name_en: et.name });
+                    setForm({ name_ar: et.name_ar, name_en: et.name_en });
                     setModal({ mode: 'edit', et });
                   }}
                   className="flex items-center gap-1 px-2.5 py-1.5 bg-primary/10 text-primary rounded-lg text-xs font-medium cursor-pointer hover:bg-primary/20 transition-colors"
                 >
-                  <Pencil className="w-3.5 h-3.5" /> تعديل
+                  <Pencil className="w-3.5 h-3.5" /> {t('lpEdit')}
                 </button>
                 <button
                   onClick={() => setModal({ mode: 'delete', et })}
                   className="flex items-center gap-1 px-2.5 py-1.5 bg-red-50 text-red-500 rounded-lg text-xs font-medium cursor-pointer hover:bg-red-100 transition-colors"
                 >
-                  <Trash2 className="w-3.5 h-3.5" /> حذف
+                  <Trash2 className="w-3.5 h-3.5" /> {t('lpDelete')}
                 </button>
               </div>
             </motion.div>
@@ -215,6 +240,8 @@ export default function EventTypesSection({ token }: { token: string }) {
                   valueAr={form.name_ar}
                   onChangeEn={v => setForm(f => ({ ...f, name_en: v }))}
                   onChangeAr={v => setForm(f => ({ ...f, name_ar: v }))}
+                  placeholderEn={t('lpEventTypeEnPlaceholder')}
+                  placeholderAr={t('lpEventTypeArPlaceholder')}
                 />
               </div>
               <div className="flex gap-3 px-6 py-4 border-t border-secondary/10">
@@ -238,7 +265,7 @@ export default function EventTypesSection({ token }: { token: string }) {
         )}
         {modal?.mode === 'delete' && (
           <DeleteConfirm
-            label={modal.et.name}
+            label={language === 'ar' ? modal.et.name_ar : modal.et.name_en}
             onConfirm={doDelete}
             onCancel={() => setModal(null)}
             loading={deleting}

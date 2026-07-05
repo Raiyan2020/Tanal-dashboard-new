@@ -76,10 +76,10 @@ export default function EmployeesClient({
 
   const handleRemove = async () => {
     if (employeeToDelete !== null && token) {
-      const delToast = toast.loading('Deleting employee...');
+      const delToast = toast.loading(t('deletingEmployee'));
       try {
         await deleteEmployee(employeeToDelete, token);
-        toast.success(t('deleteEmployeeSuccess' as any) || 'Employee deleted successfully');
+        toast.success(t('deleteEmployeeSuccess'));
         if (employeeToView && employeeToView.id === employeeToDelete) {
           setEmployeeToView(null);
         }
@@ -95,18 +95,18 @@ export default function EmployeesClient({
 
   const handleSaveEmployee = async (payload: any) => {
     if (!token) return;
-    const saveToast = toast.loading(employeeToEdit ? 'Updating employee...' : 'Creating employee...');
+    const saveToast = toast.loading(employeeToEdit ? t('updatingEmployee') : t('creatingEmployee'));
     try {
       if (employeeToEdit) {
         await updateEmployee(employeeToEdit.id, payload, token);
-        toast.success(t('updateEmployeeSuccess' as any) || 'Employee updated successfully');
+        toast.success(t('updateEmployeeSuccess'));
         if (employeeToView?.id === employeeToEdit.id) {
           const detailRes = await getEmployeeById(employeeToEdit.id, token);
           setEmployeeToView(detailRes.data);
         }
       } else {
         await createEmployee(payload, token);
-        toast.success(t('createEmployeeSuccess' as any) || 'Employee created successfully');
+        toast.success(t('createEmployeeSuccess'));
       }
       setIsEditing(false);
       setEmployeeToEdit(null);

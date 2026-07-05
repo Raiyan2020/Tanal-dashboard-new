@@ -18,7 +18,7 @@ interface RoleDetailViewProps {
 }
 
 export function RoleDetailView({ roleId, onBack, onEdit, onDelete }: RoleDetailViewProps) {
-  const { t, dir } = useLanguage();
+  const { t, dir, language } = useLanguage();
   const token = getToken() ?? '';
   const [role, setRole] = useState<RoleDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -34,11 +34,7 @@ export function RoleDetailView({ roleId, onBack, onEdit, onDelete }: RoleDetailV
   if (loading) return <div className="flex justify-center py-32"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
   if (!role) return null;
 
-  const grouped = role.permissions.reduce<Record<string, { label: string; perms: typeof role.permissions }>>((acc, p) => {
-    if (!acc[p.module]) acc[p.module] = { label: p.module, perms: [] };
-    acc[p.module].perms.push(p);
-    return acc;
-  }, {});
+  const displayName = language === 'ar' ? role.name_ar : role.name_en;
 
   return (
     <motion.div
@@ -76,7 +72,7 @@ export function RoleDetailView({ roleId, onBack, onEdit, onDelete }: RoleDetailV
             <ShieldCheck className="w-7 h-7 text-primary" />
           </div>
           <div className="flex-1">
-            <h2 className={cn('text-2xl font-bold text-secondary', dir === 'rtl' ? 'font-arabic' : 'font-serif')}>{role.name}</h2>
+            <h2 className={cn('text-2xl font-bold text-secondary', dir === 'rtl' ? 'font-arabic' : 'font-serif')}>{displayName}</h2>
             <div className="flex flex-wrap gap-3 mt-3">
               <span className="inline-flex items-center gap-1.5 text-sm text-secondary/60 bg-secondary/8 px-3 py-1 rounded-full">
                 <Users className="w-4 h-4" /> {role.admins_count} {t('adminCount')}
@@ -98,18 +94,24 @@ export function RoleDetailView({ roleId, onBack, onEdit, onDelete }: RoleDetailV
       <div className="glass-panel p-6 sm:p-8 rounded-[2rem] border border-secondary/5 shadow-sm crystal-accent">
         <h3 className={cn('text-lg font-semibold text-secondary mb-6', dir === 'rtl' ? 'font-arabic' : 'font-serif')}>{t('grantedPermissions')}</h3>
         <div className="space-y-5">
-          {Object.entries(grouped).map(([mod, { label, perms }]) => (
-            <div key={mod}>
-              <p className="text-xs font-semibold text-secondary/40 uppercase tracking-widest mb-2">{label}</p>
-              <div className="flex flex-wrap gap-2">
-                {perms.map(p => (
-                  <span key={p.id} className={cn('inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border font-medium', actionColor(p.action))}>
-                    {p.label}
-                  </span>
-                ))}
+          {role.permissions.map(group => {
+            const moduleLabel = language === 'ar' ? group.module_label_ar : group.module_label_en;
+            return (
+              <div key={group.module}>
+                <p className="text-xs font-semibold text-secondary/40 uppercase tracking-widest mb-2">{moduleLabel}</p>
+                <div className="flex flex-wrap gap-2">
+                  {group.permissions.map(p => {
+                    const permLabel = language === 'ar' ? p.label_ar : p.label_en;
+                    return (
+                      <span key={p.id} className={cn('inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border font-medium', actionColor(p.action))}>
+                        {permLabel}
+                      </span>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </motion.div>

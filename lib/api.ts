@@ -273,10 +273,8 @@ export async function getDashboardData(
 export interface Role {
   id: number;
   name: string;
-  /** @deprecated use name instead */
-  name_en?: string;
-  /** @deprecated use name instead */
-  name_ar?: string;
+  name_ar: string;
+  name_en: string;
   is_protected: boolean;
   is_super_admin: boolean;
   admins_count: number;
@@ -288,21 +286,28 @@ export interface Role {
 export interface Permission {
   id: number;
   name: string;
+  name_ar: string;
+  name_en: string;
   module: string;
   action: string;
   label: string;
+  label_ar: string;
+  label_en: string;
 }
 
 export interface PermissionGroup {
   module: string;
-  label: string;
+  module_label: string;
+  module_label_ar: string;
+  module_label_en: string;
+  /** @deprecated use module_label_ar / module_label_en */
+  label?: string;
   permissions: Permission[];
 }
 
 export interface RoleDetail extends Role {
-  /** Merged display name returned by the detail endpoint */
-  name: string;
-  permissions: Permission[];
+  /** Flat list is no longer returned – the API now returns grouped permissions */
+  permissions: PermissionGroup[];
 }
 
 export interface PaginatedItems<T> {
@@ -1742,7 +1747,7 @@ export interface ApiFinancialRecordDetail {
   paid_amount: string;
   remaining_amount: string;
   currency: string;
-  status: 'paid' | 'unpaid' | 'installments';
+  status: 'paid' | 'unpaid' | 'installments' | "cancelled";
   record_date: string;
   notes: string | null;
   client: {
@@ -1803,20 +1808,6 @@ export async function getFinancialRecordById(
   return apiRequest<ApiFinancialRecordDetail>(`/admin/financial-records/${id}`, { token });
 }
 
-/** GET /admin/financial-records/:id/pdf */
-export async function downloadFinancialRecordPdf(
-  id: number,
-  token: string
-): Promise<Blob> {
-  const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://portal.tanal.raiyan.cc/api'}/admin/financial-records/${id}/pdf`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: 'application/pdf',
-    },
-  });
-  if (!response.ok) throw new Error('فشل تحميل ملف PDF');
-  return response.blob();
-}
 
 /** POST /financial-records/:id/admin/settle?_method=patch */
 export async function settleFinancialRecord(
@@ -1884,16 +1875,21 @@ export interface LandingSocialLink {
   platform: string;
   url: string;
   sort: number;
+  label_ar: string | null;
+  label_en: string | null;
 }
 
 export interface LandingFooter {
   id: number;
-  brand_name: { ar: string; en: string };
-  tagline: { ar: string; en: string };
-  description: { ar: string; en: string };
-  about_url?: string;
-  privacy_url?: string;
-  terms_url?: string;
+  brand_name_ar: string;
+  brand_name_en: string;
+  tagline_ar: string;
+  tagline_en: string;
+  description_ar: string;
+  description_en: string;
+  about_url?: string | null;
+  privacy_url?: string | null;
+  terms_url?: string | null;
   copyright: string;
   logo_url: string | null;
 }
@@ -1911,7 +1907,9 @@ export interface LandingContact {
 
 export interface LandingEventType {
   id: number;
-  name: string;
+  name?: string;
+  name_ar: string;
+  name_en: string;
   sort: number;
 }
 

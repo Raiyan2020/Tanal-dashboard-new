@@ -21,7 +21,7 @@ export default function RolesClient({
 }: {
   initialData: Role[] | null;
 }) {
-  const { t, dir } = useLanguage();
+  const { t, dir, language } = useLanguage();
   const [token] = useState(() => getToken() ?? '');
 
   const [roles, setRoles] = useState<Role[]>(initialData ?? []);
@@ -146,7 +146,7 @@ export default function RolesClient({
                     </div>
                     <div className="flex-1 min-w-0 text-start">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <h3 className="font-semibold text-secondary truncate">{role.name}</h3>
+                        <h3 className="font-semibold text-secondary truncate">{language === 'ar' ? role.name_ar : role.name_en}</h3>
                         {role.is_super_admin && (
                           <span className="text-[10px] px-1.5 py-0.5 bg-purple-50 text-purple-700 border border-purple-200 rounded-full">{t('superAdmin')}</span>
                         )}

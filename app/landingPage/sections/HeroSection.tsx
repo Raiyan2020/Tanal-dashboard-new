@@ -5,6 +5,7 @@ import { useLanguage } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { Save, Loader2 } from 'lucide-react';
+import { z } from 'zod';
 import { getLandingHero, updateLandingHero, type LandingHero } from '@/lib/api';
 import { BilingualField, ImageUploadBox, SectionSkeleton, inputClass, labelClass } from './shared';
 
@@ -19,7 +20,7 @@ interface BilingualHero {
 }
 
 export default function HeroSection({ token }: { token: string }) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const [hero, setHero] = useState<BilingualHero | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -32,17 +33,29 @@ export default function HeroSection({ token }: { token: string }) {
       getLandingHero(token, 'en')
     ])
       .then(([resAr, resEn]) => {
-        const arData = resAr.data;
-        const enData = resEn.data;
-        if (arData && enData) {
+        const arHero = (resAr.data as any)?.data || resAr.data;
+        const enHero = (resEn.data as any)?.data || resEn.data;
+        if (arHero && enHero) {
           setHero({
-            title: { ar: arData.title || '', en: enData.title || '' },
-            subtitle: { ar: arData.subtitle || '', en: enData.subtitle || '' },
-            primary_cta_label: { ar: arData.primary_cta_label || '', en: enData.primary_cta_label || '' },
-            primary_cta_url: arData.primary_cta_url || enData.primary_cta_url || '',
-            secondary_cta_label: { ar: arData.secondary_cta_label || '', en: enData.secondary_cta_label || '' },
-            secondary_cta_url: arData.secondary_cta_url || enData.secondary_cta_url || '',
-            image: arData.image || enData.image || null,
+            title: {
+              ar: (arHero.title && typeof arHero.title === 'object' ? arHero.title.ar : arHero.title) || '',
+              en: (enHero.title && typeof enHero.title === 'object' ? enHero.title.en : enHero.title) || '',
+            },
+            subtitle: {
+              ar: (arHero.subtitle && typeof arHero.subtitle === 'object' ? arHero.subtitle.ar : arHero.subtitle) || '',
+              en: (enHero.subtitle && typeof enHero.subtitle === 'object' ? enHero.subtitle.en : enHero.subtitle) || '',
+            },
+            primary_cta_label: {
+              ar: (arHero.primary_cta_label && typeof arHero.primary_cta_label === 'object' ? arHero.primary_cta_label.ar : arHero.primary_cta_label) || '',
+              en: (enHero.primary_cta_label && typeof enHero.primary_cta_label === 'object' ? enHero.primary_cta_label.en : enHero.primary_cta_label) || '',
+            },
+            primary_cta_url: arHero.primary_cta_url || enHero.primary_cta_url || '',
+            secondary_cta_label: {
+              ar: (arHero.secondary_cta_label && typeof arHero.secondary_cta_label === 'object' ? arHero.secondary_cta_label.ar : arHero.secondary_cta_label) || '',
+              en: (enHero.secondary_cta_label && typeof enHero.secondary_cta_label === 'object' ? enHero.secondary_cta_label.en : enHero.secondary_cta_label) || '',
+            },
+            secondary_cta_url: arHero.secondary_cta_url || enHero.secondary_cta_url || '',
+            image: arHero.image || enHero.image || null,
           });
         } else {
           toast.error(t('noDataFound'));
@@ -54,6 +67,48 @@ export default function HeroSection({ token }: { token: string }) {
 
   const handleSave = async () => {
     if (!hero) return;
+
+    const schema = z.object({
+      titleAr: z.string().min(1, { message: language === 'ar' ? 'العنوان بالعربية مطلوب' : 'Title in Arabic is required' })
+        .max(40, { message: language === 'ar' ? 'العنوان لا يمكن أن يتجاوز 40 حرفاً' : 'Title must not exceed 40 characters' }),
+      titleEn: z.string().min(1, { message: language === 'ar' ? 'العنوان بالإنجليزية مطلوب' : 'Title in English is required' })
+        .max(40, { message: language === 'ar' ? 'العنوان لا يمكن أن يتجاوز 40 حرفاً' : 'Title must not exceed 40 characters' }),
+      subtitleAr: z.string().min(1, { message: language === 'ar' ? 'النص الفرعي بالعربية مطلوب' : 'Subtitle in Arabic is required' })
+        .max(40, { message: language === 'ar' ? 'النص الفرعي لا يمكن أن يتجاوز 40 حرفاً' : 'Subtitle must not exceed 40 characters' }),
+      subtitleEn: z.string().min(1, { message: language === 'ar' ? 'النص الفرعي بالإنجليزية مطلوب' : 'Subtitle in English is required' })
+        .max(40, { message: language === 'ar' ? 'النص الفرعي لا يمكن أن يتجاوز 40 حرفاً' : 'Subtitle must not exceed 40 characters' }),
+      primaryCtaLabelAr: z.string().min(1, { message: language === 'ar' ? 'اسم زر الدعوة الأساسي بالعربية مطلوب' : 'Primary CTA Label in Arabic is required' })
+        .max(40, { message: language === 'ar' ? 'اسم زر الدعوة لا يمكن أن يتجاوز 40 حرفاً' : 'Primary CTA Label must not exceed 40 characters' }),
+      primaryCtaLabelEn: z.string().min(1, { message: language === 'ar' ? 'اسم زر الدعوة الأساسي بالإنجليزية مطلوب' : 'Primary CTA Label in English is required' })
+        .max(40, { message: language === 'ar' ? 'اسم زر الدعوة لا يمكن أن يتجاوز 40 حرفاً' : 'Primary CTA Label must not exceed 40 characters' }),
+      primaryCtaUrl: z.string().url({ message: language === 'ar' ? 'الرابط الأساسي غير صالح' : 'Invalid Primary CTA URL' }),
+      secondaryCtaLabelAr: z.string().min(1, { message: language === 'ar' ? 'اسم زر الدعوة الثانوي بالعربية مطلوب' : 'Secondary CTA Label in Arabic is required' })
+        .max(40, { message: language === 'ar' ? 'اسم زر الدعوة لا يمكن أن يتجاوز 40 حرفاً' : 'Secondary CTA Label must not exceed 40 characters' }),
+      secondaryCtaLabelEn: z.string().min(1, { message: language === 'ar' ? 'اسم زر الدعوة الثانوي بالإنجليزية مطلوب' : 'Secondary CTA Label in English is required' })
+        .max(40, { message: language === 'ar' ? 'اسم زر الدعوة لا يمكن أن يتجاوز 40 حرفاً' : 'Secondary CTA Label must not exceed 40 characters' }),
+      secondaryCtaUrl: z.string().url({ message: language === 'ar' ? 'الرابط الثانوي غير صالح' : 'Invalid Secondary CTA URL' }),
+      image: z.any().refine(val => val !== null && val !== undefined, { message: language === 'ar' ? 'الصورة مطلوبة' : 'Hero Image is required' }),
+    });
+
+    const result = schema.safeParse({
+      titleAr: hero.title.ar,
+      titleEn: hero.title.en,
+      subtitleAr: hero.subtitle.ar,
+      subtitleEn: hero.subtitle.en,
+      primaryCtaLabelAr: hero.primary_cta_label.ar,
+      primaryCtaLabelEn: hero.primary_cta_label.en,
+      primaryCtaUrl: hero.primary_cta_url,
+      secondaryCtaLabelAr: hero.secondary_cta_label.ar,
+      secondaryCtaLabelEn: hero.secondary_cta_label.en,
+      secondaryCtaUrl: hero.secondary_cta_url,
+      image: imageFile || hero.image,
+    });
+
+    if (!result.success) {
+      toast.error(result.error.issues[0].message);
+      return;
+    }
+
     setSaving(true);
     try {
       await updateLandingHero({
@@ -71,7 +126,12 @@ export default function HeroSection({ token }: { token: string }) {
       }, token);
       toast.success(t('lpSavedOk'));
     } catch (e) {
-      toast.error((e as Error).message);
+      const msg = (e as Error).message;
+      if (msg.includes(', ')) {
+        msg.split(', ').forEach(err => toast.error(err));
+      } else {
+        toast.error(msg);
+      }
     } finally {
       setSaving(false);
     }

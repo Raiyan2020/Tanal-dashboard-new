@@ -388,7 +388,16 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
   return (
     <Suspense fallback={
       <div className="flex h-screen overflow-hidden luxury-gradient justify-center items-center font-sans">
-        <div className="animate-pulse text-stone-400 text-sm">Loading Tanal...</div>
+        <div className="animate-pulse">
+          <Image
+            src={logo}
+            alt="Tanal Logo"
+            width={80}
+            height={100}
+            className="object-contain"
+            priority
+          />
+        </div>
       </div>
     }>
       <MainLayoutContent>{children}</MainLayoutContent>

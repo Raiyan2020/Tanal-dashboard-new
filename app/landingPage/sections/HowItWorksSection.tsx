@@ -5,6 +5,7 @@ import { useLanguage } from '@/lib/i18n';
 import { motion, AnimatePresence } from 'motion/react';
 import Image from 'next/image';
 import { toast } from 'sonner';
+import { z } from 'zod';
 import {
   Loader2, RefreshCw, Plus, ArrowUp, ArrowDown, Pencil, Trash2, X, Save
 } from 'lucide-react';
@@ -31,7 +32,7 @@ const emptyStepForm = (): StepForm => ({
 });
 
 export default function HowItWorksSection({ token }: { token: string }) {
-  const { dir, t } = useLanguage();
+  const { dir, t, language } = useLanguage();
   const [steps, setSteps] = useState<LandingHowItWorksStep[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -94,6 +95,31 @@ export default function HowItWorksSection({ token }: { token: string }) {
   };
 
   const submitForm = async () => {
+    const schema = z.object({
+      titleAr: z.string().min(1, { message: language === 'ar' ? 'العنوان بالعربية مطلوب' : 'Title in Arabic is required' })
+        .max(40, { message: language === 'ar' ? 'العنوان لا يمكن أن يتجاوز 40 حرفاً' : 'Title must not exceed 40 characters' }),
+      titleEn: z.string().min(1, { message: language === 'ar' ? 'العنوان بالإنجليزية مطلوب' : 'Title in English is required' })
+        .max(40, { message: language === 'ar' ? 'العنوان لا يمكن أن يتجاوز 40 حرفاً' : 'Title must not exceed 40 characters' }),
+      descriptionAr: z.string().min(1, { message: language === 'ar' ? 'الوصف بالعربية مطلوب' : 'Description in Arabic is required' })
+        .max(40, { message: language === 'ar' ? 'الوصف لا يمكن أن يتجاوز 40 حرفاً' : 'Description must not exceed 40 characters' }),
+      descriptionEn: z.string().min(1, { message: language === 'ar' ? 'الوصف بالإنجليزية مطلوب' : 'Description in English is required' })
+        .max(40, { message: language === 'ar' ? 'الوصف لا يمكن أن يتجاوز 40 حرفاً' : 'Description must not exceed 40 characters' }),
+      icon: z.any().refine(val => val !== null && val !== undefined, { message: language === 'ar' ? 'أيقونة الخطوة مطلوبة' : 'Step icon is required' }),
+    });
+
+    const result = schema.safeParse({
+      titleAr: form.title_ar,
+      titleEn: form.title_en,
+      descriptionAr: form.description_ar,
+      descriptionEn: form.description_en,
+      icon: form.iconFile || (modal?.mode === 'edit' ? modal.step.icon_url : null),
+    });
+
+    if (!result.success) {
+      toast.error(result.error.issues[0].message);
+      return;
+    }
+
     setFormSaving(true);
     try {
       if (modal?.mode === 'add') {
@@ -105,7 +131,12 @@ export default function HowItWorksSection({ token }: { token: string }) {
       setModal(null);
       load();
     } catch (e) {
-      toast.error((e as Error).message);
+      const msg = (e as Error).message;
+      if (msg.includes(', ')) {
+        msg.split(', ').forEach(err => toast.error(err));
+      } else {
+        toast.error(msg);
+      }
     } finally {
       setFormSaving(false);
     }
@@ -261,7 +292,7 @@ export default function HowItWorksSection({ token }: { token: string }) {
               </div>
               <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
                 <ImageUploadBox
-                  url={form.iconPreview ?? null}
+                  url={form.iconPreview ?? (modal?.mode === 'edit' ? modal.step.icon_url : null)}
                   label={t('lpIconImage')}
                   aspect="aspect-square max-w-[120px]"
                   onFile={f => {
@@ -276,6 +307,8 @@ export default function HowItWorksSection({ token }: { token: string }) {
                   valueAr={form.title_ar}
                   onChangeEn={v => setForm(f => ({ ...f, title_en: v }))}
                   onChangeAr={v => setForm(f => ({ ...f, title_ar: v }))}
+                  placeholderEn={t('lpStepTitleEnPlaceholder')}
+                  placeholderAr={t('lpStepTitleArPlaceholder')}
                 />
                 <BilingualField
                   labelEn={`${t('lpDescription')} (EN)`}
@@ -285,6 +318,8 @@ export default function HowItWorksSection({ token }: { token: string }) {
                   onChangeEn={v => setForm(f => ({ ...f, description_en: v }))}
                   onChangeAr={v => setForm(f => ({ ...f, description_ar: v }))}
                   multiline
+                  placeholderEn={t('lpStepDescEnPlaceholder')}
+                  placeholderAr={t('lpStepDescArPlaceholder')}
                 />
               </div>
               <div className="flex gap-3 px-6 py-4 border-t border-secondary/10">

@@ -73,17 +73,15 @@ export function RoleForm({ roleId, onBack, onSaved }: RoleFormProps) {
   useEffect(() => {
     if (roleId === null) return;
     setFetchLoading(true);
-    Promise.all([
-      getRoleById(roleId, token, 'ar'),
-      getRoleById(roleId, token, 'en')
-    ])
-      .then(([resAr, resEn]) => {
-        const arData = resAr.data;
-        const enData = resEn.data;
+    getRoleById(roleId, token)
+      .then(res => {
+        const data = res.data;
+        // Flatten permission IDs from the grouped structure
+        const permissionIds = data?.permissions.flatMap(g => g.permissions.map(p => p.id)) ?? [];
         form.reset({
-          nameAr: arData?.name || '',
-          nameEn: enData?.name || '',
-          permissionIds: (arData?.permissions || []).map(p => p.id),
+          nameAr: data?.name_ar || '',
+          nameEn: data?.name_en || '',
+          permissionIds,
         });
       })
       .catch(err => toast.error((err as Error).message))

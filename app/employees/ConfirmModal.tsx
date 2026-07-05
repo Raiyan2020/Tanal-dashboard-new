@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useLanguage } from '@/lib/i18n';
 
 export function ConfirmModal({ isOpen, onClose, onConfirm, title, message }: { isOpen: boolean, onClose: () => void, onConfirm: () => void, title: string, message: string }) {
-  const { dir } = useLanguage();
+  const { dir, t } = useLanguage();
   
   if (!isOpen) return null;
 
@@ -20,10 +20,10 @@ export function ConfirmModal({ isOpen, onClose, onConfirm, title, message }: { i
         <p className="text-secondary/70 mb-6">{message}</p>
         <div className="flex justify-end gap-3">
           <button onClick={onClose} className="px-4 py-2 rounded-xl border border-secondary/20 hover:bg-secondary/5 transition-colors cursor-pointer">
-            Cancel
+            {t('cancel')}
           </button>
           <button onClick={onConfirm} className="px-4 py-2 rounded-xl bg-red-500 text-white hover:bg-red-600 transition-colors cursor-pointer">
-            Confirm
+            {t('confirm')}
           </button>
         </div>
       </motion.div>

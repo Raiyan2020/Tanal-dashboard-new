@@ -4,11 +4,12 @@ import React, { useState, useEffect } from 'react';
 import { useLanguage } from '@/lib/i18n';
 import { toast } from 'sonner';
 import { Save, Loader2 } from 'lucide-react';
+import { z } from 'zod';
 import { getLandingContact, updateLandingContact, type LandingContact } from '@/lib/api';
 import { BilingualField, SectionSkeleton, getSocialIcon, inputClass, labelClass } from './shared';
 
 export default function ContactSection({ token }: { token: string }) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const [contact, setContact] = useState<LandingContact | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -22,6 +23,32 @@ export default function ContactSection({ token }: { token: string }) {
 
   const handleSave = async () => {
     if (!contact) return;
+
+    const schema = z.object({
+      whatsappCountryCode: z.string().min(1, { message: language === 'ar' ? 'رمز الدولة للواتساب مطلوب' : 'WhatsApp country code is required' })
+        .max(40, { message: language === 'ar' ? 'الرمز لا يمكن أن يتجاوز 40 حرفاً' : 'Code must not exceed 40 characters' }),
+      whatsappPhone: z.string().min(1, { message: language === 'ar' ? 'رقم الهاتف للواتساب مطلوب' : 'WhatsApp phone number is required' })
+        .max(40, { message: language === 'ar' ? 'الهاتف لا يمكن أن يتجاوز 40 حرفاً' : 'Phone must not exceed 40 characters' }),
+      officeAddressAr: z.string().min(1, { message: language === 'ar' ? 'عنوان المكتب بالعربية مطلوب' : 'Office address in Arabic is required' })
+        .max(40, { message: language === 'ar' ? 'العنوان لا يمكن أن يتجاوز 40 حرفاً' : 'Address must not exceed 40 characters' }),
+      officeAddressEn: z.string().min(1, { message: language === 'ar' ? 'عنوان المكتب بالإنجليزية مطلوب' : 'Office address in English is required' })
+        .max(40, { message: language === 'ar' ? 'العنوان لا يمكن أن يتجاوز 40 حرفاً' : 'Address must not exceed 40 characters' }),
+      googleMapsUrl: z.string().url({ message: language === 'ar' ? 'رابط خرائط جوجل غير صالح' : 'Invalid Google Maps URL' }),
+    });
+
+    const result = schema.safeParse({
+      whatsappCountryCode: contact.whatsapp_country_code,
+      whatsappPhone: contact.whatsapp_phone,
+      officeAddressAr: contact.office_address_ar,
+      officeAddressEn: contact.office_address_en,
+      googleMapsUrl: contact.google_maps_url,
+    });
+
+    if (!result.success) {
+      toast.error(result.error.issues[0].message);
+      return;
+    }
+
     setSaving(true);
     try {
       await updateLandingContact({
@@ -33,7 +60,12 @@ export default function ContactSection({ token }: { token: string }) {
       }, token);
       toast.success('تم تحديث معلومات التواصل');
     } catch (e) {
-      toast.error((e as Error).message);
+      const msg = (e as Error).message;
+      if (msg.includes(', ')) {
+        msg.split(', ').forEach(err => toast.error(err));
+      } else {
+        toast.error(msg);
+      }
     } finally {
       setSaving(false);
     }

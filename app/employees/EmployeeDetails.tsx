@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { 
-  ArrowLeft, ArrowRight, Shield, Edit2, Trash2, 
-  User, Phone, KeyRound, Copy, Calendar, 
+import {
+  ArrowLeft, ArrowRight, Shield, Edit2, Trash2,
+  User, Phone, KeyRound, Copy, Calendar,
   QrCode, CheckCircle2, X, Loader2, Plus
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -14,20 +14,20 @@ import type { ApiEmployeeDetail } from '@/lib/api';
 import { getToken } from '@/lib/auth';
 import { toast } from 'sonner';
 
-export function EmployeeDetails({ 
-  employee, 
-  onBack, 
-  onEdit, 
-  onDelete, 
-  onUpdate, 
-  onNavigateToEvent 
-}: { 
-  employee: any, 
-  onBack: () => void, 
-  onEdit: () => void, 
-  onDelete: () => void, 
-  onUpdate: () => void, 
-  onNavigateToEvent?: (id: string) => void 
+export function EmployeeDetails({
+  employee,
+  onBack,
+  onEdit,
+  onDelete,
+  onUpdate,
+  onNavigateToEvent
+}: {
+  employee: any,
+  onBack: () => void,
+  onEdit: () => void,
+  onDelete: () => void,
+  onUpdate: () => void,
+  onNavigateToEvent?: (id: string) => void
 }) {
   const { t, dir, language } = useLanguage();
   const token = getToken() ?? '';
@@ -138,7 +138,7 @@ export function EmployeeDetails({
           >
             <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
             <span className="text-sm font-medium flex-1 truncate">{toastMessage}</span>
-            <button 
+            <button
               onClick={() => setToastMessage(null)}
               className="ml-2 p-1 hover:bg-white/10 rounded-full transition-colors shrink-0"
             >
@@ -150,7 +150,7 @@ export function EmployeeDetails({
 
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div className="flex items-center gap-3">
-          <button 
+          <button
             onClick={onBack}
             className="p-2 sm:p-2.5 bg-white text-secondary/60 hover:text-secondary rounded-xl transition-all shadow-sm ring-1 ring-black/5 hover:scale-105 active:scale-95 flex items-center justify-center cursor-pointer"
           >
@@ -168,16 +168,16 @@ export function EmployeeDetails({
             </div>
           </div>
         </div>
-        
+
         <div className="flex items-center justify-end gap-2 w-full sm:w-auto">
-          <button 
+          <button
             title={t('edit' as any) || 'Edit'}
             onClick={onEdit}
             className="w-10 h-10 bg-white text-yellow-500 rounded-xl transition-all shadow-sm ring-1 ring-black/5 hover:scale-105 active:scale-95 flex items-center justify-center cursor-pointer hover:bg-yellow-50 font-medium"
           >
             <Edit2 className="w-4 h-4" />
           </button>
-          <button 
+          <button
             title={t('remove' as any) || 'Remove'}
             onClick={onDelete}
             className="w-10 h-10 bg-white text-red-500 rounded-xl transition-all shadow-sm ring-1 ring-black/5 hover:scale-105 active:scale-95 flex items-center justify-center cursor-pointer hover:bg-red-50 font-medium"
@@ -227,17 +227,6 @@ export function EmployeeDetails({
                     <Copy className="w-4 h-4" />
                   </button>
                 </div>
-                <div className="flex items-center justify-between gap-3 p-3 rounded-2xl bg-white/50 border border-secondary/5 group">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-secondary/5 flex items-center justify-center shrink-0">
-                      <KeyRound className="w-5 h-5 text-secondary/60" />
-                    </div>
-                    <div className="flex flex-col text-start">
-                      <span className="text-xs font-medium text-secondary/60">{t('password' as any) || 'Password'}</span>
-                      <span className="text-sm font-semibold text-secondary">••••••••</span>
-                    </div>
-                  </div>
-                </div>
               </div>
             </div>
           </div>
@@ -261,7 +250,7 @@ export function EmployeeDetails({
                         activeEventTab === 'upcoming' ? "bg-white text-primary shadow-sm ring-1 ring-black/5" : "text-secondary/60 hover:text-secondary"
                       )}
                     >
-                      {t('upcomingEvents' as any) || 'Upcoming'}
+                      {t('upcomingEventsTab')}
                       <span className="ml-1.5 text-[10px] opacity-70">({upcomingEventsList.length})</span>
                     </button>
                     <button
@@ -271,7 +260,7 @@ export function EmployeeDetails({
                         activeEventTab === 'past' ? "bg-white text-primary shadow-sm ring-1 ring-black/5" : "text-secondary/60 hover:text-secondary"
                       )}
                     >
-                      {t('pastEvents' as any) || 'Past'}
+                      {t('pastEventsTab')}
                       <span className="ml-1.5 text-[10px] opacity-70">({pastEventsList.length})</span>
                     </button>
                   </div>
@@ -293,8 +282,8 @@ export function EmployeeDetails({
               ) : (
                 <div className="flex flex-col gap-3">
                   {displayedEventsList.map(event => (
-                    <div 
-                      key={event.id} 
+                    <div
+                      key={event.id}
                       onClick={() => onNavigateToEvent && onNavigateToEvent(String(event.id))}
                       className="p-4 rounded-2xl bg-white/40 border border-secondary/5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 group cursor-pointer hover:bg-white/60 hover:border-secondary/10 transition-all text-start"
                     >
