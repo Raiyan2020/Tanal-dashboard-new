@@ -21,7 +21,6 @@ type Period = 'this_year' | 'this_month' | 'last_12_months' | 'last_6months' | '
 
 export function DashboardContent({
   onNavigate,
-  onCreateEvent,
   initialData,
 }: {
   onNavigate?: (id: string) => void;

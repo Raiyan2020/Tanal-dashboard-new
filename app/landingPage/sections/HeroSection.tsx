@@ -70,23 +70,23 @@ export default function HeroSection({ token }: { token: string }) {
 
     const schema = z.object({
       titleAr: z.string().min(1, { message: language === 'ar' ? 'العنوان بالعربية مطلوب' : 'Title in Arabic is required' })
-        .max(40, { message: language === 'ar' ? 'العنوان لا يمكن أن يتجاوز 40 حرفاً' : 'Title must not exceed 40 characters' }),
+        .max(100, { message: language === 'ar' ? 'العنوان لا يمكن أن يتجاوز 100 حرفاً' : 'Title must not exceed 100 characters' }),
       titleEn: z.string().min(1, { message: language === 'ar' ? 'العنوان بالإنجليزية مطلوب' : 'Title in English is required' })
-        .max(40, { message: language === 'ar' ? 'العنوان لا يمكن أن يتجاوز 40 حرفاً' : 'Title must not exceed 40 characters' }),
+        .max(200, { message: language === 'ar' ? 'العنوان لا يمكن أن يتجاوز 200 حرفاً' : 'Title must not exceed 200 characters' }),
       subtitleAr: z.string().min(1, { message: language === 'ar' ? 'النص الفرعي بالعربية مطلوب' : 'Subtitle in Arabic is required' })
-        .max(40, { message: language === 'ar' ? 'النص الفرعي لا يمكن أن يتجاوز 40 حرفاً' : 'Subtitle must not exceed 40 characters' }),
+        .max(200, { message: language === 'ar' ? 'النص الفرعي لا يمكن أن يتجاوز 200 حرفاً' : 'Subtitle must not exceed 200 characters' }),
       subtitleEn: z.string().min(1, { message: language === 'ar' ? 'النص الفرعي بالإنجليزية مطلوب' : 'Subtitle in English is required' })
-        .max(40, { message: language === 'ar' ? 'النص الفرعي لا يمكن أن يتجاوز 40 حرفاً' : 'Subtitle must not exceed 40 characters' }),
+        .max(200, { message: language === 'ar' ? 'النص الفرعي لا يمكن أن يتجاوز 200 حرفاً' : 'Subtitle must not exceed 200 characters' }),
       primaryCtaLabelAr: z.string().min(1, { message: language === 'ar' ? 'اسم زر الدعوة الأساسي بالعربية مطلوب' : 'Primary CTA Label in Arabic is required' })
-        .max(40, { message: language === 'ar' ? 'اسم زر الدعوة لا يمكن أن يتجاوز 40 حرفاً' : 'Primary CTA Label must not exceed 40 characters' }),
+        .max(100, { message: language === 'ar' ? 'اسم زر الدعوة لا يمكن أن يتجاوز 100 حرفاً' : 'Primary CTA Label must not exceed 100 characters' }),
       primaryCtaLabelEn: z.string().min(1, { message: language === 'ar' ? 'اسم زر الدعوة الأساسي بالإنجليزية مطلوب' : 'Primary CTA Label in English is required' })
-        .max(40, { message: language === 'ar' ? 'اسم زر الدعوة لا يمكن أن يتجاوز 40 حرفاً' : 'Primary CTA Label must not exceed 40 characters' }),
-      primaryCtaUrl: z.string().url({ message: language === 'ar' ? 'الرابط الأساسي غير صالح' : 'Invalid Primary CTA URL' }),
+        .max(100, { message: language === 'ar' ? 'اسم زر الدعوة لا يمكن أن يتجاوز 100 حرفاً' : 'Primary CTA Label must not exceed 100 characters' }),
+      primaryCtaUrl: z.string(),
       secondaryCtaLabelAr: z.string().min(1, { message: language === 'ar' ? 'اسم زر الدعوة الثانوي بالعربية مطلوب' : 'Secondary CTA Label in Arabic is required' })
-        .max(40, { message: language === 'ar' ? 'اسم زر الدعوة لا يمكن أن يتجاوز 40 حرفاً' : 'Secondary CTA Label must not exceed 40 characters' }),
+        .max(100, { message: language === 'ar' ? 'اسم زر الدعوة لا يمكن أن يتجاوز 100 حرفاً' : 'Secondary CTA Label must not exceed 100 characters' }),
       secondaryCtaLabelEn: z.string().min(1, { message: language === 'ar' ? 'اسم زر الدعوة الثانوي بالإنجليزية مطلوب' : 'Secondary CTA Label in English is required' })
-        .max(40, { message: language === 'ar' ? 'اسم زر الدعوة لا يمكن أن يتجاوز 40 حرفاً' : 'Secondary CTA Label must not exceed 40 characters' }),
-      secondaryCtaUrl: z.string().url({ message: language === 'ar' ? 'الرابط الثانوي غير صالح' : 'Invalid Secondary CTA URL' }),
+        .max(100, { message: language === 'ar' ? 'اسم زر الدعوة لا يمكن أن يتجاوز 100 حرفاً' : 'Secondary CTA Label must not exceed 100 characters' }),
+      secondaryCtaUrl: z.string(),
       image: z.any().refine(val => val !== null && val !== undefined, { message: language === 'ar' ? 'الصورة مطلوبة' : 'Hero Image is required' }),
     });
 
