@@ -15,7 +15,7 @@ import {
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { cn } from '@/lib/utils';
 import { getDashboardData, type DashboardData } from '@/lib/api';
-import { getToken } from '@/lib/auth';
+import { getToken, getPermissions } from '@/lib/auth';
 
 type Period = 'this_year' | 'this_month' | 'last_12_months' | 'last_6months' | 'all_time';
 
@@ -32,6 +32,12 @@ export function DashboardContent({
   const [data, setData] = useState<DashboardData | null>(initialData ?? null);
   const [loading, setLoading] = useState(!initialData);
   const [error, setError] = useState<string | null>(null);
+
+  // Finance permission check — runs client-side only
+  const hasFinanceAccess = React.useMemo(() => {
+    const perms = getPermissions();
+    return perms.includes('finance') || perms.includes('show-finance') || perms.includes('edit-finance');
+  }, []);
 
   const isInitialMount = useRef(true);
 
@@ -67,7 +73,8 @@ export function DashboardContent({
       icon: Users,
       change: `${data.stats.total_clients.growth >= 0 ? '+' : ''}${data.stats.total_clients.growth}%`,
       isPositive: data.stats.total_clients.trend === 'up',
-      onClick: () => onNavigate?.('clients')
+      onClick: () => onNavigate?.('clients'),
+      financeOnly: true,
     },
     {
       title: 'upcomingEvents',
@@ -75,23 +82,26 @@ export function DashboardContent({
       icon: CalendarHeart,
       change: `${data.stats.upcoming_events.growth >= 0 ? '+' : ''}${data.stats.upcoming_events.growth}%`,
       isPositive: data.stats.upcoming_events.trend === 'up',
-      onClick: () => onNavigate?.('events')
+      onClick: () => onNavigate?.('events'),
+      financeOnly: false,
     },
     {
       title: 'monthlyProfit',
       value: data.stats.monthly_revenue.formatted || `${data.stats.monthly_revenue.value.toLocaleString()} ${data.stats.monthly_revenue.currency || 'KWD'}`,
       icon: HandCoins,
       change: `${data.stats.monthly_revenue.growth >= 0 ? '+' : ''}${data.stats.monthly_revenue.growth}%`,
-      isPositive: data.stats.monthly_revenue.trend === 'up'
+      isPositive: data.stats.monthly_revenue.trend === 'up',
+      financeOnly: true,
     },
     {
       title: 'qrCheckInsToday',
       value: data.stats.today_scans.value.toLocaleString(),
       icon: QrCode,
       change: `${data.stats.today_scans.growth >= 0 ? '+' : ''}${data.stats.today_scans.growth}%`,
-      isPositive: data.stats.today_scans.trend === 'up'
+      isPositive: data.stats.today_scans.trend === 'up',
+      financeOnly: false,
     },
-  ] : [];
+  ].filter(s => !s.financeOnly || hasFinanceAccess) : [];
 
   const statCardsVariants: any = {
     hidden: { opacity: 0, y: 20 },
@@ -206,89 +216,91 @@ export function DashboardContent({
         ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-1 gap-6 lg:gap-8">
-        {/* Charts */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4, duration: 0.5 }}
-          className="p-6 rounded-3xl glass-panel flex flex-col"
-        >
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-            <h3 className={cn("text-xl font-medium", dir === 'ltr' ? 'font-serif' : 'font-arabic')}>{t('revenue')}</h3>
-            <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-              <div className="relative">
-                <select
-                  value={period}
-                  onChange={(e) => setPeriod(e.target.value as Period)}
-                  className={cn(
-                    "bg-white/50 border border-white/60 focus:border-primary/50 focus:ring-2 focus:ring-primary/20 rounded-xl py-1.5 outline-none text-secondary cursor-pointer appearance-none text-sm font-medium transition-all",
-                    dir === 'ltr' ? 'pl-3 pr-8' : 'pr-3 pl-8'
-                  )}
-                >
-                  <option value="this_year">{t('thisYear')}</option>
-                  <option value="this_month">{t('thisMonth')}</option>
-                  <option value="last_12_months">{t('last12Months')}</option>
-                  <option value="last_6months">{t('last6Months')}</option>
-                  <option value="all_time">{t('allTime')}</option>
-                </select>
-                <div className={cn("absolute inset-y-0 flex items-center pointer-events-none text-secondary/50", dir === 'ltr' ? 'right-2' : 'left-2')}>
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
+      {hasFinanceAccess && (
+        <div className="grid grid-cols-1 lg:grid-cols-1 gap-6 lg:gap-8">
+          {/* Revenue Chart — finance permission required */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.4, duration: 0.5 }}
+            className="p-6 rounded-3xl glass-panel flex flex-col"
+          >
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+              <h3 className={cn("text-xl font-medium", dir === 'ltr' ? 'font-serif' : 'font-arabic')}>{t('revenue')}</h3>
+              <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+                <div className="relative">
+                  <select
+                    value={period}
+                    onChange={(e) => setPeriod(e.target.value as Period)}
+                    className={cn(
+                      "bg-white/50 border border-white/60 focus:border-primary/50 focus:ring-2 focus:ring-primary/20 rounded-xl py-1.5 outline-none text-secondary cursor-pointer appearance-none text-sm font-medium transition-all",
+                      dir === 'ltr' ? 'pl-3 pr-8' : 'pr-3 pl-8'
+                    )}
+                  >
+                    <option value="this_year">{t('thisYear')}</option>
+                    <option value="this_month">{t('thisMonth')}</option>
+                    <option value="last_12_months">{t('last12Months')}</option>
+                    <option value="last_6months">{t('last6Months')}</option>
+                    <option value="all_time">{t('allTime')}</option>
+                  </select>
+                  <div className={cn("absolute inset-y-0 flex items-center pointer-events-none text-secondary/50", dir === 'ltr' ? 'right-2' : 'left-2')}>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
+                  </div>
                 </div>
+                <button onClick={() => onNavigate?.('financial')} className="text-sm font-medium text-primary hover:text-primary-dark bg-white/40 px-4 py-1.5 rounded-full shadow-sm ring-1 ring-white/60 cursor-pointer whitespace-nowrap">
+                  {t('viewAll')}
+                </button>
               </div>
-              <button onClick={() => onNavigate?.('financial')} className="text-sm font-medium text-primary hover:text-primary-dark bg-white/40 px-4 py-1.5 rounded-full shadow-sm ring-1 ring-white/60 cursor-pointer whitespace-nowrap">
-                {t('viewAll')}
-              </button>
             </div>
-          </div>
-          <div className="h-[300px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="var(--color-primary)" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="var(--color-primary)" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(0,0,0,0.05)" />
-                <XAxis
-                  dataKey="name"
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fill: 'var(--color-secondary)', opacity: 0.5, fontSize: 12 }}
-                  dy={10}
-                />
-                <YAxis
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fill: 'var(--color-secondary)', opacity: 0.5, fontSize: 12 }}
-                />
-                <Tooltip
-                  formatter={(value: any) => [`${value.toLocaleString()} ${data?.revenue_chart.currency || 'KWD'}`, dir === 'rtl' ? 'الإيرادات' : 'Revenue']}
-                  contentStyle={{
-                    backgroundColor: 'rgba(255,255,255,0.8)',
-                    backdropFilter: 'blur(10px)',
-                    border: '1px solid rgba(255,255,255,0.5)',
-                    borderRadius: '16px',
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.05)',
-                    color: 'var(--color-secondary)'
-                  }}
-                  itemStyle={{ color: 'var(--color-primary)' }}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="revenue"
-                  stroke="var(--color-primary)"
-                  strokeWidth={2}
-                  fillOpacity={1}
-                  fill="url(#colorRevenue)"
-                  activeDot={{ r: 6, fill: "var(--color-primary)", stroke: "#fff", strokeWidth: 2 }}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </motion.div>
-      </div>
+            <div className="h-[300px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="var(--color-primary)" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="var(--color-primary)" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(0,0,0,0.05)" />
+                  <XAxis
+                    dataKey="name"
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fill: 'var(--color-secondary)', opacity: 0.5, fontSize: 12 }}
+                    dy={10}
+                  />
+                  <YAxis
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fill: 'var(--color-secondary)', opacity: 0.5, fontSize: 12 }}
+                  />
+                  <Tooltip
+                    formatter={(value: any) => [`${value.toLocaleString()} ${data?.revenue_chart.currency || 'KWD'}`, dir === 'rtl' ? 'الإيرادات' : 'Revenue']}
+                    contentStyle={{
+                      backgroundColor: 'rgba(255,255,255,0.8)',
+                      backdropFilter: 'blur(10px)',
+                      border: '1px solid rgba(255,255,255,0.5)',
+                      borderRadius: '16px',
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.05)',
+                      color: 'var(--color-secondary)'
+                    }}
+                    itemStyle={{ color: 'var(--color-primary)' }}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="revenue"
+                    stroke="var(--color-primary)"
+                    strokeWidth={2}
+                    fillOpacity={1}
+                    fill="url(#colorRevenue)"
+                    activeDot={{ r: 6, fill: "var(--color-primary)", stroke: "#fff", strokeWidth: 2 }}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </motion.div>
+        </div>
+      )}
 
       {/* Upcoming Events Table */}
       <motion.div
@@ -330,19 +342,21 @@ export function DashboardContent({
                     </div>
                   </div>
 
-                  <div className="flex flex-row sm:flex-col items-center sm:items-end justify-between gap-2 shrink-0 pt-2 sm:pt-0 border-t border-secondary/5 sm:border-t-0 mt-1 sm:mt-0">
-                    <span className="font-bold text-secondary text-sm sm:text-base leading-none">
-                      {parseFloat(event.price).toLocaleString(undefined, { minimumFractionDigits: 3, maximumFractionDigits: 3 })} KWD
-                    </span>
-                    <span className={cn(
-                      "px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-md text-[10px] sm:text-xs font-bold uppercase tracking-wider leading-none",
-                      event.status === 'paid' ? "bg-emerald-100/60 text-emerald-700" :
-                        event.status === 'installments' ? "bg-blue-100/60 text-blue-700" :
-                          "bg-amber-100/60 text-amber-700"
-                    )}>
-                      {event.status_label}
-                    </span>
-                  </div>
+                  {hasFinanceAccess && (
+                    <div className="flex flex-row sm:flex-col items-center sm:items-end justify-between gap-2 shrink-0 pt-2 sm:pt-0 border-t border-secondary/5 sm:border-t-0 mt-1 sm:mt-0">
+                      <span className="font-bold text-secondary text-sm sm:text-base leading-none">
+                        {parseFloat(event.price).toLocaleString(undefined, { minimumFractionDigits: 3, maximumFractionDigits: 3 })} KWD
+                      </span>
+                      <span className={cn(
+                        "px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-md text-[10px] sm:text-xs font-bold uppercase tracking-wider leading-none",
+                        event.status === 'paid' ? "bg-emerald-100/60 text-emerald-700" :
+                          event.status === 'installments' ? "bg-blue-100/60 text-blue-700" :
+                            "bg-amber-100/60 text-amber-700"
+                      )}>
+                        {event.status_label}
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
             ))
