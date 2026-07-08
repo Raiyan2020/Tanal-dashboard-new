@@ -458,11 +458,19 @@ export function EventEditForm({ event, onBack, onSave }: EventEditFormProps) {
                       {dir === 'ltr' ? 'Event Time' : 'وقت الحفل'} <span className="text-red-500">*</span>
                     </FormLabel>
                     <FormControl>
-                      <input
-                        type="time"
+                      <select
                         {...field}
-                        className="w-full bg-white/50 border border-secondary/20 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-all text-secondary h-[46px] sm:h-[50px]"
-                      />
+                        className="w-full bg-white/50 border border-secondary/20 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-all text-secondary h-[46px] sm:h-[50px] cursor-pointer"
+                      >
+                        <option value="">{dir === 'ltr' ? 'Select time...' : 'اختر الوقت...'}</option>
+                        {Array.from({ length: 24 }, (_, h) => {
+                          const period = h < 12 ? (dir === 'rtl' ? 'ص' : 'AM') : (dir === 'rtl' ? 'م' : 'PM');
+                          const hour12 = h % 12 === 0 ? 12 : h % 12;
+                          const label = `${String(hour12).padStart(2, '0')}:00 ${period}`;
+                          const value = `${String(h).padStart(2, '0')}:00`;
+                          return <option key={value} value={value}>{label}</option>;
+                        })}
+                      </select>
                     </FormControl>
                     <FormMessage />
                   </FormItem>

@@ -1,141 +1,178 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Edit2, Loader2, Save, X, Layers, AlertTriangle } from 'lucide-react';
-import { getMockPackages, saveMockPackages, type ServicePackage } from '@/lib/mockServicesStore';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Plus, Trash2, Edit2, Loader2, X, Layers, AlertTriangle } from 'lucide-react';
+import {
+  getServicePackages,
+  createServicePackage,
+  updateServicePackage,
+  deleteServicePackage,
+  type ApiServicePackage,
+} from '@/lib/api';
+import { getToken } from '@/lib/auth';
 import { toast } from 'sonner';
-import { cn } from '@/lib/utils';
 import { useLanguage } from '@/lib/i18n';
 
 interface PackagesTabProps {
   serviceId: number;
 }
 
+interface FormState {
+  nameAr: string;
+  nameEn: string;
+  price: string;
+  descAr: string;
+  descEn: string;
+  sortOrder: string;
+}
+
+const EMPTY_FORM: FormState = { nameAr: '', nameEn: '', price: '', descAr: '', descEn: '', sortOrder: '1' };
+
 export function PackagesTab({ serviceId }: PackagesTabProps) {
-  const { t, language, dir } = useLanguage();
-  const [packages, setPackages] = useState<ServicePackage[]>([]);
-  const [modal, setModal] = useState<{ mode: 'add' | 'edit'; data?: ServicePackage } | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<ServicePackage | null>(null);
+  const { t, language } = useLanguage();
+  const [packages, setPackages] = useState<ApiServicePackage[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
-  // Form states
-  const [nameAr, setNameAr] = useState('');
-  const [nameEn, setNameEn] = useState('');
-  const [price, setPrice] = useState('');
-  const [descAr, setDescAr] = useState('');
-  const [descEn, setDescEn] = useState('');
+  const [modal, setModal] = useState<{ mode: 'add' | 'edit'; data?: ApiServicePackage } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ApiServicePackage | null>(null);
+  const [form, setForm] = useState<FormState>(EMPTY_FORM);
 
-  const load = () => {
-    const all = getMockPackages();
-    setPackages(all.filter(p => p.service_id === serviceId));
-  };
+  const ar = language === 'ar';
+
+  const load = useCallback(async () => {
+    const token = getToken();
+    if (!token) return;
+    setLoading(true);
+    try {
+      const res = await getServicePackages(serviceId, token);
+      setPackages(res.data.items);
+    } catch (err: any) {
+      toast.error(err?.message || (ar ? 'فشل تحميل الباقات' : 'Failed to load packages'));
+    } finally {
+      setLoading(false);
+    }
+  }, [serviceId, ar]);
 
   useEffect(() => {
     load();
-  }, [serviceId]);
+  }, [load]);
 
   const openAdd = () => {
-    setNameAr('');
-    setNameEn('');
-    setPrice('');
-    setDescAr('');
-    setDescEn('');
+    setForm(EMPTY_FORM);
     setModal({ mode: 'add' });
   };
 
-  const openEdit = (pkg: ServicePackage) => {
-    setNameAr(pkg.name_ar);
-    setNameEn(pkg.name_en);
-    setPrice(String(pkg.price));
-    setDescAr(pkg.description_ar || '');
-    setDescEn(pkg.description_en || '');
+  const openEdit = (pkg: ApiServicePackage) => {
+    setForm({
+      nameAr: pkg.name_ar,
+      nameEn: pkg.name_en,
+      price: pkg.price,
+      descAr: pkg.description_ar ?? '',
+      descEn: pkg.description_en ?? '',
+      sortOrder: String(pkg.sort_order),
+    });
     setModal({ mode: 'edit', data: pkg });
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  const closeModal = () => setModal(null);
+
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!nameAr || !nameEn || !price) {
-      toast.error(language === 'ar' ? 'يرجى تعبئة الحقول المطلوبة' : 'Please fill required fields');
-      return;
+    const token = getToken();
+    if (!token) return;
+
+    const payload = {
+      name_ar: form.nameAr,
+      name_en: form.nameEn,
+      price: parseFloat(form.price) || 0,
+      description_ar: form.descAr || undefined,
+      description_en: form.descEn || undefined,
+      sort_order: parseInt(form.sortOrder) || 1,
+    };
+
+    setSaving(true);
+    try {
+      if (modal?.mode === 'add') {
+        await createServicePackage(serviceId, payload, token);
+        toast.success(ar ? 'تم إضافة الباقة بنجاح' : 'Package added successfully');
+      } else if (modal?.mode === 'edit' && modal.data) {
+        await updateServicePackage(serviceId, modal.data.id, payload, token);
+        toast.success(ar ? 'تم تحديث الباقة بنجاح' : 'Package updated successfully');
+      }
+      closeModal();
+      load();
+    } catch (err: any) {
+      toast.error(err?.message || (ar ? 'حدث خطأ أثناء الحفظ' : 'Error while saving'));
+    } finally {
+      setSaving(false);
     }
-
-    const all = getMockPackages();
-    const pkgPrice = parseFloat(price) || 0;
-
-    if (modal?.mode === 'add') {
-      const newPkg: ServicePackage = {
-        id: Date.now(),
-        service_id: serviceId,
-        name_ar: nameAr,
-        name_en: nameEn,
-        price: pkgPrice,
-        description_ar: descAr || undefined,
-        description_en: descEn || undefined
-      };
-      saveMockPackages([...all, newPkg]);
-      toast.success(language === 'ar' ? 'تم إضافة الباقة بنجاح' : 'Package added successfully');
-    } else if (modal?.mode === 'edit' && modal.data) {
-      const updated = all.map(p => {
-        if (p.id === modal.data!.id) {
-          return {
-            ...p,
-            name_ar: nameAr,
-            name_en: nameEn,
-            price: pkgPrice,
-            description_ar: descAr || undefined,
-            description_en: descEn || undefined
-          };
-        }
-        return p;
-      });
-      saveMockPackages(updated);
-      toast.success(language === 'ar' ? 'تم تحديث الباقة بنجاح' : 'Package updated successfully');
-    }
-
-    setModal(null);
-    load();
   };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!deleteTarget) return;
-    const all = getMockPackages();
-    saveMockPackages(all.filter(p => p.id !== deleteTarget.id));
-    toast.success(language === 'ar' ? 'تم حذف الباقة بنجاح' : 'Package deleted successfully');
-    setDeleteTarget(null);
-    load();
+    const token = getToken();
+    if (!token) return;
+
+    setDeleting(true);
+    try {
+      await deleteServicePackage(serviceId, deleteTarget.id, token);
+      toast.success(ar ? 'تم حذف الباقة بنجاح' : 'Package deleted successfully');
+      setDeleteTarget(null);
+      load();
+    } catch (err: any) {
+      toast.error(err?.message || (ar ? 'فشل حذف الباقة' : 'Failed to delete package'));
+    } finally {
+      setDeleting(false);
+    }
   };
+
+  const field = (key: keyof FormState) => ({
+    value: form[key],
+    onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+      setForm(prev => ({ ...prev, [key]: e.target.value })),
+  });
 
   return (
     <div className="space-y-4">
+      {/* Header */}
       <div className="flex justify-between items-center bg-secondary/5 p-4 rounded-2xl border border-secondary/10">
         <span className="font-semibold text-secondary text-sm">
-          {language === 'ar' ? 'باقات الخدمة' : 'Service Packages'}{' '}
+          {ar ? 'باقات الخدمة' : 'Service Packages'}{' '}
           <span className="text-secondary/40 font-normal text-xs">({packages.length})</span>
         </span>
         <button
           onClick={openAdd}
           className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-white rounded-xl text-xs font-medium cursor-pointer hover:bg-primary-dark transition-colors shadow-sm"
         >
-          <Plus className="w-3.5 h-3.5" /> {language === 'ar' ? 'إضافة باقة' : 'Add Package'}
+          <Plus className="w-3.5 h-3.5" /> {ar ? 'إضافة باقة' : 'Add Package'}
         </button>
       </div>
 
+      {/* List */}
       <div className="glass-panel rounded-3xl overflow-hidden min-h-[150px] relative divide-y divide-secondary/8">
-        {packages.length === 0 ? (
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-16 gap-3 text-secondary/40">
+            <Loader2 className="w-7 h-7 animate-spin text-primary" />
+            <p className="text-xs font-medium">{ar ? 'جارٍ التحميل...' : 'Loading...'}</p>
+          </div>
+        ) : packages.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 gap-3 text-secondary/40 text-center">
             <Layers className="w-10 h-10 opacity-30" />
-            <p className="text-xs font-medium">{language === 'ar' ? 'لا توجد باقات مضافة لهذه الخدمة' : 'No packages added for this service yet'}</p>
+            <p className="text-xs font-medium">{ar ? 'لا توجد باقات مضافة لهذه الخدمة' : 'No packages added for this service yet'}</p>
           </div>
         ) : (
-          packages.map((pkg, idx) => {
-            const name = language === 'ar' ? pkg.name_ar : pkg.name_en;
-            const desc = language === 'ar' ? pkg.description_ar : pkg.description_en;
+          packages.map((pkg) => {
+            const name = ar ? pkg.name_ar : pkg.name_en;
+            const desc = ar ? pkg.description_ar : pkg.description_en;
             return (
               <div key={pkg.id} className="flex items-center justify-between p-5 hover:bg-white/40 transition-colors group">
                 <div className="flex-1 min-w-0 pr-4 rtl:pr-0 rtl:pl-4 text-start">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-sm font-semibold text-secondary">{name}</span>
                     <span className="text-[10px] bg-primary/10 text-primary font-bold px-2 py-0.5 rounded-full">
-                      {pkg.price} {language === 'ar' ? 'د.ك' : 'KD'}
+                      {parseFloat(pkg.price).toLocaleString(undefined, { minimumFractionDigits: 3 })} {ar ? 'د.ك' : 'KD'}
                     </span>
                   </div>
                   {desc && <p className="text-xs text-secondary/50 mt-1 line-clamp-1">{desc}</p>}
@@ -166,41 +203,48 @@ export function PackagesTab({ serviceId }: PackagesTabProps) {
           <form onSubmit={handleSave} className="bg-white rounded-3xl shadow-2xl border border-secondary/10 w-full max-w-md overflow-hidden flex flex-col text-start">
             <div className="flex items-center justify-between px-6 py-4 border-b border-secondary/10 shrink-0">
               <h3 className="font-semibold text-secondary text-base">
-                {modal.mode === 'add' ? (language === 'ar' ? 'إضافة باقة جديدة' : 'Add New Package') : (language === 'ar' ? 'تعديل الباقة' : 'Edit Package')}
+                {modal.mode === 'add'
+                  ? (ar ? 'إضافة باقة جديدة' : 'Add New Package')
+                  : (ar ? 'تعديل الباقة' : 'Edit Package')}
               </h3>
-              <button type="button" onClick={() => setModal(null)} className="p-2 hover:bg-secondary/10 rounded-xl transition-colors cursor-pointer">
+              <button type="button" onClick={closeModal} className="p-2 hover:bg-secondary/10 rounded-xl transition-colors cursor-pointer">
                 <X className="w-5 h-5 text-secondary/60" />
               </button>
             </div>
 
             <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
               <div className="space-y-1">
-                <label className="text-xs font-bold text-secondary/50 uppercase tracking-wider">{language === 'ar' ? 'اسم الباقة (العربية) *' : 'Package Name (Arabic) *'}</label>
-                <input type="text" required value={nameAr} onChange={e => setNameAr(e.target.value)} dir="rtl" className="w-full px-4 py-2.5 rounded-xl bg-white/60 border border-secondary/15 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none text-sm text-secondary font-arabic" />
+                <label className="text-xs font-bold text-secondary/50 uppercase tracking-wider">{ar ? 'اسم الباقة (العربية) *' : 'Package Name (Arabic) *'}</label>
+                <input type="text" required {...field('nameAr')} dir="rtl" className="w-full px-4 py-2.5 rounded-xl bg-white/60 border border-secondary/15 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none text-sm text-secondary font-arabic" />
               </div>
               <div className="space-y-1">
-                <label className="text-xs font-bold text-secondary/50 uppercase tracking-wider">{language === 'ar' ? 'اسم الباقة (الإنجليزية) *' : 'Package Name (English) *'}</label>
-                <input type="text" required value={nameEn} onChange={e => setNameEn(e.target.value)} dir="ltr" className="w-full px-4 py-2.5 rounded-xl bg-white/60 border border-secondary/15 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none text-sm text-secondary" />
+                <label className="text-xs font-bold text-secondary/50 uppercase tracking-wider">{ar ? 'اسم الباقة (الإنجليزية) *' : 'Package Name (English) *'}</label>
+                <input type="text" required {...field('nameEn')} dir="ltr" className="w-full px-4 py-2.5 rounded-xl bg-white/60 border border-secondary/15 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none text-sm text-secondary" />
               </div>
               <div className="space-y-1">
-                <label className="text-xs font-bold text-secondary/50 uppercase tracking-wider">{language === 'ar' ? 'السعر (د.ك) *' : 'Price (KD) *'}</label>
-                <input type="number" required step="0.001" min="0" value={price} onChange={e => setPrice(e.target.value)} dir="ltr" className="w-full px-4 py-2.5 rounded-xl bg-white/60 border border-secondary/15 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none text-sm text-secondary" />
+                <label className="text-xs font-bold text-secondary/50 uppercase tracking-wider">{ar ? 'السعر (د.ك) *' : 'Price (KD) *'}</label>
+                <input type="number" required step="0.001" min="0" {...field('price')} dir="ltr" className="w-full px-4 py-2.5 rounded-xl bg-white/60 border border-secondary/15 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none text-sm text-secondary" />
               </div>
               <div className="space-y-1">
-                <label className="text-xs font-bold text-secondary/50 uppercase tracking-wider">{language === 'ar' ? 'الوصف (العربية)' : 'Description (Arabic)'}</label>
-                <textarea rows={2} value={descAr} onChange={e => setDescAr(e.target.value)} dir="rtl" className="w-full px-4 py-2.5 rounded-xl bg-white/60 border border-secondary/15 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none text-sm text-secondary font-arabic resize-none" />
+                <label className="text-xs font-bold text-secondary/50 uppercase tracking-wider">{ar ? 'الوصف (العربية)' : 'Description (Arabic)'}</label>
+                <textarea rows={2} {...field('descAr')} dir="rtl" className="w-full px-4 py-2.5 rounded-xl bg-white/60 border border-secondary/15 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none text-sm text-secondary font-arabic resize-none" />
               </div>
               <div className="space-y-1">
-                <label className="text-xs font-bold text-secondary/50 uppercase tracking-wider">{language === 'ar' ? 'الوصف (الإنجليزية)' : 'Description (English)'}</label>
-                <textarea rows={2} value={descEn} onChange={e => setDescEn(e.target.value)} dir="ltr" className="w-full px-4 py-2.5 rounded-xl bg-white/60 border border-secondary/15 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none text-sm text-secondary resize-none" />
+                <label className="text-xs font-bold text-secondary/50 uppercase tracking-wider">{ar ? 'الوصف (الإنجليزية)' : 'Description (English)'}</label>
+                <textarea rows={2} {...field('descEn')} dir="ltr" className="w-full px-4 py-2.5 rounded-xl bg-white/60 border border-secondary/15 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none text-sm text-secondary resize-none" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-secondary/50 uppercase tracking-wider">{ar ? 'الترتيب' : 'Sort Order'}</label>
+                <input type="number" min="0" {...field('sortOrder')} dir="ltr" className="w-full px-4 py-2.5 rounded-xl bg-white/60 border border-secondary/15 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none text-sm text-secondary" />
               </div>
             </div>
 
             <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-secondary/10 bg-secondary/5 shrink-0">
-              <button type="button" onClick={() => setModal(null)} className="px-4 py-2 text-sm font-medium text-secondary/70 bg-white border border-secondary/15 rounded-xl transition-colors cursor-pointer">
+              <button type="button" onClick={closeModal} className="px-4 py-2 text-sm font-medium text-secondary/70 bg-white border border-secondary/15 rounded-xl transition-colors cursor-pointer">
                 {t('cancel')}
               </button>
-              <button type="submit" className="px-5 py-2.5 text-sm font-medium text-white bg-primary hover:bg-primary/90 rounded-xl transition-colors cursor-pointer shadow-md">
+              <button type="submit" disabled={saving} className="flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-white bg-primary hover:bg-primary/90 rounded-xl transition-colors cursor-pointer shadow-md disabled:opacity-60">
+                {saving && <Loader2 className="w-4 h-4 animate-spin" />}
                 {t('save')}
               </button>
             </div>
@@ -216,14 +260,17 @@ export function PackagesTab({ serviceId }: PackagesTabProps) {
               <AlertTriangle className="w-7 h-7" />
             </div>
             <div>
-              <h3 className="font-semibold text-secondary text-lg mb-1">{language === 'ar' ? 'حذف الباقة' : 'Delete Package'}</h3>
-              <p className="text-sm text-secondary/60">{language === 'ar' ? 'هل أنت متأكد من حذف هذه الباقة؟ لا يمكن التراجع عن هذا الإجراء.' : 'Are you sure you want to delete this package? This cannot be undone.'}</p>
+              <h3 className="font-semibold text-secondary text-lg mb-1">{ar ? 'حذف الباقة' : 'Delete Package'}</h3>
+              <p className="text-sm text-secondary/60">
+                {ar ? 'هل أنت متأكد من حذف هذه الباقة؟ لا يمكن التراجع عن هذا الإجراء.' : 'Are you sure you want to delete this package? This cannot be undone.'}
+              </p>
             </div>
             <div className="w-full flex gap-3">
-              <button onClick={() => setDeleteTarget(null)} className="flex-1 px-4 py-2.5 text-sm font-medium text-secondary/70 bg-secondary/5 border border-secondary/15 rounded-xl cursor-pointer">
+              <button onClick={() => setDeleteTarget(null)} disabled={deleting} className="flex-1 px-4 py-2.5 text-sm font-medium text-secondary/70 bg-secondary/5 border border-secondary/15 rounded-xl cursor-pointer">
                 {t('cancel')}
               </button>
-              <button onClick={handleDelete} className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-xl cursor-pointer shadow-md">
+              <button onClick={handleDelete} disabled={deleting} className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-xl cursor-pointer shadow-md disabled:opacity-60">
+                {deleting && <Loader2 className="w-4 h-4 animate-spin" />}
                 {t('yesDelete')}
               </button>
             </div>

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { useLanguage } from '@/lib/i18n';
 import { AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
@@ -20,13 +21,11 @@ import {
   ServiceOrder,
   getOrders,
   saveOrder,
-  deleteOrder,
-  generateOrderId,
   ORDER_MOCK_EMPLOYEES
 } from '@/lib/orderStore';
 
 import { OrderList } from './components/order-list';
-import { OrderForm, FormState, createEmptyServiceItem } from './components/order-form';
+import { OrderForm, FormState } from './components/order-form';
 import { OrderSent } from './components/order-sent';
 import { DeleteModal } from './components/delete-modal';
 import { OrderDetailModal } from './components/order-detail-modal';
@@ -38,7 +37,7 @@ const EMPTY_FORM = {
   time: '',
   hallName: '',
   hallLocation: '',
-  paymentType: 'one-payment' as const,
+  paymentType: 'single' as const,
   firstInstallmentAmount: '',
   clientId: '',
   clientName: '',
@@ -56,6 +55,7 @@ export default function ServiceOrdersClient({
   initialPagination: PaginatedItems<ApiServiceOrderItem>['pagination'] | null;
 }) {
   const { language } = useLanguage();
+  const router = useRouter();
   const [token] = useState(() => getToken() ?? '');
 
   const [view, setView] = useState<'list' | 'form' | 'sent'>('list');
@@ -127,12 +127,7 @@ export default function ServiceOrdersClient({
   }, [fetchOrders, initialData]);
 
   const openCreate = () => {
-    setForm({
-      ...EMPTY_FORM,
-      services: [createEmptyServiceItem()],
-    });
-    setEditing(null);
-    setView('form');
+    router.push('/service-orders/new');
   };
 
   const openDetail = async (order: ApiServiceOrderItem) => {
@@ -162,19 +157,13 @@ export default function ServiceOrdersClient({
     if (localOrder) {
       setForm({
         services: localOrder.services.map(s => {
-          let empType: 'employee' | 'freelancer' | 'none' = 'none';
+          let empType: 'employee' | 'none' = 'none';
           let empId: number | undefined = undefined;
-          let flUsername = '';
-          let flPhone = '';
           if (s.employeeName) {
             const empDb = ORDER_MOCK_EMPLOYEES.find(e => e.name === s.employeeName);
             if (empDb) {
               empType = 'employee';
               empId = empDb.id;
-            } else {
-              empType = 'freelancer';
-              flUsername = s.employeeName;
-              flPhone = s.employeePhone;
             }
           }
 
@@ -188,9 +177,6 @@ export default function ServiceOrdersClient({
             options: [],
             employeeType: empType,
             employeeId: empId,
-            freelancerUsername: flUsername,
-            freelancerCountryCode: '+965',
-            freelancerPhone: flPhone,
           };
         }),
         description: localOrder.description,
@@ -198,11 +184,11 @@ export default function ServiceOrdersClient({
         time: localOrder.time,
         hallName: localOrder.hallName,
         hallLocation: localOrder.hallLocation,
-        paymentType: localOrder.paymentType,
+        paymentType: (localOrder.paymentType === 'single' ? 'single' : 'two_installments') as 'single' | 'two_installments',
         firstInstallmentAmount: (localOrder as any).firstInstallmentAmount?.toString() || '',
         clientId: localOrder.clientId,
-        clientName: localOrder.clientName,
-        clientPhone: localOrder.clientPhone,
+        clientName: localOrder.clientName || '',
+        clientPhone: localOrder.clientPhone || '',
         isPaid: localOrder.paymentStatus === 'paid',
       });
       setEditing(localOrder);
@@ -229,7 +215,6 @@ export default function ServiceOrdersClient({
           serviceDescription: '',
           serviceDescriptionAr: '',
           price: parseFloat(s.price) || 0,
-          description: s.description,
           employeeName: '',
           employeePhone: '',
           status: (editing?.services.find(item => item.id === s.id)?.status) ?? ('coming' as const),
@@ -244,10 +229,10 @@ export default function ServiceOrdersClient({
           time: form.time,
           hallName: form.hallName,
           hallLocation: form.hallLocation,
-          paymentType: form.paymentType,
+          paymentType: (form.paymentType === 'single' ? 'single' : 'two_installments') as 'single' | 'two_installments',
           clientId: form.clientId,
-          clientName: form.clientName,
-          clientPhone: form.clientPhone,
+          clientName: '',
+          clientPhone: '',
           paymentStatus: form.isPaid ? 'paid' : 'unpaid',
           createdAt: editing.createdAt,
         };
@@ -261,28 +246,19 @@ export default function ServiceOrdersClient({
           const optionsPayload: any[] = [];
           for (const opt of s.options) {
             if (opt.type === 'employee') {
-              for (const empId of (opt.selectedEmployeeIds || [])) {
-                optionsPayload.push({
-                  service_option_id: opt.service_option_id,
-                  employee_id: empId,
-                });
-              }
+              optionsPayload.push({
+                service_option_id: opt.service_option_id,
+                value: opt.selectedEmployeeIds || [],
+              });
             } else if (opt.type === 'color') {
-              if ((opt.values || []).length > 0) {
-                optionsPayload.push({
-                  service_option_id: opt.service_option_id,
-                  values: opt.selectedColorIds || [],
-                });
-              } else {
-                optionsPayload.push({
-                  service_option_id: opt.service_option_id,
-                  value: opt.value || '',
-                });
-              }
+              optionsPayload.push({
+                service_option_id: opt.service_option_id,
+                value: opt.value || '',
+              });
             } else if (opt.type === 'list') {
               optionsPayload.push({
                 service_option_id: opt.service_option_id,
-                value: Number(opt.value),
+                value: String(opt.value),
               });
             } else {
               optionsPayload.push({
@@ -298,22 +274,15 @@ export default function ServiceOrdersClient({
               type: 'employee' as const,
               employee_id: s.employeeId,
             };
-          } else if (s.employeeType === 'freelancer' && s.freelancerUsername) {
-            employeePayload = {
-              type: 'freelancer' as const,
-              username: s.freelancerUsername,
-              country_code: s.freelancerCountryCode || '+965',
-              phone: s.freelancerPhone || '',
-            };
           }
 
           return {
             service_id: Number(s.serviceId),
-            price: Number(s.price),
-            options: optionsPayload,
-            employee: employeePayload,
             service_package_id: s.selectedPackageId ? Number(s.selectedPackageId) : undefined,
             addon_ids: s.selectedAddonIds ? s.selectedAddonIds.map(Number) : [],
+            options: optionsPayload,
+            employee: employeePayload,
+            notes: s.description || undefined,
           };
         });
 
@@ -323,9 +292,10 @@ export default function ServiceOrdersClient({
           event_time: form.time,
           hall_name: form.hallName,
           location_url: form.hallLocation || undefined,
+          notes: form.description || undefined,
           is_paid: (form.isPaid ? 1 : 0) as 0 | 1,
-          payment_type: (form.paymentType === 'one-payment' ? 'single' : 'two_installments') as 'single' | 'two_installments',
-          first_installment_amount: form.paymentType === 'two-installments' ? Number(form.firstInstallmentAmount) : undefined,
+          payment_type: form.paymentType,
+          first_installment_amount: form.paymentType === 'two_installments' ? Number(form.firstInstallmentAmount) : undefined,
           items,
         };
 
@@ -343,7 +313,7 @@ export default function ServiceOrdersClient({
             serviceDescription: '',
             serviceDescriptionAr: '',
             price: parseFloat(s.price) || 0,
-            employeeName: s.employeeType === 'employee' ? 'Staff Assigned' : s.employeeType === 'freelancer' ? 'Freelancer Assigned' : 'None',
+            employeeName: s.employeeType === 'employee' ? 'Staff Assigned' : 'None',
             employeePhone: '',
             status: 'coming' as const,
           })),
@@ -353,10 +323,10 @@ export default function ServiceOrdersClient({
           time: form.time,
           hallName: form.hallName,
           hallLocation: form.hallLocation,
-          paymentType: form.paymentType,
+          paymentType: (form.paymentType === 'single' ? 'single' : 'two_installments') as 'single' | 'two_installments',
           clientId: form.clientId,
-          clientName: form.clientName,
-          clientPhone: form.clientPhone,
+          clientName: '',
+          clientPhone: '',
           paymentStatus: form.isPaid ? 'paid' : 'unpaid',
           createdAt: new Date().toISOString(),
         };
@@ -413,7 +383,8 @@ export default function ServiceOrdersClient({
     );
   }
 
-  if (view === 'form') {
+  // Edit mode — only reached via openEdit(), never for new orders
+  if (view === 'form' && editing) {
     return (
       <OrderForm
         form={form}

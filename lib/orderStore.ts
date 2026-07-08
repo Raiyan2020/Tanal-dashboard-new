@@ -28,7 +28,7 @@ export interface ServiceOrder {
   time: string;             // 'HH:mm'
   hallName: string;
   hallLocation: string;     // Google Maps URL
-  paymentType: 'one-payment' | 'two-installments';
+  paymentType: 'single' | 'two_installments';
   clientId: string;
   clientName: string;
   clientPhone: string;
@@ -52,11 +52,11 @@ export function getOverallStatus(order: ServiceOrder): OrderStatus {
 // ── Shared mock data (mirrors data in other pages) ──────────────────────────
 
 export const ORDER_MOCK_SERVICES = [
-  { id: 'ps1', nameEn: 'Photobooth',                     nameAr: 'الفوتوبوث',                      descriptionEn: 'Interactive photobooth with premium props and instant printing.',       descriptionAr: 'بوث تصوير تفاعلي مع إكسسوارات فاخرة وطباعة فورية.', imageUrl: '' },
-  { id: 'ps2', nameEn: 'Barcode',                        nameAr: 'الباركود',                       descriptionEn: 'Digital barcode check-in system for events.',                          descriptionAr: 'نظام تسجيل الحضور الرقمي عبر الباركود.',            imageUrl: '' },
-  { id: 'ps3', nameEn: 'Photography Cover',              nameAr: 'كفرات منع التصوير',              descriptionEn: 'Photography covers to manage camera-free zones at events.',              descriptionAr: 'كفرات منع التصوير لإدارة المناطق الخاصة في الحفلات.',  imageUrl: '' },
-  { id: 'ps4', nameEn: 'Coat & Abaya Hanging Service',   nameAr: 'خدمة تعليق العبايات والمعاطف',   descriptionEn: 'Professional coat and abaya hanging service for event guests.',          descriptionAr: 'خدمة تعليق العبايات والمعاطف للضيوف بشكل احترافي.',  imageUrl: '' },
-  { id: 'ps5', nameEn: 'Welcoming & Cheering Service',   nameAr: 'خدمة التهليل والترحيب',          descriptionEn: 'Elegant welcoming and cheering service for your event guests.',          descriptionAr: 'خدمة ترحيب وتهليل أنيقة لضيوف مناسباتك.',           imageUrl: '' },
+  { id: 'ps1', nameEn: 'Photobooth', nameAr: 'الفوتوبوث', descriptionEn: 'Interactive photobooth with premium props and instant printing.', descriptionAr: 'بوث تصوير تفاعلي مع إكسسوارات فاخرة وطباعة فورية.', imageUrl: '' },
+  { id: 'ps2', nameEn: 'Barcode', nameAr: 'الباركود', descriptionEn: 'Digital barcode check-in system for events.', descriptionAr: 'نظام تسجيل الحضور الرقمي عبر الباركود.', imageUrl: '' },
+  { id: 'ps3', nameEn: 'Photography Cover', nameAr: 'كفرات منع التصوير', descriptionEn: 'Photography covers to manage camera-free zones at events.', descriptionAr: 'كفرات منع التصوير لإدارة المناطق الخاصة في الحفلات.', imageUrl: '' },
+  { id: 'ps4', nameEn: 'Coat & Abaya Hanging Service', nameAr: 'خدمة تعليق العبايات والمعاطف', descriptionEn: 'Professional coat and abaya hanging service for event guests.', descriptionAr: 'خدمة تعليق العبايات والمعاطف للضيوف بشكل احترافي.', imageUrl: '' },
+  { id: 'ps5', nameEn: 'Welcoming & Cheering Service', nameAr: 'خدمة التهليل والترحيب', descriptionEn: 'Elegant welcoming and cheering service for your event guests.', descriptionAr: 'خدمة ترحيب وتهليل أنيقة لضيوف مناسباتك.', imageUrl: '' },
 ];
 
 export const ORDER_MOCK_CLIENTS = [
@@ -101,7 +101,7 @@ const SEED_ORDERS: ServiceOrder[] = [
     time: '19:00',
     hallName: 'Boulevard Mall – Grand Hall',
     hallLocation: 'https://maps.google.com/?q=Boulevard+Mall+Riyadh',
-    paymentType: 'one-payment',
+    paymentType: 'single',
     clientId: '1001',
     clientName: 'Abdulrahman Al Saud',
     clientPhone: '+966501234567',
@@ -131,7 +131,7 @@ const SEED_ORDERS: ServiceOrder[] = [
     time: '20:00',
     hallName: 'Al Faisaliah Hotel – Ballroom',
     hallLocation: 'https://maps.google.com/?q=Al+Faisaliah+Hotel+Riyadh',
-    paymentType: 'two-installments',
+    paymentType: 'two_installments',
     clientId: '1003',
     clientName: 'Sara Al Olayan',
     clientPhone: '+966534567890',

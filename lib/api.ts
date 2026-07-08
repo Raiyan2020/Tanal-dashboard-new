@@ -1082,8 +1082,30 @@ export interface ApiServiceOption {
   values_count?: number;
 }
 
+export interface ApiServicePackage {
+  id: number;
+  service_id: number;
+  name_ar: string;
+  name_en: string;
+  description_ar: string | null;
+  description_en: string | null;
+  price: string;
+  sort_order: number;
+}
+
+export interface ApiServiceAddon {
+  id: number;
+  service_id: number;
+  name_ar: string;
+  name_en: string;
+  price: string;
+  sort_order: number;
+}
+
 export interface ApiServiceDetail extends ApiService {
   options: ApiServiceOption[];
+  packages: ApiServicePackage[];
+  addons: ApiServiceAddon[];
   option_types_summary: Record<string, number>;
 }
 
@@ -1178,6 +1200,122 @@ export async function deleteService(
   token: string
 ): Promise<ApiResponse<unknown>> {
   return apiRequest(`/admin/services/${id}`, {
+    method: 'DELETE',
+    token,
+  });
+}
+
+/* ─── Service Packages ─── */
+
+export interface ServicePackagePayload {
+  name_ar: string;
+  name_en: string;
+  description_ar?: string;
+  description_en?: string;
+  price: number;
+  sort_order?: number;
+}
+
+/** GET /admin/services/:serviceId/packages */
+export async function getServicePackages(
+  serviceId: number,
+  token: string
+): Promise<ApiResponse<PaginatedItems<ApiServicePackage>>> {
+  return apiRequest<PaginatedItems<ApiServicePackage>>(
+    `/admin/services/${serviceId}/packages`,
+    { token }
+  );
+}
+
+/** POST /admin/services/:serviceId/packages */
+export async function createServicePackage(
+  serviceId: number,
+  payload: ServicePackagePayload,
+  token: string
+): Promise<ApiResponse<ApiServicePackage>> {
+  return apiRequest<ApiServicePackage>(
+    `/admin/services/${serviceId}/packages`,
+    { method: 'POST', body: payload as any, token }
+  );
+}
+
+/** POST /admin/services/:serviceId/packages/:packageId?_method=put */
+export async function updateServicePackage(
+  serviceId: number,
+  packageId: number,
+  payload: ServicePackagePayload,
+  token: string
+): Promise<ApiResponse<ApiServicePackage>> {
+  return apiRequest<ApiServicePackage>(
+    `/admin/services/${serviceId}/packages/${packageId}?_method=put`,
+    { method: 'POST', body: payload as any, token }
+  );
+}
+
+/** DELETE /admin/services/:serviceId/packages/:packageId */
+export async function deleteServicePackage(
+  serviceId: number,
+  packageId: number,
+  token: string
+): Promise<ApiResponse<unknown>> {
+  return apiRequest(`/admin/services/${serviceId}/packages/${packageId}`, {
+    method: 'DELETE',
+    token,
+  });
+}
+
+/* ─── Service Addons ─── */
+
+export interface ServiceAddonPayload {
+  name_ar: string;
+  name_en: string;
+  price: number;
+  sort_order?: number;
+}
+
+/** GET /admin/services/:serviceId/addons */
+export async function getServiceAddons(
+  serviceId: number,
+  token: string
+): Promise<ApiResponse<PaginatedItems<ApiServiceAddon>>> {
+  return apiRequest<PaginatedItems<ApiServiceAddon>>(
+    `/admin/services/${serviceId}/addons`,
+    { token }
+  );
+}
+
+/** POST /admin/services/:serviceId/addons */
+export async function createServiceAddon(
+  serviceId: number,
+  payload: ServiceAddonPayload,
+  token: string
+): Promise<ApiResponse<ApiServiceAddon>> {
+  return apiRequest<ApiServiceAddon>(
+    `/admin/services/${serviceId}/addons`,
+    { method: 'POST', body: payload as any, token }
+  );
+}
+
+/** POST /admin/services/:serviceId/addons/:addonId?_method=put */
+export async function updateServiceAddon(
+  serviceId: number,
+  addonId: number,
+  payload: ServiceAddonPayload,
+  token: string
+): Promise<ApiResponse<ApiServiceAddon>> {
+  return apiRequest<ApiServiceAddon>(
+    `/admin/services/${serviceId}/addons/${addonId}?_method=put`,
+    { method: 'POST', body: payload as any, token }
+  );
+}
+
+/** DELETE /admin/services/:serviceId/addons/:addonId */
+export async function deleteServiceAddon(
+  serviceId: number,
+  addonId: number,
+  token: string
+): Promise<ApiResponse<unknown>> {
+  return apiRequest(`/admin/services/${serviceId}/addons/${addonId}`, {
     method: 'DELETE',
     token,
   });
@@ -1692,11 +1830,11 @@ export interface CreateServiceOrderItemEmployee {
 
 export interface CreateServiceOrderItem {
   service_id: number;
-  price: number;
-  options: CreateServiceOrderItemOption[];
-  employee?: CreateServiceOrderItemEmployee;
   service_package_id?: number;
   addon_ids?: number[];
+  options: CreateServiceOrderItemOption[];
+  employee?: CreateServiceOrderItemEmployee;
+  notes?: string;
 }
 
 export interface CreateServiceOrderPayload {
@@ -1705,6 +1843,7 @@ export interface CreateServiceOrderPayload {
   event_time: string;
   hall_name: string;
   location_url?: string;
+  notes?: string;
   is_paid: 0 | 1;
   payment_type: 'single' | 'two_installments';
   first_installment_amount?: number;

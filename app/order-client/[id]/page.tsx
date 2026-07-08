@@ -331,7 +331,7 @@ export default function ClientOrderPage() {
                 </span>
               </div>
               <p className="text-xs text-stone-400 mt-1">
-                {order.paymentType === 'one-payment' ? t('singlePayment') : t('twoInstallments')}
+                {order.paymentType === 'single' ? t('singlePayment') : t('twoInstallments')}
               </p>
             </div>
             <div>
