@@ -3,26 +3,7 @@
 import React, { useState, Suspense, useMemo } from 'react';
 import { useLanguage } from '@/lib/i18n';
 import { motion, AnimatePresence } from 'motion/react';
-import {
-  LayoutDashboard,
-  CalendarDays,
-  Users,
-  UserCog,
-  Briefcase,
-  MailPlus,
-  Settings,
-  Globe,
-  Menu,
-  Bell,
-  LogOut,
-  Loader2,
-  Wallet,
-  ShoppingBag,
-  Layers,
-  SlidersHorizontal,
-  UserPen,
-  ShieldCheck,
-} from 'lucide-react';
+import { LayoutDashboard, CalendarDays, Users, UserCog, Briefcase, MailPlus, Settings, Globe, Menu, Bell, LogOut, Loader2, Wallet, ShoppingBag, Layers, SlidersHorizontal, UserPen, ShieldCheck, } from 'lucide-react';
 import logo from "@/public/logo.webp";
 import { cn } from '@/lib/utils';
 import Image from 'next/image';
@@ -32,10 +13,7 @@ import { logoutAdmin } from '@/lib/api';
 import type { Admin } from '@/lib/api';
 import { ProfileEditDialog } from './profile-edit-dialog';
 
-/**
- * Each nav item declares which permission string is needed to see it.
- * `permission: null` means always visible (e.g. dashboard).
- */
+
 const navItems = [
   { icon: LayoutDashboard, id: 'dashboard', permission: null },
   { icon: UserCog, id: 'admins', permission: 'admins' },
@@ -296,7 +274,7 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
                         exit={{ opacity: 0, y: 10, scale: 0.95 }}
                         transition={{ duration: 0.2 }}
                         className={cn(
-                          "absolute top-full mt-2 w-48 bg-white/90 backdrop-blur-md border border-white/60 shadow-xl rounded-2xl p-2 z-50 overflow-hidden",
+                          "absolute top-full mt-2 w-56 bg-white/90 backdrop-blur-md border border-white/60 shadow-xl rounded-2xl p-2 z-50 overflow-hidden",
                           dir === 'rtl' ? 'left-0' : 'right-0'
                         )}
                       >
@@ -379,9 +357,7 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
     pathname.startsWith('/order-employee')
   ) {
     return (
-      <div className="font-sans text-secondary min-h-screen selection:bg-primary/20 selection:text-primary-dark">
-        {children}
-      </div>
+      <div className="font-sans text-secondary min-h-screen selection:bg-primary/20 selection:text-primary-dark">{children}</div>
     );
   }
 
@@ -389,14 +365,7 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
     <Suspense fallback={
       <div className="flex h-screen overflow-hidden luxury-gradient justify-center items-center font-sans">
         <div className="animate-pulse">
-          <Image
-            src={logo}
-            alt="Tanal Logo"
-            width={80}
-            height={100}
-            className="object-contain"
-            priority
-          />
+          <Image src={logo} alt="Tanal Logo" width={80} height={100} className="object-contain" priority />
         </div>
       </div>
     }>
