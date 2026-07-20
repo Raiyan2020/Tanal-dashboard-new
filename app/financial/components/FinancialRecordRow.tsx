@@ -55,8 +55,9 @@ export function FinancialRecordRow({ item, idx, onClick, language, t }: Financia
           <span className="text-xs font-mono bg-secondary/5 px-2 py-0.5 rounded text-secondary/60">
             {item.reference_code || `FIN-${item.reference_number}`}
           </span>
+          {/* Service order reference, falling back to the legacy event name */}
           <h3 className="font-semibold text-secondary text-sm truncate m-0 group-hover:text-primary transition-colors">
-            {item.event_name}
+            {item.service_order_reference || item.event_name || '—'}
           </h3>
         </div>
         <div className="flex flex-col sm:flex-row sm:items-center text-xs text-secondary/55 gap-1 sm:gap-3">

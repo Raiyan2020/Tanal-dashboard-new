@@ -1,19 +1,26 @@
 import React from 'react';
 import { getServerToken } from '@/lib/server-auth';
-import { getAdminServiceOrders, type ApiServiceOrderItem, type ServiceOrderStatus, type PaginatedItems } from '@/lib/api';
+import {
+  getAdminServiceOrders,
+  type ApiServiceOrderItem,
+  type ServiceOrderStatus,
+  type ServiceOrdersResponse,
+} from '@/lib/api';
 import ServiceOrdersClient from './ServiceOrdersClient';
 
 export default async function Page() {
   const token = await getServerToken();
   let initialData: ApiServiceOrderItem[] | null = null;
   let initialStatuses: ServiceOrderStatus[] = [];
-  let initialPagination: PaginatedItems<ApiServiceOrderItem>['pagination'] | null = null;
+  let initialPaymentStatuses: ServiceOrderStatus[] = [];
+  let initialPagination: ServiceOrdersResponse['pagination'] | null = null;
 
   if (token) {
     try {
       const res = await getAdminServiceOrders(token, { page: 1, per_page: 15 });
       initialData = res.data.items;
       initialStatuses = res.data.statuses || [];
+      initialPaymentStatuses = res.data.payment_statuses || [];
       initialPagination = res.data.pagination;
     } catch (e) {
       console.error('Failed to prefetch service orders server-side:', e);
@@ -24,6 +31,7 @@ export default async function Page() {
     <ServiceOrdersClient
       initialData={initialData}
       initialStatuses={initialStatuses}
+      initialPaymentStatuses={initialPaymentStatuses}
       initialPagination={initialPagination}
     />
   );

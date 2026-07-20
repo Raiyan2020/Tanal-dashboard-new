@@ -7,6 +7,7 @@ import {
   createServicePackage,
   updateServicePackage,
   deleteServicePackage,
+  BARCODE_INVITATIONS_KEY,
   type ApiServicePackage,
 } from '@/lib/api';
 import { getToken } from '@/lib/auth';
@@ -15,6 +16,8 @@ import { useLanguage } from '@/lib/i18n';
 
 interface PackagesTabProps {
   serviceId: number;
+  /** Drives the guests_included requirement for barcode-invitation packages. */
+  systemKey?: string | null;
 }
 
 interface FormState {
@@ -24,11 +27,17 @@ interface FormState {
   descAr: string;
   descEn: string;
   sortOrder: string;
+  guestsIncluded: string;
 }
 
-const EMPTY_FORM: FormState = { nameAr: '', nameEn: '', price: '', descAr: '', descEn: '', sortOrder: '1' };
+const EMPTY_FORM: FormState = {
+  nameAr: '', nameEn: '', price: '', descAr: '', descEn: '', sortOrder: '1', guestsIncluded: '',
+};
 
-export function PackagesTab({ serviceId }: PackagesTabProps) {
+export function PackagesTab({ serviceId, systemKey }: PackagesTabProps) {
+  // The barcode service allocates a guest quota per package, so the field is
+  // mandatory there and hidden everywhere else.
+  const requiresGuests = systemKey === BARCODE_INVITATIONS_KEY;
   const { t, language } = useLanguage();
   const [packages, setPackages] = useState<ApiServicePackage[]>([]);
   const [loading, setLoading] = useState(true);
@@ -72,6 +81,7 @@ export function PackagesTab({ serviceId }: PackagesTabProps) {
       descAr: pkg.description_ar ?? '',
       descEn: pkg.description_en ?? '',
       sortOrder: String(pkg.sort_order),
+      guestsIncluded: pkg.guests_included != null ? String(pkg.guests_included) : '',
     });
     setModal({ mode: 'edit', data: pkg });
   };
@@ -83,6 +93,11 @@ export function PackagesTab({ serviceId }: PackagesTabProps) {
     const token = getToken();
     if (!token) return;
 
+    if (requiresGuests && !form.guestsIncluded.trim()) {
+      toast.error(ar ? 'عدد المدعوين مطلوب لهذه الباقة' : 'Guests included is required for this package');
+      return;
+    }
+
     const payload = {
       name_ar: form.nameAr,
       name_en: form.nameEn,
@@ -90,6 +105,7 @@ export function PackagesTab({ serviceId }: PackagesTabProps) {
       description_ar: form.descAr || undefined,
       description_en: form.descEn || undefined,
       sort_order: parseInt(form.sortOrder) || 1,
+      guests_included: requiresGuests ? Number(form.guestsIncluded) : undefined,
     };
 
     setSaving(true);
@@ -174,6 +190,11 @@ export function PackagesTab({ serviceId }: PackagesTabProps) {
                     <span className="text-[10px] bg-primary/10 text-primary font-bold px-2 py-0.5 rounded-full">
                       {parseFloat(pkg.price).toLocaleString(undefined, { minimumFractionDigits: 3 })} {ar ? 'د.ك' : 'KD'}
                     </span>
+                    {pkg.guests_included != null && (
+                      <span className="text-[10px] bg-emerald-100 text-emerald-700 font-bold px-2 py-0.5 rounded-full">
+                        {ar ? `${pkg.guests_included} مدعو` : `${pkg.guests_included} guests`}
+                      </span>
+                    )}
                   </div>
                   {desc && <p className="text-xs text-secondary/50 mt-1 line-clamp-1">{desc}</p>}
                 </div>
@@ -233,6 +254,27 @@ export function PackagesTab({ serviceId }: PackagesTabProps) {
                 <label className="text-xs font-bold text-secondary/50 uppercase tracking-wider">{ar ? 'الوصف (الإنجليزية)' : 'Description (English)'}</label>
                 <textarea rows={2} {...field('descEn')} dir="ltr" className="w-full px-4 py-2.5 rounded-xl bg-white/60 border border-secondary/15 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none text-sm text-secondary resize-none" />
               </div>
+              {/* Barcode-invitation packages carry a guest quota */}
+              {requiresGuests && (
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-secondary/50 uppercase tracking-wider">
+                    {ar ? 'عدد المدعوين المشمول *' : 'Guests Included *'}
+                  </label>
+                  <input
+                    type="number"
+                    required
+                    min="1"
+                    {...field('guestsIncluded')}
+                    dir="ltr"
+                    className="w-full px-4 py-2.5 rounded-xl bg-white/60 border border-secondary/15 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none text-sm text-secondary"
+                  />
+                  <p className="text-[10px] text-secondary/45">
+                    {ar
+                      ? 'الحد الأقصى لعدد المدعوين المسموح به لهذه الباقة.'
+                      : 'Maximum number of guests allowed on this package.'}
+                  </p>
+                </div>
+              )}
               <div className="space-y-1">
                 <label className="text-xs font-bold text-secondary/50 uppercase tracking-wider">{ar ? 'الترتيب' : 'Sort Order'}</label>
                 <input type="number" min="0" {...field('sortOrder')} dir="ltr" className="w-full px-4 py-2.5 rounded-xl bg-white/60 border border-secondary/15 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none text-sm text-secondary" />

@@ -4,7 +4,7 @@ import { useLanguage } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { Dropdown } from './dropdown';
 import { ServiceOptionRenderer } from './service-option-renderer';
-import { type FormState, type FormServiceItem } from './order-form';
+import { type FormState, type FormServiceItem } from '@/lib/service-order-form';
 
 interface ServiceItemRowProps {
   svc: FormServiceItem;
@@ -87,6 +87,14 @@ export function ServiceItemRow({
                 );
               })}
             </select>
+            {/* Guest allowance comes from the selected package */}
+            {svc.guestsIncluded != null && (
+              <p className="text-[11px] text-primary font-medium pt-0.5">
+                {language === 'ar'
+                  ? `عدد المدعوين المشمول: ${svc.guestsIncluded}`
+                  : `Guests included: ${svc.guestsIncluded}`}
+              </p>
+            )}
           </div>
         ) : (
           /* Fallback placeholder if no packages have been loaded yet */
@@ -200,7 +208,7 @@ export function ServiceItemRow({
                 copy[index] = {
                   ...copy[index],
                   employeeType: mode.id,
-                  employeeId: undefined,
+                  employeeIds: [],
                   freelancerUsername: '',
                   freelancerCountryCode: '+965',
                   freelancerPhone: ''
@@ -215,20 +223,51 @@ export function ServiceItemRow({
           ))}
         </div>
 
+        {/* Several employees may share one service item. The first selected id is
+            also sent as the singular `employee_id`, which the API still requires. */}
         {svc.employeeType === 'employee' && (
-          <Dropdown
-            value={dbEmployees.find(e => e.id === svc.employeeId)?.name || ''}
-            placeholder={t('chooseEmployeePlaceholder') || 'Choose Employee'}
-            items={dbEmployees}
-            filterFn={(e, q) => e.name.toLowerCase().includes(q.toLowerCase()) || e.phone.includes(q)}
-            label={e => e.name}
-            sublabel={e => <span dir="ltr">{e.phone}</span>}
-            onSelect={e => {
-              const copy = [...form.services];
-              copy[index].employeeId = e.id;
-              setForm({ ...form, services: copy });
-            }}
-          />
+          <div className="space-y-2">
+            <div className="flex flex-wrap gap-1.5 p-1.5 bg-white/30 border border-secondary/15 rounded-xl min-h-[46px]">
+              {dbEmployees.map(emp => {
+                const isSelected = svc.employeeIds.includes(emp.id);
+                return (
+                  <button
+                    key={emp.id}
+                    type="button"
+                    onClick={() => {
+                      const copy = [...form.services];
+                      const current = copy[index].employeeIds;
+                      copy[index] = {
+                        ...copy[index],
+                        employeeIds: isSelected
+                          ? current.filter(id => id !== emp.id)
+                          : [...current, emp.id],
+                      };
+                      setForm({ ...form, services: copy });
+                    }}
+                    className={cn(
+                      'inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-lg border transition-all cursor-pointer',
+                      isSelected
+                        ? 'bg-primary/10 border-primary/20 text-primary'
+                        : 'bg-white/50 border-secondary/10 text-secondary/50 hover:bg-white'
+                    )}
+                  >
+                    {emp.name}
+                  </button>
+                );
+              })}
+              {dbEmployees.length === 0 && (
+                <span className="text-[10px] text-secondary/40 px-1 py-1.5">
+                  {language === 'ar' ? 'لا يوجد موظفون' : 'No employees available'}
+                </span>
+              )}
+            </div>
+            {svc.employeeIds.length === 0 && (
+              <p className="text-[10px] text-secondary/40">
+                {language === 'ar' ? 'اختر موظفاً واحداً على الأقل' : 'Select at least one employee'}
+              </p>
+            )}
+          </div>
         )}
 
         {svc.employeeType === 'freelancer' && (

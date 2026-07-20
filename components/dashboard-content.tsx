@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { cn } from '@/lib/utils';
-import { getDashboardData, type DashboardData } from '@/lib/api';
+import { getDashboardData, parseAmount, type DashboardData } from '@/lib/api';
 import { getToken, getPermissions } from '@/lib/auth';
 
 type Period = 'this_year' | 'this_month' | 'last_12_months' | 'last_6months' | 'all_time';
@@ -68,21 +68,21 @@ export function DashboardContent({
 
   const stats = data ? [
     {
-      title: 'totalClients',
-      value: data.stats.total_clients.value.toLocaleString(),
+      title: 'totalServiceOrders',
+      value: data.stats.total_service_orders.value.toLocaleString(),
       icon: Users,
-      change: `${data.stats.total_clients.growth >= 0 ? '+' : ''}${data.stats.total_clients.growth}%`,
-      isPositive: data.stats.total_clients.trend === 'up',
-      onClick: () => onNavigate?.('clients'),
+      change: `${data.stats.total_service_orders.growth >= 0 ? '+' : ''}${data.stats.total_service_orders.growth}%`,
+      isPositive: data.stats.total_service_orders.trend === 'up',
+      onClick: () => onNavigate?.('service-orders'),
       financeOnly: true,
     },
     {
-      title: 'upcomingEvents',
-      value: data.stats.upcoming_events.value.toLocaleString(),
+      title: 'upcomingServiceOrders',
+      value: data.stats.upcoming_service_orders.value.toLocaleString(),
       icon: CalendarHeart,
-      change: `${data.stats.upcoming_events.growth >= 0 ? '+' : ''}${data.stats.upcoming_events.growth}%`,
-      isPositive: data.stats.upcoming_events.trend === 'up',
-      onClick: () => onNavigate?.('events'),
+      change: `${data.stats.upcoming_service_orders.growth >= 0 ? '+' : ''}${data.stats.upcoming_service_orders.growth}%`,
+      isPositive: data.stats.upcoming_service_orders.trend === 'up',
+      onClick: () => onNavigate?.('service-orders'),
       financeOnly: false,
     },
     {
@@ -302,7 +302,7 @@ export function DashboardContent({
         </div>
       )}
 
-      {/* Upcoming Events Table */}
+      {/* Upcoming Service Orders */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -310,9 +310,11 @@ export function DashboardContent({
         className="p-6 rounded-3xl glass-panel overflow-hidden"
       >
         <div className="flex justify-between items-center mb-6">
-          <h3 className={cn("text-xl font-medium", dir === 'ltr' ? 'font-serif' : 'font-arabic')}>{t('upcomingEvents' as any)}</h3>
+          <h3 className={cn("text-xl font-medium", dir === 'ltr' ? 'font-serif' : 'font-arabic')}>
+            {t('upcomingServiceOrders' as any)}
+          </h3>
           <button
-            onClick={() => onNavigate?.('events')}
+            onClick={() => onNavigate?.('service-orders')}
             className="text-sm font-medium text-primary hover:text-primary-dark bg-white/40 px-4 py-1.5 rounded-full shadow-sm ring-1 ring-white/60 cursor-pointer"
           >
             {t('viewAll')}
@@ -320,9 +322,13 @@ export function DashboardContent({
         </div>
 
         <div className="flex flex-col gap-3">
-          {data?.upcoming_events && data.upcoming_events.length > 0 ? (
-            data.upcoming_events.map((event) => (
-              <div key={event.id} className="p-4 rounded-2xl bg-white/40 hover:bg-white/60 transition-colors shadow-sm border border-secondary/5 flex flex-row items-start sm:items-center gap-3 sm:gap-4 group cursor-pointer" onClick={() => onNavigate?.('events')}>
+          {data?.upcoming_service_orders && data.upcoming_service_orders.length > 0 ? (
+            data.upcoming_service_orders.map((order) => (
+              <div
+                key={order.id}
+                className="p-4 rounded-2xl bg-white/40 hover:bg-white/60 transition-colors shadow-sm border border-secondary/5 flex flex-row items-start sm:items-center gap-3 sm:gap-4 group cursor-pointer"
+                onClick={() => onNavigate?.('service-orders')}
+              >
                 <div className="w-10 h-10 sm:w-12 sm:h-12 shrink-0 rounded-xl sm:rounded-[14px] bg-primary/10 flex items-center justify-center text-primary group-hover:scale-110 transition-transform mt-0.5 sm:mt-0">
                   <CalendarHeart className="w-5 h-5 sm:w-6 sm:h-6" />
                 </div>
@@ -330,31 +336,52 @@ export function DashboardContent({
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 min-w-0 flex-1">
                   <div className="flex flex-col justify-center min-w-0">
                     <span className="font-semibold text-secondary text-sm sm:text-base line-clamp-2 leading-tight">
-                      {event.event_name}
+                      <span className="font-mono text-xs text-secondary/50 me-1.5">{order.reference_label}</span>
+                      {order.service_name}
                     </span>
                     <div className="flex items-center flex-wrap gap-1.5 sm:gap-2 mt-1 sm:mt-1.5 text-xs sm:text-sm text-secondary/60 font-medium">
-                      <span className="whitespace-nowrap">{event.event_date}</span>
-                      <span className="w-1 h-1 sm:w-1.5 sm:h-1.5 rounded-full bg-secondary/20 shrink-0"></span>
-                      <span className="flex items-center gap-1 sm:gap-1.5 shrink-0 whitespace-nowrap">
-                        <UsersRound className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                        {event.guest_count}
-                      </span>
+                      <span className="whitespace-nowrap">{order.event_date}</span>
+                      {order.event_time && (
+                        <>
+                          <span className="w-1 h-1 sm:w-1.5 sm:h-1.5 rounded-full bg-secondary/20 shrink-0" />
+                          <span className="whitespace-nowrap">{order.event_time}</span>
+                        </>
+                      )}
+                      {order.client_name && (
+                        <>
+                          <span className="w-1 h-1 sm:w-1.5 sm:h-1.5 rounded-full bg-secondary/20 shrink-0" />
+                          <span className="flex items-center gap-1 sm:gap-1.5 shrink-0 whitespace-nowrap">
+                            <UsersRound className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                            {order.client_name}
+                          </span>
+                        </>
+                      )}
+                      {order.is_barcode_suspended && (
+                        <span className="px-2 py-0.5 rounded-md bg-rose-100 text-rose-700 text-[10px] font-bold shrink-0">
+                          {dir === 'ltr' ? 'Suspended' : 'موقوف'}
+                        </span>
+                      )}
                     </div>
                   </div>
 
                   {hasFinanceAccess && (
                     <div className="flex flex-row sm:flex-col items-center sm:items-end justify-between gap-2 shrink-0 pt-2 sm:pt-0 border-t border-secondary/5 sm:border-t-0 mt-1 sm:mt-0">
                       <span className="font-bold text-secondary text-sm sm:text-base leading-none">
-                        {parseFloat(event.price).toLocaleString(undefined, { minimumFractionDigits: 3, maximumFractionDigits: 3 })} KWD
+                        {parseAmount(order.total_amount).toLocaleString(undefined, { minimumFractionDigits: 3, maximumFractionDigits: 3 })} KWD
                       </span>
-                      <span className={cn(
-                        "px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-md text-[10px] sm:text-xs font-bold uppercase tracking-wider leading-none",
-                        event.status === 'paid' ? "bg-emerald-100/60 text-emerald-700" :
-                          event.status === 'installments' ? "bg-blue-100/60 text-blue-700" :
-                            "bg-amber-100/60 text-amber-700"
-                      )}>
-                        {event.status_label}
-                      </span>
+                      <div className="flex items-center gap-1.5">
+                        {order.statuses.map((st, i) => (
+                          <span key={i} className={cn(
+                            "px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-md text-[10px] sm:text-xs font-bold uppercase tracking-wider leading-none",
+                            st.value === 'paid' ? "bg-emerald-100/60 text-emerald-700" :
+                              st.value === 'installments' ? "bg-blue-100/60 text-blue-700" :
+                                st.value === 'cancelled' ? "bg-rose-100/60 text-rose-700" :
+                                  "bg-amber-100/60 text-amber-700"
+                          )}>
+                            {st.label}
+                          </span>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -362,7 +389,7 @@ export function DashboardContent({
             ))
           ) : (
             <div className="text-center py-8 text-secondary/50 text-sm">
-              {t('noUpcomingEvents')}
+              {t('noUpcomingServiceOrders' as any)}
             </div>
           )}
         </div>

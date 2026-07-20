@@ -8,7 +8,7 @@ import { motion } from 'motion/react';
 import { ChevronLeft, ChevronRight, Eye, EyeOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useLanguage } from '@/lib/i18n';
-import { COUNTRIES } from '@/app/clients/_client-form';
+import { COUNTRIES } from '@/lib/countries';
 
 import {
   Form,

@@ -32,6 +32,18 @@ const nextConfig: NextConfig = {
   },
   output: 'standalone',
   transpilePackages: ['motion'],
+  // The clients/events modules were replaced by service orders; keep old
+  // bookmarks and deep links working instead of 404ing them.
+  async redirects() {
+    return [
+      { source: '/events', destination: '/service-orders', permanent: false },
+      { source: '/events/:path*', destination: '/service-orders', permanent: false },
+      { source: '/clients', destination: '/service-orders', permanent: false },
+      { source: '/clients/:path*', destination: '/service-orders', permanent: false },
+      { source: '/service-requests', destination: '/service-orders', permanent: false },
+      { source: '/service-requests/:path*', destination: '/service-orders', permanent: false },
+    ];
+  },
   webpack: (config, { dev }) => {
     // HMR is disabled in AI Studio via DISABLE_HMR env var.
     // Do not modify—file watching is disabled to prevent flickering during agent edits.

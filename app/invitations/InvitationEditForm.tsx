@@ -9,7 +9,13 @@ import { ChevronLeft, ChevronRight, Upload, Ticket, Calendar, Clock, Loader2 } f
 import { cn } from '@/lib/utils';
 import { useLanguage } from '@/lib/i18n';
 import { Invitation } from './InvitationsClient';
-import { getEvents, getInvitationById, createInvitation, updateInvitation, type ApiEvent } from '@/lib/api';
+import {
+  getAdminServiceOrders,
+  getInvitationById,
+  createInvitation,
+  updateInvitation,
+  type ApiServiceOrderItem,
+} from '@/lib/api';
 import { getToken } from '@/lib/auth';
 import { toast } from 'sonner';
 
@@ -28,7 +34,7 @@ import {
 } from '@/components/ui/form';
 
 interface FormValues {
-  eventId: string;
+  serviceOrderId: string;
   logic: 'strict' | 'default_accept' | 'view_only';
   deadlineDate: string;
   deadlineTime: string;
@@ -46,7 +52,7 @@ export function InvitationEditForm({ invitation, onBack, onSave }: InvitationEdi
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const schema = React.useMemo(() => z.object({
-    eventId: z.string().min(1, { message: t('chooseEvent') }),
+    serviceOrderId: z.string().min(1, { message: t('chooseEvent') }),
     logic: z.enum(['strict', 'default_accept', 'view_only']),
     deadlineDate: z.string().min(1, { message: t('pleaseSelectDeadline') }),
     deadlineTime: z.string().min(1, { message: t('pleaseSelectDeadlineTime') }),
@@ -56,8 +62,8 @@ export function InvitationEditForm({ invitation, onBack, onSave }: InvitationEdi
   const [fileName, setFileName] = useState('');
   const [fileError, setFileError] = useState<string | null>(null);
 
-  const [events, setEvents] = useState<ApiEvent[]>([]);
-  const [eventsLoading, setEventsLoading] = useState(false);
+  const [orders, setOrders] = useState<ApiServiceOrderItem[]>([]);
+  const [ordersLoading, setOrdersLoading] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
@@ -69,7 +75,7 @@ export function InvitationEditForm({ invitation, onBack, onSave }: InvitationEdi
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
-      eventId: invitation?.eventId || '',
+      serviceOrderId: invitation?.serviceOrderId || '',
       logic: 'strict',
       deadlineDate: '',
       deadlineTime: '',
@@ -78,9 +84,9 @@ export function InvitationEditForm({ invitation, onBack, onSave }: InvitationEdi
 
   // Watch deadlineDate value to display it and feed the calendar
   const deadlineDateValue = form.watch('deadlineDate');
-  const selectedEventId = form.watch('eventId');
-  const selectedEvent = events.find(ev => String(ev.id) === selectedEventId);
-  const eventDate = selectedEvent?.event_date;
+  const selectedOrderId = form.watch('serviceOrderId');
+  const selectedOrder = orders.find(o => String(o.id) === selectedOrderId);
+  const eventDate = selectedOrder?.event_date ?? undefined;
 
   // Close datepicker when clicking outside
   useEffect(() => {
@@ -118,14 +124,14 @@ export function InvitationEditForm({ invitation, onBack, onSave }: InvitationEdi
 
   const selectedDate = deadlineDateValue ? new Date(deadlineDateValue) : undefined;
 
-  // Fetch events list for dropdown
+  // Fetch service orders for the dropdown — invitations attach to an order now
   useEffect(() => {
     if (!token) return;
-    setEventsLoading(true);
-    getEvents(token, { per_page: 100 })
-      .then(res => setEvents(res.data.items))
-      .catch(err => toast.error((err as Error).message || 'فشل تحميل قائمة الحفلات'))
-      .finally(() => setEventsLoading(false));
+    setOrdersLoading(true);
+    getAdminServiceOrders(token, { per_page: 100 })
+      .then(res => setOrders(res.data.items))
+      .catch(err => toast.error((err as Error).message || 'فشل تحميل قائمة الطلبات'))
+      .finally(() => setOrdersLoading(false));
   }, [token]);
 
   // Parse Jun 20, 2026 into YYYY-MM-DD
@@ -150,7 +156,7 @@ export function InvitationEditForm({ invitation, onBack, onSave }: InvitationEdi
       .then(res => {
         const details = res.data.details;
         form.reset({
-          eventId: String(res.data.event_id),
+          serviceOrderId: res.data.service_order_id != null ? String(res.data.service_order_id) : '',
           logic: details.logic_type === 'strict_action' ? 'strict' : details.logic_type,
           deadlineDate: parseApiDate(details.deadline_date),
           deadlineTime: details.deadline_time || '',
@@ -170,7 +176,7 @@ export function InvitationEditForm({ invitation, onBack, onSave }: InvitationEdi
     setFileError(null);
 
     const mappedLogic = values.logic === 'strict' ? 'strict_action' : values.logic;
-    const selectedEvent = events.find(ev => String(ev.id) === values.eventId);
+    const order = orders.find(o => String(o.id) === values.serviceOrderId);
 
     setSubmitting(true);
     const formToast = toast.loading(invitation ? t('savingChanges') : t('creatingInvitation'));
@@ -181,7 +187,7 @@ export function InvitationEditForm({ invitation, onBack, onSave }: InvitationEdi
         const res = await updateInvitation(
           Number(invitation.id),
           {
-            event_id: values.eventId,
+            service_order_id: values.serviceOrderId,
             logic_type: mappedLogic,
             deadline_date: values.deadlineDate,
             deadline_time: values.deadlineTime,
@@ -193,18 +199,22 @@ export function InvitationEditForm({ invitation, onBack, onSave }: InvitationEdi
         toast.success(res.msg || 'تم تحديث الدعوة بنجاح');
 
         onSave({
+          ...invitation,
           id: invitation.id,
-          eventId: values.eventId,
-          eventName: selectedEvent?.name || invitation.eventName,
+          serviceOrderId: values.serviceOrderId,
+          serviceOrderReference: order?.reference_label || invitation.serviceOrderReference,
+          clientName: order?.client_name ?? invitation.clientName,
+          executionDate: order?.event_date ?? invitation.executionDate,
           deadlineDate: values.deadlineDate,
           guestsNumber: res.data?.guest_count ?? invitation.guestsNumber,
+          isBarcodeSuspended: order?.is_barcode_suspended ?? invitation.isBarcodeSuspended,
           status: res.data?.status === 'previous' ? 'past' : (res.data?.is_sent ? 'sent' : 'unsent'),
         }, res.data);
       } else {
         // Create Invitation
         const res = await createInvitation(
           {
-            event_id: values.eventId,
+            service_order_id: values.serviceOrderId,
             logic_type: mappedLogic,
             deadline_date: values.deadlineDate,
             deadline_time: values.deadlineTime,
@@ -217,10 +227,16 @@ export function InvitationEditForm({ invitation, onBack, onSave }: InvitationEdi
 
         onSave({
           id: String(res.data.id),
-          eventId: values.eventId,
-          eventName: selectedEvent?.name || res.data.name || 'Unnamed Event',
+          serviceOrderId: values.serviceOrderId,
+          serviceOrderReference: order?.reference_label || res.data.name || '—',
+          clientName: order?.client_name ?? '',
+          clientPhone: order?.client_phone ?? '',
+          executionDate: order?.event_date ?? '',
           deadlineDate: values.deadlineDate,
           guestsNumber: 0,
+          guestsIncluded: null,
+          isBarcodeSuspended: order?.is_barcode_suspended ?? false,
+          whatsappUrl: order?.whatsapp_url ?? '',
           status: 'unsent',
         }, res.data);
       }
@@ -288,30 +304,34 @@ export function InvitationEditForm({ invitation, onBack, onSave }: InvitationEdi
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
 
-            {/* Event dropdown */}
+            {/* Service order dropdown */}
             <FormField
               control={form.control}
-              name="eventId"
+              name="serviceOrderId"
               render={({ field }) => (
                 <FormItem className="space-y-1.5">
                   <FormLabel className="text-sm font-medium text-secondary/80 ml-1 flex items-center gap-2 cursor-pointer">
                     <Ticket className="w-4 h-4 text-secondary/50" />
-                    {t('selectEvent' as any) || (dir === 'ltr' ? 'Select Event' : 'اختر الحفل')} <span className="text-red-500">*</span>
+                    {dir === 'ltr' ? 'Select Service Order' : 'اختر طلب الخدمة'} <span className="text-red-500">*</span>
                   </FormLabel>
                   <div className="relative">
                     <FormControl>
                       <select
                         {...field}
                         className="w-full bg-white/50 border border-secondary/20 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-all text-secondary appearance-none font-medium cursor-pointer"
-                        disabled={eventsLoading}
+                        disabled={ordersLoading}
                       >
                         <option value="" disabled>
-                          {eventsLoading
-                            ? (dir === 'ltr' ? 'Loading events...' : 'جاري تحميل الحفلات...')
-                            : (t('chooseEvent' as any) || (dir === 'ltr' ? 'Choose an event...' : 'اختر حفلاً...'))}
+                          {ordersLoading
+                            ? (dir === 'ltr' ? 'Loading orders...' : 'جاري تحميل الطلبات...')
+                            : (dir === 'ltr' ? 'Choose a service order...' : 'اختر طلب خدمة...')}
                         </option>
-                        {events.map(ev => (
-                          <option key={ev.id} value={ev.id}>{ev.name}</option>
+                        {orders.map(o => (
+                          <option key={o.id} value={o.id}>
+                            {o.reference_label}
+                            {o.client_name ? ` — ${o.client_name}` : ''}
+                            {o.event_date ? ` (${o.event_date})` : ''}
+                          </option>
                         ))}
                       </select>
                     </FormControl>

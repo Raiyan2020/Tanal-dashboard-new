@@ -125,13 +125,23 @@ export function ServiceList({
                     >
                       <Edit2 className="w-3.5 h-3.5" />
                     </button>
-                    <button
-                      onClick={() => onDeleteService(svc)}
-                      className="p-1.5 bg-white text-red-500 hover:bg-red-50 hover:text-red-600 rounded-lg transition-colors border border-secondary/5 cursor-pointer shadow-sm"
-                      title={language === 'ar' ? 'حذف الخدمة' : 'Delete Service'}
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    {/* System services are backend-managed and cannot be deleted */}
+                    {svc.is_system ? (
+                      <span
+                        className="px-2.5 py-1 rounded-full bg-secondary/10 text-secondary/60 text-[10px] font-bold shadow-sm"
+                        title={language === 'ar' ? 'خدمة نظام' : 'System service'}
+                      >
+                        {language === 'ar' ? 'نظام' : 'System'}
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => onDeleteService(svc)}
+                        className="p-1.5 bg-white text-red-500 hover:bg-red-50 hover:text-red-600 rounded-lg transition-colors border border-secondary/5 cursor-pointer shadow-sm"
+                        title={language === 'ar' ? 'حذف الخدمة' : 'Delete Service'}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                     <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary/10 text-primary text-xs font-bold shadow-sm">
                       <SlidersHorizontal className="w-3 h-3" />
                       {svc.options_count}

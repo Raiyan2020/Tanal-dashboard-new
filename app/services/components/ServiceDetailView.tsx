@@ -327,7 +327,9 @@ export function ServiceDetailView({
         </div>
       )}
 
-      {activeTab === 'packages' && <PackagesTab serviceId={selectedServiceId} />}
+      {activeTab === 'packages' && (
+        <PackagesTab serviceId={selectedServiceId} systemKey={serviceDetail?.system_key} />
+      )}
 
       {activeTab === 'addons' && <AddonsTab serviceId={selectedServiceId} />}
     </div>

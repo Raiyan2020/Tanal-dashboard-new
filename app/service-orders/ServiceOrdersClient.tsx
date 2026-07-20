@@ -8,61 +8,40 @@ import { toast } from 'sonner';
 import { getToken } from '@/lib/auth';
 import {
   getAdminServiceOrders,
-  createAdminServiceOrder,
   getAdminServiceOrderById,
   deleteAdminServiceOrder,
+  cancelAdminServiceOrder,
   type ApiServiceOrderItem,
   type ApiServiceOrderDetail,
   type ServiceOrderStatus,
-  type CreateServiceOrderPayload,
-  type PaginatedItems
+  type ServiceOrderListStatus,
+  type ServiceOrdersResponse,
 } from '@/lib/api';
-import {
-  ServiceOrder,
-  getOrders,
-  saveOrder,
-  ORDER_MOCK_EMPLOYEES
-} from '@/lib/orderStore';
 
 import { OrderList } from './components/order-list';
-import { OrderForm, FormState } from './components/order-form';
-import { OrderSent } from './components/order-sent';
 import { DeleteModal } from './components/delete-modal';
+import { CancelModal } from './components/cancel-modal';
 import { OrderDetailModal } from './components/order-detail-modal';
-
-const EMPTY_FORM = {
-  services: [] as any[],
-  description: '',
-  date: '',
-  time: '',
-  hallName: '',
-  hallLocation: '',
-  paymentType: 'single' as const,
-  firstInstallmentAmount: '',
-  clientId: '',
-  clientName: '',
-  clientPhone: '',
-  isPaid: false,
-};
 
 export default function ServiceOrdersClient({
   initialData,
   initialStatuses,
+  initialPaymentStatuses,
   initialPagination,
 }: {
   initialData: ApiServiceOrderItem[] | null;
   initialStatuses: ServiceOrderStatus[];
-  initialPagination: PaginatedItems<ApiServiceOrderItem>['pagination'] | null;
+  initialPaymentStatuses: ServiceOrderStatus[];
+  initialPagination: ServiceOrdersResponse['pagination'] | null;
 }) {
   const { language } = useLanguage();
   const router = useRouter();
   const [token] = useState(() => getToken() ?? '');
 
-  const [view, setView] = useState<'list' | 'form' | 'sent'>('list');
   const [orders, setOrders] = useState<ApiServiceOrderItem[]>(initialData ?? []);
   const [statuses, setStatuses] = useState<ServiceOrderStatus[]>(initialStatuses);
+  const [paymentStatuses, setPaymentStatuses] = useState<ServiceOrderStatus[]>(initialPaymentStatuses);
   const [loading, setLoading] = useState(!initialData);
-  const [formSubmitting, setFormSubmitting] = useState(false);
 
   // Filter & Search states
   const [search, setSearch] = useState('');
@@ -76,10 +55,8 @@ export default function ServiceOrdersClient({
   const [totalItems, setTotalItems] = useState(initialPagination?.total ?? 0);
 
   // Action states
-  const [editing, setEditing] = useState<ServiceOrder | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ApiServiceOrderItem | null>(null);
-  const [createdOrder, setCreatedOrder] = useState<ServiceOrder | null>(null);
-  const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  const [cancelTarget, setCancelTarget] = useState<ApiServiceOrderItem | null>(null);
 
   // Detail modal state
   const [detailOrder, setDetailOrder] = useState<ApiServiceOrderDetail | null>(null);
@@ -95,20 +72,16 @@ export default function ServiceOrdersClient({
         page,
         per_page: 15,
         keyword: search || undefined,
+        // The API owns status filtering — filtering the current page locally
+        // would silently hide matches on other pages.
+        status: activeTab === 'all' ? undefined : (activeTab as ServiceOrderListStatus),
         order_by: orderBy,
         order: orderDir,
       });
 
-      // Filter locally by activeTab if activeTab is not 'all'
-      let fetchedItems = res.data.items || [];
-      if (activeTab !== 'all') {
-        fetchedItems = fetchedItems.filter(item =>
-          item.statuses.some(st => st.value === activeTab)
-        );
-      }
-
-      setOrders(fetchedItems);
+      setOrders(res.data.items || []);
       setStatuses(res.data.statuses || []);
+      setPaymentStatuses(res.data.payment_statuses || []);
       setTotalPages(res.data.pagination.last_page);
       setTotalItems(res.data.pagination.total);
     } catch (err) {
@@ -126,9 +99,10 @@ export default function ServiceOrdersClient({
     fetchOrders();
   }, [fetchOrders, initialData]);
 
-  const openCreate = () => {
-    router.push('/service-orders/new');
-  };
+  // Changing a filter invalidates the current page number.
+  useEffect(() => {
+    setPage(1);
+  }, [search, activeTab, orderBy, orderDir]);
 
   const openDetail = async (order: ApiServiceOrderItem) => {
     setDetailLoading(true);
@@ -138,7 +112,6 @@ export default function ServiceOrdersClient({
       setDetailOrder(res.data);
     } catch (err) {
       toast.error((err as Error).message || 'فشل جلب تفاصيل الطلب');
-      setDetailLoading(false);
     } finally {
       setDetailLoading(false);
     }
@@ -149,261 +122,18 @@ export default function ServiceOrdersClient({
     setDetailLoading(false);
   };
 
-  const openEdit = (order: ApiServiceOrderItem) => {
-    const localOrders = getOrders();
-    const localOrder = localOrders.find(
-      o => o.id === order.reference_label || o.id === `SO-${order.reference_number}`
-    );
-    if (localOrder) {
-      setForm({
-        services: localOrder.services.map(s => {
-          let empType: 'employee' | 'none' = 'none';
-          let empId: number | undefined = undefined;
-          if (s.employeeName) {
-            const empDb = ORDER_MOCK_EMPLOYEES.find(e => e.name === s.employeeName);
-            if (empDb) {
-              empType = 'employee';
-              empId = empDb.id;
-            }
-          }
-
-          return {
-            id: s.id,
-            serviceId: s.serviceId,
-            serviceName: s.serviceName,
-            serviceNameAr: s.serviceNameAr,
-            price: s.price.toString(),
-            description: (s as any).description ?? '',
-            options: [],
-            employeeType: empType,
-            employeeId: empId,
-          };
-        }),
-        description: localOrder.description,
-        date: localOrder.date,
-        time: localOrder.time,
-        hallName: localOrder.hallName,
-        hallLocation: localOrder.hallLocation,
-        paymentType: (localOrder.paymentType === 'single' ? 'single' : 'two_installments') as 'single' | 'two_installments',
-        firstInstallmentAmount: (localOrder as any).firstInstallmentAmount?.toString() || '',
-        clientId: localOrder.clientId,
-        clientName: localOrder.clientName || '',
-        clientPhone: localOrder.clientPhone || '',
-        isPaid: localOrder.paymentStatus === 'paid',
-      });
-      setEditing(localOrder);
-      setView('form');
-    } else {
-      toast.error('لم يتم العثور على الطلب محلياً لتعديله');
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!form.clientId) return;
-
-    setFormSubmitting(true);
-    try {
-      if (editing) {
-        // Edit mode local store fallback
-        const servicesList = form.services.map(s => ({
-          id: s.id || Math.random().toString(),
-          serviceId: s.serviceId,
-          serviceName: s.serviceName,
-          serviceNameAr: s.serviceNameAr,
-          serviceImageUrl: '',
-          serviceDescription: '',
-          serviceDescriptionAr: '',
-          price: parseFloat(s.price) || 0,
-          employeeName: '',
-          employeePhone: '',
-          status: (editing?.services.find(item => item.id === s.id)?.status) ?? ('coming' as const),
-        }));
-
-        const order: ServiceOrder = {
-          id: editing.id,
-          services: servicesList,
-          currency: 'KD',
-          description: form.description,
-          date: form.date,
-          time: form.time,
-          hallName: form.hallName,
-          hallLocation: form.hallLocation,
-          paymentType: (form.paymentType === 'single' ? 'single' : 'two_installments') as 'single' | 'two_installments',
-          clientId: form.clientId,
-          clientName: '',
-          clientPhone: '',
-          paymentStatus: form.isPaid ? 'paid' : 'unpaid',
-          createdAt: editing.createdAt,
-        };
-        saveOrder(order);
-        toast.success(language === 'ar' ? 'تم تحديث الطلب بنجاح' : 'Order updated successfully');
-        fetchOrders();
-        setView('list');
-      } else {
-        // Create mode
-        const items = form.services.map(s => {
-          const optionsPayload: any[] = [];
-          for (const opt of s.options) {
-            if (opt.type === 'employee') {
-              optionsPayload.push({
-                service_option_id: opt.service_option_id,
-                value: opt.selectedEmployeeIds || [],
-              });
-            } else if (opt.type === 'color') {
-              optionsPayload.push({
-                service_option_id: opt.service_option_id,
-                value: opt.value || '',
-              });
-            } else if (opt.type === 'list') {
-              optionsPayload.push({
-                service_option_id: opt.service_option_id,
-                value: String(opt.value),
-              });
-            } else {
-              optionsPayload.push({
-                service_option_id: opt.service_option_id,
-                value: opt.type === 'number' ? Number(opt.value) : opt.value,
-              });
-            }
-          }
-
-          let employeePayload = undefined;
-          if (s.employeeType === 'employee' && s.employeeId) {
-            employeePayload = {
-              type: 'employee' as const,
-              employee_id: s.employeeId,
-            };
-          }
-
-          return {
-            service_id: Number(s.serviceId),
-            service_package_id: s.selectedPackageId ? Number(s.selectedPackageId) : undefined,
-            addon_ids: s.selectedAddonIds ? s.selectedAddonIds.map(Number) : [],
-            options: optionsPayload,
-            employee: employeePayload,
-            notes: s.description || undefined,
-          };
-        });
-
-        const payload: CreateServiceOrderPayload = {
-          client_id: Number(form.clientId),
-          event_date: form.date,
-          event_time: form.time,
-          hall_name: form.hallName,
-          location_url: form.hallLocation || undefined,
-          notes: form.description || undefined,
-          is_paid: (form.isPaid ? 1 : 0) as 0 | 1,
-          payment_type: form.paymentType,
-          first_installment_amount: form.paymentType === 'two_installments' ? Number(form.firstInstallmentAmount) : undefined,
-          items,
-        };
-
-        const res = await createAdminServiceOrder(payload, token);
-        toast.success(res.msg || (language === 'ar' ? 'تم إنشاء الطلب بنجاح' : 'Order created successfully'));
-
-        const successOrder: ServiceOrder = {
-          id: res.data?.reference_label || `SO-${res.data?.reference_number || 'new'}`,
-          services: form.services.map(s => ({
-            id: s.id,
-            serviceId: s.serviceId,
-            serviceName: s.serviceName,
-            serviceNameAr: s.serviceNameAr,
-            serviceImageUrl: '',
-            serviceDescription: '',
-            serviceDescriptionAr: '',
-            price: parseFloat(s.price) || 0,
-            employeeName: s.employeeType === 'employee' ? 'Staff Assigned' : 'None',
-            employeePhone: '',
-            status: 'coming' as const,
-          })),
-          currency: 'KD',
-          description: form.description,
-          date: form.date,
-          time: form.time,
-          hallName: form.hallName,
-          hallLocation: form.hallLocation,
-          paymentType: (form.paymentType === 'single' ? 'single' : 'two_installments') as 'single' | 'two_installments',
-          clientId: form.clientId,
-          clientName: '',
-          clientPhone: '',
-          paymentStatus: form.isPaid ? 'paid' : 'unpaid',
-          createdAt: new Date().toISOString(),
-        };
-
-        setCreatedOrder(successOrder);
-        fetchOrders();
-        setView('sent');
-      }
-    } catch (err) {
-      toast.error((err as Error).message || 'فشل حفظ الطلب');
-    } finally {
-      setFormSubmitting(false);
-    }
-  };
-
-  const sendWhatsApp = (phone: string, msg: string) => {
-    const clean = phone.replace(/[^0-9]/g, '');
-    window.open(`https://wa.me/${clean}?text=${encodeURIComponent(msg)}`, '_blank');
-  };
-
-  const clientMsg = (o: ServiceOrder) => {
-    const link = `${window.location.origin}/order-client/${o.id}`;
-    if (language === 'ar') {
-      return `مرحباً ${o.clientName}!\nطلب الخدمات الخاص بك #${o.id} جاهز.\nاضغط لمشاهدة التفاصيل والدفع: ${link}`;
-    }
-    return `Hello ${o.clientName}!\nYour Service Order #${o.id} is ready.\nClick to view details and pay: ${link}`;
-  };
-
-  const employeeMsg = (o: ServiceOrder, item: any) => {
-    const link = `${window.location.origin}/order-employee/${o.id}?itemId=${item.id}`;
-    const sName = language === 'ar' ? (item.serviceNameAr || item.serviceName) : item.serviceName;
-    if (language === 'ar') {
-      return `مرحباً ${item.employeeName}!\nتم تعيينك على خدمة "${sName}" في طلب #${o.id}.\nاضغط لعرض التفاصيل وتحديث الحالة: ${link}`;
-    }
-    return `Hello ${item.employeeName}!\nYou have been assigned to service "${sName}" in order #${o.id}.\nClick to view details and update status: ${link}`;
-  };
-
-  if (view === 'sent' && createdOrder) {
-    return (
-      <OrderSent
-        createdOrder={createdOrder}
-        onBackToOrders={() => {
-          setCreatedOrder(null);
-          setView('list');
-        }}
-        onAddNewOrder={() => {
-          setCreatedOrder(null);
-          openCreate();
-        }}
-        sendWhatsApp={sendWhatsApp}
-        clientMsg={clientMsg}
-        employeeMsg={employeeMsg}
-      />
-    );
-  }
-
-  // Edit mode — only reached via openEdit(), never for new orders
-  if (view === 'form' && editing) {
-    return (
-      <OrderForm
-        form={form}
-        setForm={setForm}
-        editing={editing}
-        loading={formSubmitting}
-        onCancel={() => setView('list')}
-        onSubmit={handleSubmit}
-        token={token}
-      />
-    );
-  }
-
   return (
     <>
       <OrderDetailModal
         order={detailOrder}
         loading={detailLoading}
+        token={token}
         onClose={closeDetail}
+        onEdit={id => router.push(`/service-orders/${id}/edit`)}
+        onChanged={() => {
+          closeDetail();
+          fetchOrders();
+        }}
       />
 
       <AnimatePresence>
@@ -424,11 +154,30 @@ export default function ServiceOrdersClient({
             }}
           />
         )}
+
+        {cancelTarget && (
+          <CancelModal
+            order={cancelTarget}
+            onClose={() => setCancelTarget(null)}
+            onConfirm={async () => {
+              try {
+                await cancelAdminServiceOrder(cancelTarget.id, token);
+                toast.success(language === 'ar' ? 'تم إلغاء الطلب' : 'Order cancelled');
+              } catch (err) {
+                toast.error((err as Error).message || 'فشل إلغاء الطلب');
+              } finally {
+                fetchOrders();
+                setCancelTarget(null);
+              }
+            }}
+          />
+        )}
       </AnimatePresence>
 
       <OrderList
         orders={orders}
         statuses={statuses}
+        paymentStatuses={paymentStatuses}
         loading={loading}
         search={search}
         onSearchChange={setSearch}
@@ -442,10 +191,11 @@ export default function ServiceOrdersClient({
         onPageChange={setPage}
         totalPages={totalPages}
         totalItems={totalItems}
-        onCreateNew={openCreate}
+        onCreateNew={() => router.push('/service-orders/new')}
         onViewDetail={openDetail}
-        onEdit={openEdit}
+        onEdit={order => router.push(`/service-orders/${order.id}/edit`)}
         onDelete={setDeleteTarget}
+        onCancel={setCancelTarget}
       />
     </>
   );

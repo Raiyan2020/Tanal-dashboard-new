@@ -62,19 +62,19 @@ export function getPermissions(): string[] {
   }
 }
 
-/**
- * Check if the current user has a specific permission.
- * Super-admins (is_super_admin = true on their saved admin object) always return true.
- */
-export function hasPermission(permission: string): boolean {
-  const permissions = getPermissions();
-  return permissions.includes(permission);
-}
-
 /** Returns true when the logged-in admin is a super-admin. */
 export function isSuperAdmin(): boolean {
   const admin = getAdmin<{ is_super_admin?: boolean }>();
   return admin?.is_super_admin === true;
+}
+
+/**
+ * Check if the current user has a specific permission.
+ * Super-admins always return true, matching the nav-filtering behaviour.
+ */
+export function hasPermission(permission: string): boolean {
+  if (isSuperAdmin()) return true;
+  return getPermissions().includes(permission);
 }
 
 export function clearAuth(): void {

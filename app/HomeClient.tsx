@@ -12,7 +12,7 @@ export default function HomeClient({ initialData }: { initialData: DashboardData
     <DashboardContent 
        initialData={initialData}
        onNavigate={(id) => router.push(id === 'dashboard' ? '/' : `/${id}`)}
-       onCreateEvent={() => router.push('/events')}
+       onCreateEvent={() => router.push('/service-orders')}
     />
   );
 }

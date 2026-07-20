@@ -7,12 +7,21 @@ import {
   MoreHorizontal, ArrowLeft, ArrowRight, Edit2, Ticket, Users,
   Settings, ImageIcon, QrCode, UploadCloud, PieChart as PieChartIcon,
   BarChart3, Calendar, AlertCircle, Search, SortDesc, User, Loader2,
-  ChevronLeft, ChevronRight
+  ChevronLeft, ChevronRight, ShieldOff
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ResponsiveContainer, Tooltip, Legend, BarChart, CartesianGrid, XAxis, YAxis, Bar } from 'recharts';
 import { ConfirmModal } from './ConfirmModal';
-import { getInvitationById, getInvitationGuests, sendInvitation, type InvitationDetailData, type InvitationGuest as ApiInvitationGuest, type CreateInvitationResponse } from '@/lib/api';
+import {
+  getInvitationById,
+  getInvitationGuests,
+  sendInvitation,
+  isInvitationOverageError,
+  type InvitationDetailData,
+  type InvitationGuest as ApiInvitationGuest,
+  type CreateInvitationResponse,
+  type InvitationOverageError,
+} from '@/lib/api';
 import { getToken } from '@/lib/auth';
 import { toast } from 'sonner';
 
@@ -181,11 +190,11 @@ const StatCard = ({ title, value, icon: Icon, colorClass, subtitle }: any) => (
 interface InvitationDetailsProps {
   invitation: Invitation;
   onBack: () => void;
-  onNavigateToEventGuests?: (eventId: string) => void;
+  onNavigateToServiceOrder?: (serviceOrderId: string) => void;
   onEdit?: (invitation: Invitation) => void;
 }
 
-export function InvitationDetails({ invitation, onBack, onNavigateToEventGuests, onEdit }: InvitationDetailsProps) {
+export function InvitationDetails({ invitation, onBack, onNavigateToServiceOrder, onEdit }: InvitationDetailsProps) {
   const { t, dir } = useLanguage();
   const token = getToken() ?? '';
 
@@ -199,6 +208,8 @@ export function InvitationDetails({ invitation, onBack, onNavigateToEventGuests,
   const [showSendConfirm, setShowSendConfirm] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [sentInvitationData, setSentInvitationData] = useState<CreateInvitationResponse | null>(null);
+  // Set when the API rejects the send because guests exceed the package allowance.
+  const [overageInfo, setOverageInfo] = useState<InvitationOverageError | null>(null);
 
   const [detail, setDetail] = useState<InvitationDetailData | null>(null);
   const [detailLoading, setDetailLoading] = useState(true);
@@ -226,20 +237,30 @@ export function InvitationDetails({ invitation, onBack, onNavigateToEventGuests,
     refreshDetails(true);
   }, [refreshDetails]);
 
-  const handleSendInvitation = async () => {
+  /**
+   * Sends the invitation. When the guest count exceeds the package allowance the
+   * API replies 422 with `requires_confirmation`; that is surfaced as a second
+   * confirmation which retries with `force_overage=1`.
+   */
+  const handleSendInvitation = async (forceOverage = false) => {
     if (!token || !invitation.id) return;
     setShowSendConfirm(false);
+    if (forceOverage) setOverageInfo(null);
 
     const sendToast = toast.loading(dir === 'ltr' ? 'Sending invitation...' : 'جاري إرسال الدعوة...');
     setIsSending(true);
     try {
-      const res = await sendInvitation(Number(invitation.id), token);
+      const res = await sendInvitation(Number(invitation.id), token, forceOverage);
       toast.dismiss(sendToast);
       toast.success(res.msg || (dir === 'ltr' ? 'Invitation sent successfully!' : 'تم إرسال الدعوة بنجاح!'));
       setSentInvitationData(res.data);
       await refreshDetails(false);
     } catch (err) {
       toast.dismiss(sendToast);
+      if (isInvitationOverageError(err)) {
+        setOverageInfo(err.data);
+        return;
+      }
       toast.error((err as Error).message || (dir === 'ltr' ? 'Failed to send invitation' : 'فشل إرسال الدعوة'));
     } finally {
       setIsSending(false);
@@ -258,8 +279,11 @@ export function InvitationDetails({ invitation, onBack, onNavigateToEventGuests,
   // Fetch guests from API
   const fetchGuests = useCallback(async () => {
     if (!token) return;
-    const eventIdParam = detail?.event_id || Number(invitation.eventId);
-    if (!eventIdParam) return;
+
+    // Prefer the service order; fall back to event_id only for legacy invitations.
+    const serviceOrderId = detail?.service_order_id ?? Number(invitation.serviceOrderId) ?? undefined;
+    const legacyEventId = detail?.event_id;
+    if (!serviceOrderId && !legacyEventId) return;
 
     setGuestLoading(true);
     try {
@@ -269,7 +293,9 @@ export function InvitationDetails({ invitation, onBack, onNavigateToEventGuests,
         per_page: 15,
         keyword: debouncedGuestSearch || undefined,
         status: apiStatus,
-        event_id: eventIdParam,
+        ...(serviceOrderId
+          ? { service_order_id: serviceOrderId }
+          : { event_id: legacyEventId }),
       }, token);
 
       const mapped = res.data.items.map((g) => ({
@@ -287,7 +313,7 @@ export function InvitationDetails({ invitation, onBack, onNavigateToEventGuests,
     } finally {
       setGuestLoading(false);
     }
-  }, [token, detail?.event_id, invitation.eventId, guestPage, debouncedGuestSearch, guestStatusFilter]);
+  }, [token, detail?.service_order_id, detail?.event_id, invitation.serviceOrderId, guestPage, debouncedGuestSearch, guestStatusFilter]);
 
   useEffect(() => {
     if (activeTab === 'guests') {
@@ -347,7 +373,7 @@ export function InvitationDetails({ invitation, onBack, onNavigateToEventGuests,
             <div>
               <div className="flex flex-wrap items-center gap-3">
                 <h2 className={cn("text-2xl font-semibold text-primary-dark", dir === 'ltr' ? 'font-serif' : 'font-arabic font-bold')}>
-                  {invitation.eventName}
+                  {invitation.serviceOrderReference}
                 </h2>
                 <span className="px-2.5 py-1 text-xs font-medium bg-secondary/5 text-secondary/60 rounded-lg font-mono">
                   {invitation.id}
@@ -417,7 +443,21 @@ export function InvitationDetails({ invitation, onBack, onNavigateToEventGuests,
                           <Users className="w-5 h-5" />
                           <span className="text-sm">{t('numOfGuests' as any) || (dir === 'ltr' ? 'Num of Guests' : 'عدد الضيوف')}</span>
                         </div>
-                        <span className="font-medium text-secondary">{detail?.details.guest_count || invitation.guestsNumber}</span>
+                        <span className="font-medium text-secondary">
+                          {detail?.details.guest_count || invitation.guestsNumber}
+                          {/* Show the package allowance so overage is visible before sending */}
+                          {(detail?.guests_included ?? invitation.guestsIncluded) != null && (
+                            <span className={cn(
+                              'ms-1.5 text-xs font-bold',
+                              (detail?.details.guest_count || invitation.guestsNumber) >
+                                (detail?.guests_included ?? invitation.guestsIncluded ?? Infinity)
+                                ? 'text-amber-600'
+                                : 'text-secondary/40'
+                            )}>
+                              / {detail?.guests_included ?? invitation.guestsIncluded}
+                            </span>
+                          )}
+                        </span>
                       </div>
                       <div className="p-4 bg-white/40 rounded-2xl flex items-center justify-between border border-secondary/5">
                         <div className="flex items-center gap-3 text-secondary/60">
@@ -429,12 +469,28 @@ export function InvitationDetails({ invitation, onBack, onNavigateToEventGuests,
                     </div>
 
                     <div className="mt-6 flex flex-col gap-3">
+                      {/* Sending is blocked while the barcode is suspended */}
+                      {(detail?.is_barcode_suspended ?? invitation.isBarcodeSuspended) && (
+                        <div className="flex items-start gap-2.5 p-3 rounded-2xl bg-rose-50 border border-rose-200">
+                          <ShieldOff className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                          <div>
+                            <p className="text-sm font-bold text-rose-700">
+                              {dir === 'ltr' ? 'Barcode suspended' : 'الباركود موقوف'}
+                            </p>
+                            <p className="text-xs text-rose-600/80 mt-0.5">
+                              {dir === 'ltr'
+                                ? 'This invitation cannot be sent until the order is reinstated.'
+                                : 'لا يمكن إرسال هذه الدعوة حتى يتم استعادة الطلب.'}
+                            </p>
+                          </div>
+                        </div>
+                      )}
                       {
                         detail?.actions.can_be_sent ?
 
                           <button
                             onClick={() => setShowSendConfirm(true)}
-                            disabled={isSending}
+                            disabled={isSending || (detail?.is_barcode_suspended ?? invitation.isBarcodeSuspended)}
                             className="w-full py-4 rounded-2xl bg-gradient-to-r from-primary to-primary-light text-white font-medium shadow-xl shadow-primary/30 flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             {isSending ? (
@@ -470,7 +526,7 @@ export function InvitationDetails({ invitation, onBack, onNavigateToEventGuests,
                           <div className="w-20 h-20 rounded-full border border-stone-300 mb-6 flex items-center justify-center bg-stone-50">
                             <Ticket className="w-8 h-8 text-stone-400" />
                           </div>
-                          <h4 className="text-2xl font-serif text-stone-800 mb-2">{invitation.eventName}</h4>
+                          <h4 className="text-2xl font-serif text-stone-800 mb-2">{invitation.serviceOrderReference}</h4>
                           <p className="text-stone-500 text-sm mb-8 font-medium">{t('youAreCordiallyInvited' as any) || (dir === 'ltr' ? 'You are cordially invited' : 'أنتم مدعوون بكل مودة')}</p>
                           <div className="mt-auto bg-white p-3 rounded-xl shadow-sm border border-stone-200">
                             <QrCode className="w-24 h-24 text-stone-800" />
@@ -567,14 +623,18 @@ export function InvitationDetails({ invitation, onBack, onNavigateToEventGuests,
                   </div>
                   <h3 className="text-xl font-bold text-secondary mb-3">{t('noGuestsFound' as any) || (dir === 'ltr' ? 'No Guests Found' : 'لم يتم العثور على ضيوف')}</h3>
                   <p className="text-secondary/60 max-w-sm mb-8">
-                    {t('noGuestsFoundMsg' as any) || (dir === 'ltr' ? 'You haven\'t uploaded any guests to this event yet. Please navigate to the event details to add guests.' : 'لم تقم بإضافة أي ضيوف لهذا الحفل بعد. يرجى التوجه لتفاصيل الحفل لإضافة الضيوف.')}
+                    {dir === 'ltr'
+                      ? 'No guests have been added for this service order yet.'
+                      : 'لم تتم إضافة أي ضيوف لطلب الخدمة هذا بعد.'}
                   </p>
-                  <button
-                    onClick={() => onNavigateToEventGuests?.(invitation.eventId)}
-                    className="px-6 py-3 bg-primary text-white rounded-xl font-medium shadow-md shadow-primary/20 hover:bg-primary-dark transition-all active:scale-95 cursor-pointer"
-                  >
-                    {t('goToEventGuests' as any) || (dir === 'ltr' ? 'Go to Event Guests' : 'الذهاب لضيوف الحفل')}
-                  </button>
+                  {invitation.serviceOrderId && (
+                    <button
+                      onClick={() => onNavigateToServiceOrder?.(invitation.serviceOrderId)}
+                      className="px-6 py-3 bg-primary text-white rounded-xl font-medium shadow-md shadow-primary/20 hover:bg-primary-dark transition-all active:scale-95 cursor-pointer"
+                    >
+                      {dir === 'ltr' ? 'Go to Service Order' : 'الذهاب لطلب الخدمة'}
+                    </button>
+                  )}
                 </div>
               ) : (
                 <div className="glass-panel p-4 sm:p-6 rounded-3xl">
@@ -704,11 +764,26 @@ export function InvitationDetails({ invitation, onBack, onNavigateToEventGuests,
       <ConfirmModal
         isOpen={showSendConfirm}
         onClose={() => setShowSendConfirm(false)}
-        onConfirm={handleSendInvitation}
+        onConfirm={() => handleSendInvitation(false)}
         title={t('confirmSendInvitation' as any) || (dir === 'ltr' ? 'Send Invitation' : 'إرسال الدعوة')}
         message={t('confirmSendInvitationMessage' as any) || (dir === 'ltr' ? 'Are you sure you want to send this invitation to all guests?' : 'هل أنت متأكد من رغبتك في إرسال هذه الدعوة لجميع الضيوف؟')}
         confirmLabel={t('sendInvitation' as any) || (dir === 'ltr' ? 'Send Invitation' : 'إرسال الدعوة')}
         confirmColor="bg-primary hover:bg-primary-dark"
+      />
+
+      {/* Guest overage — the API asked for explicit confirmation before sending */}
+      <ConfirmModal
+        isOpen={!!overageInfo}
+        onClose={() => setOverageInfo(null)}
+        onConfirm={() => handleSendInvitation(true)}
+        title={dir === 'ltr' ? 'Guest limit exceeded' : 'تجاوز عدد المدعوين'}
+        message={
+          dir === 'ltr'
+            ? `This invitation has ${overageInfo?.guest_count} guests but the package includes only ${overageInfo?.guests_included}. Send anyway?`
+            : `تحتوي هذه الدعوة على ${overageInfo?.guest_count} مدعو بينما الباقة تشمل ${overageInfo?.guests_included} فقط. هل تريد الإرسال على أي حال؟`
+        }
+        confirmLabel={dir === 'ltr' ? 'Send anyway' : 'إرسال على أي حال'}
+        confirmColor="bg-amber-500 hover:bg-amber-600"
       />
 
       {/* Send Success Popup Modal */}

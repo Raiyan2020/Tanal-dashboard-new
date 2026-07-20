@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
 import { motion, AnimatePresence } from 'motion/react';
 import { FileText, X, Loader2, User, Phone, Mail, Download } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -101,7 +102,9 @@ export function FinancialDetailsModal({
                         <span className="text-xs font-mono bg-secondary/5 px-2 py-0.5 rounded text-secondary/60">
                           {record.reference_code || `FIN-${record.reference_number}`}
                         </span>
-                        <h4 className="font-bold text-secondary text-lg mt-1">{record.event?.name}</h4>
+                        <h4 className="font-bold text-secondary text-lg mt-1">
+                          {record.service_order?.reference_label || record.event?.name || '—'}
+                        </h4>
                         <span className="text-xs text-secondary/50 block mt-0.5 font-medium">
                           {t('recordDate')}: {record.record_date}
                         </span>
@@ -167,20 +170,37 @@ export function FinancialDetailsModal({
                         <h5 className="text-xs font-bold text-secondary/50 uppercase tracking-wider">
                           {t('eventInfo')}
                         </h5>
-                        <div className="bg-white/40 border border-secondary/5 p-3.5 rounded-xl space-y-2 text-sm text-secondary/80">
-                          <p className="flex justify-between">
-                            <span className="text-secondary/50">{t('eventRef')}</span>
-                            <span className="font-mono">{record.event?.reference_label || `#${record.event?.reference_number}`}</span>
-                          </p>
-                          <p className="flex justify-between">
-                            <span className="text-secondary/50">{t('eventDate')}</span>
-                            <span>{record.event?.event_date}</span>
-                          </p>
-                          <p className="flex justify-between">
-                            <span className="text-secondary/50">{t('eventTime')}</span>
-                            <span>{record.event?.event_time}</span>
-                          </p>
-                        </div>
+                        {/* Prefer the service order; legacy records still carry an event */}
+                        {(() => {
+                          const source = record.service_order ?? record.event;
+                          return (
+                            <div className="bg-white/40 border border-secondary/5 p-3.5 rounded-xl space-y-2 text-sm text-secondary/80">
+                              <p className="flex justify-between">
+                                <span className="text-secondary/50">{t('eventRef')}</span>
+                                {record.service_order ? (
+                                  <Link
+                                    href={`/service-orders?orderId=${record.service_order.id}`}
+                                    className="font-mono text-primary hover:underline"
+                                  >
+                                    {record.service_order.reference_label}
+                                  </Link>
+                                ) : (
+                                  <span className="font-mono">
+                                    {source?.reference_label || (source ? `#${source.reference_number}` : '—')}
+                                  </span>
+                                )}
+                              </p>
+                              <p className="flex justify-between">
+                                <span className="text-secondary/50">{t('eventDate')}</span>
+                                <span>{source?.event_date || '—'}</span>
+                              </p>
+                              <p className="flex justify-between">
+                                <span className="text-secondary/50">{t('eventTime')}</span>
+                                <span>{source?.event_time || '—'}</span>
+                              </p>
+                            </div>
+                          );
+                        })()}
                       </div>
 
                       {record.notes && (

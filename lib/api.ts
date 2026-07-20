@@ -54,6 +54,57 @@ type RequestOptions = {
   headers?: Record<string, string>;
 };
 
+/** Field name → list of messages, as returned in `response_status.validation_errors`. */
+export type ValidationErrors = Record<string, string[]>;
+
+/**
+ * Error thrown by `apiRequest` on a failed response. Extends `Error` so existing
+ * `catch (e) { e.message }` call sites keep working, while newer callers can read
+ * per-field validation errors and the `data` payload some 422s carry (e.g. the
+ * invitation guest-overage confirmation).
+ */
+export class ApiError extends Error {
+  readonly status: number;
+  readonly validationErrors: ValidationErrors;
+  readonly data: unknown;
+
+  constructor(message: string, status: number, validationErrors: ValidationErrors, data: unknown) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+    this.validationErrors = validationErrors;
+    this.data = data;
+  }
+
+  /** First message for a field, or undefined — convenient for rendering under inputs. */
+  fieldError(field: string): string | undefined {
+    return this.validationErrors[field]?.[0];
+  }
+}
+
+/**
+ * Normalises `response_status.validation_errors` into `Record<field, string[]>`.
+ * The API returns either a keyed object or a flat array of messages; the latter
+ * is bucketed under `_` since it carries no field association.
+ */
+export function normaliseValidationErrors(errors: unknown): ValidationErrors {
+  if (!errors) return {};
+  if (Array.isArray(errors)) {
+    return errors.length > 0 ? { _: errors.map(String) } : {};
+  }
+  if (typeof errors !== 'object') return {};
+
+  const out: ValidationErrors = {};
+  Object.entries(errors as Record<string, unknown>).forEach(([field, messages]) => {
+    if (Array.isArray(messages)) {
+      out[field] = messages.map(String);
+    } else if (messages) {
+      out[field] = [String(messages)];
+    }
+  });
+  return out;
+}
+
 /**
  * Generic fetch wrapper.
  * Attaches Authorization header when a token is provided.
@@ -117,34 +168,15 @@ async function apiRequestInternal<T = unknown>(
   }
 
   if (!res.ok || json.response_status?.error) {
-    let message = json?.msg || '';
+    const validationErrors = normaliseValidationErrors(json.response_status?.validation_errors);
 
-    const errors = json.response_status?.validation_errors;
-    if (errors) {
-      if (Array.isArray(errors)) {
-        if (errors.length > 0) {
-          message = errors.join(', ');
-        }
-      } else if (typeof errors === 'object') {
-        const messages: string[] = [];
-        Object.entries(errors).forEach(([_, fieldErrors]) => {
-          if (Array.isArray(fieldErrors)) {
-            messages.push(...fieldErrors.map(String));
-          } else if (fieldErrors) {
-            messages.push(String(fieldErrors));
-          }
-        });
-        if (messages.length > 0) {
-          message = messages.join(', ');
-        }
-      }
-    }
+    // Prefer the flattened validation messages, falling back to the top-level msg.
+    const flattened = Object.values(validationErrors).flat();
+    const message = flattened.length > 0
+      ? flattened.join(', ')
+      : json?.msg || 'حدث خطأ غير متوقع';
 
-    if (!message) {
-      message = 'حدث خطأ غير متوقع';
-    }
-
-    throw new Error(message);
+    throw new ApiError(message, res.status, validationErrors, json?.data ?? null);
   }
 
   return json;
@@ -225,8 +257,8 @@ export interface DashboardStat {
 }
 
 export interface DashboardStats {
-  total_clients: DashboardStat;
-  upcoming_events: DashboardStat;
+  total_service_orders: DashboardStat;
+  upcoming_service_orders: DashboardStat;
   monthly_revenue: DashboardStat;
   today_scans: DashboardStat;
 }
@@ -242,23 +274,26 @@ export interface DashboardRevenueChart {
   total: number;
 }
 
-export interface DashboardUpcomingEvent {
+export interface DashboardUpcomingServiceOrder {
   id: number;
+  reference_label: string;
+  client_name: string | null;
+  service_name: string | null;
   event_date: string;
-  guest_count: number;
-  price: string;
-  status: string;
-  status_label: string;
-  event_name: string;
+  event_time: string;
+  hall_name: string;
+  total_amount: ApiAmount;
+  statuses: ServiceOrderStatus[];
+  is_barcode_suspended: boolean;
 }
 
 export interface DashboardData {
   stats: DashboardStats;
   revenue_chart: DashboardRevenueChart;
-  upcoming_events: DashboardUpcomingEvent[];
+  upcoming_service_orders: DashboardUpcomingServiceOrder[];
 }
 
-/** GET /admin/dashboard — fetch dashboard stats/charts/events */
+/** GET /admin/dashboard — fetch dashboard stats/charts/upcoming orders */
 export async function getDashboardData(
   period: 'this_year' | 'this_month' | 'last_12_months' | 'last_6months' | 'all_time',
   token: string
@@ -267,6 +302,20 @@ export async function getDashboardData(
     method: 'GET',
     token,
   });
+}
+
+/**
+ * GET /admin/dashboard/upcoming-service-orders
+ * Replaces the `upcoming-events` alias, which is kept only for compatibility.
+ */
+export async function getDashboardUpcomingServiceOrders(
+  token: string,
+  perPage = 15
+): Promise<ApiResponse<{ items: DashboardUpcomingServiceOrder[] }>> {
+  return apiRequest<{ items: DashboardUpcomingServiceOrder[] }>(
+    `/admin/dashboard/upcoming-service-orders?per_page=${perPage}`,
+    { token }
+  );
 }
 
 /* ─── Roles ─────────────────────────────────────────────────── */
@@ -422,417 +471,26 @@ export async function deleteAdmin(id: number, token: string): Promise<ApiRespons
   return apiRequest(`/admin/admins/${id}`, { method: 'DELETE', token });
 }
 
-/* ─── Clients CRUD ────────────────────────────────────────────── */
-
-export interface Client {
-  id: number;
-  reference_number: number;
-  reference_label: string;
-  name: string;
-  country_code: string;
-  phone: string;
-  full_phone: string;
-  whatsapp_url: string;
-  email: string;
-  notes: string | null;
-  events_count: number;
-}
-
-/** GET /admin/clients */
-export async function getClients(
-  token: string,
-  params?: { page?: number; per_page?: number; keyword?: string }
-): Promise<ApiResponse<PaginatedItems<Client>>> {
-  const query = new URLSearchParams();
-  if (params?.page) query.set('page', String(params.page));
-  if (params?.per_page) query.set('per_page', String(params.per_page));
-  if (params?.keyword) query.set('filters[keyword]', params.keyword);
-  const qs = query.toString();
-  return apiRequest<PaginatedItems<Client>>(`/admin/clients${qs ? `?${qs}` : ''}`, { token });
-}
-
-/** GET /admin/clients/:id */
-export async function getClientById(id: number, token: string): Promise<ApiResponse<Client>> {
-  return apiRequest<Client>(`/admin/clients/${id}`, { token });
-}
-
-/** POST /admin/clients */
-export async function createClient(
-  fields: { name: string; country_code: string; phone: string; email?: string; notes?: string },
-  token: string
-): Promise<ApiResponse<Client>> {
-  const formData = new FormData();
-  formData.append('name', fields.name);
-  formData.append('country_code', fields.country_code);
-  formData.append('phone', fields.phone);
-  if (fields.email) formData.append('email', fields.email);
-  if (fields.notes) formData.append('notes', fields.notes);
-  return apiRequest<Client>('/admin/clients', { method: 'POST', body: formData, token });
-}
-
-/** POST /admin/clients/:id  (update) */
-export async function updateClient(
-  id: number,
-  fields: { name: string; country_code: string; phone: string; email?: string; notes?: string },
-  token: string
-): Promise<ApiResponse<Client>> {
-  const formData = new FormData();
-  formData.append('name', fields.name);
-  formData.append('country_code', fields.country_code);
-  formData.append('phone', fields.phone);
-  if (fields.email) formData.append('email', fields.email);
-  formData.append('notes', fields.notes || '');
-  return apiRequest<Client>(`/admin/clients/${id}?_method=put`, { method: 'POST', body: formData, token });
-}
-
-/** DELETE /admin/clients/:id */
-export async function deleteClient(id: number, token: string): Promise<ApiResponse<unknown>> {
-  return apiRequest(`/admin/clients/${id}`, { method: 'DELETE', token });
-}
-
-/* ─── Events CRUD ────────────────────────────────────────────── */
-
-export interface ApiEvent {
-  id: number;
-  reference_number?: number;
-  name: string;
-  event_date: string | null;
-  event_time?: string | null;
-  guest_count: number;
-  price?: string | null;
-  status: string;
-  status_label?: string;
-  invitations_created?: boolean | number;
-  payment_type?: 'one_payment' | 'installments' | null;
-  hall_name?: string | null;
-  hall_location?: string | null;
-  welcome_message?: string | null;
-  assigned_employee_id?: number | null;
-  client_id?: number | null;
-  created_at?: string;
-  actions?: {
-    can_delete: boolean;
-    can_edit: boolean;
-    can_update_payment: boolean;
-  };
-}
-
-/** GET /admin/events */
-export async function getEvents(
-  token: string,
-  params?: {
-    page?: number;
-    per_page?: number;
-    keyword?: string;
-    guest_count?: string;
-    status?: string;
-    is_paid?: 0 | 1;
-    client_id?: number;
-    event_date_min?: string;
-    event_date_max?: string;
-  }
-): Promise<ApiResponse<PaginatedItems<ApiEvent>>> {
-  const query = new URLSearchParams();
-  if (params?.page) query.set('page', String(params.page));
-  if (params?.per_page) query.set('per_page', String(params.per_page));
-  if (params?.keyword) query.set('filters[keyword]', params.keyword);
-  if (params?.guest_count) query.set('filters[guest_count]', params.guest_count);
-  if (params?.status) query.set('filters[status]', params.status);
-  if (params?.is_paid !== undefined) query.set('filters[is_paid]', String(params.is_paid));
-  if (params?.client_id) query.set('filters[client_id]', String(params.client_id));
-  if (params?.event_date_min) query.set('filters[event_date_min]', params.event_date_min);
-  if (params?.event_date_max) query.set('filters[event_date_max]', params.event_date_max);
-  const qs = query.toString();
-  return apiRequest<PaginatedItems<ApiEvent>>(`/admin/events${qs ? `?${qs}` : ''}`, { token });
-}
-
-/** POST /admin/events */
-export async function createEvent(
-  fields: {
-    client_id: number;
-    event_date: string;
-    event_time: string;
-    hall_name: string;
-    location_url?: string;
-    whatsapp_message: string;
-    total_cost: number;
-    is_paid: 0 | 1;
-    payment_type: 'single' | 'two_installments';
-    first_installment_amount?: number;
-  },
-  token: string
-): Promise<ApiResponse<ApiEvent>> {
-  const formData = new FormData();
-  formData.append('client_id', String(fields.client_id));
-  formData.append('event_date', fields.event_date);
-  formData.append('event_time', fields.event_time);
-  formData.append('hall_name', fields.hall_name);
-  if (fields.location_url) formData.append('location_url', fields.location_url);
-  formData.append('whatsapp_message', fields.whatsapp_message);
-  formData.append('total_cost', String(fields.total_cost));
-  formData.append('is_paid', String(fields.is_paid));
-  formData.append('payment_type', fields.payment_type);
-  if (fields.first_installment_amount !== undefined) {
-    formData.append('first_installment_amount', String(fields.first_installment_amount));
-  }
-  return apiRequest<ApiEvent>('/admin/events', { method: 'POST', body: formData, token });
-}
-
-/** POST /admin/events/:id?_method=put */
-export async function updateEvent(
-  id: number,
-  fields: {
-    client_id: number;
-    event_date: string;
-    event_time: string;
-    hall_name: string;
-    location_url?: string;
-    whatsapp_message: string;
-    total_cost: number;
-    is_paid: 0 | 1;
-    payment_type: 'single' | 'two_installments';
-    first_installment_amount?: number;
-  },
-  token: string
-): Promise<ApiResponse<ApiEvent>> {
-  const formData = new FormData();
-  formData.append('client_id', String(fields.client_id));
-  formData.append('event_date', fields.event_date);
-  formData.append('event_time', fields.event_time);
-  formData.append('hall_name', fields.hall_name);
-  if (fields.location_url) formData.append('location_url', fields.location_url);
-  formData.append('whatsapp_message', fields.whatsapp_message);
-  formData.append('total_cost', String(fields.total_cost));
-  formData.append('is_paid', String(fields.is_paid));
-  formData.append('payment_type', fields.payment_type);
-  if (fields.first_installment_amount !== undefined) {
-    formData.append('first_installment_amount', String(fields.first_installment_amount));
-  }
-  return apiRequest<ApiEvent>(`/admin/events/${id}?_method=put`, { method: 'POST', body: formData, token });
-}
-
-/** DELETE /admin/events/:id */
-export async function deleteEvent(id: number, token: string): Promise<ApiResponse<unknown>> {
-  return apiRequest(`/admin/events/${id}`, { method: 'DELETE', token });
-}
-
-export interface EventDetailData {
-  details: {
-    client_id: number;
-    client_name: string;
-    created_at: string;
-    event_date: string;
-    event_time: string;
-    guest_count: number;
-  };
-  hall: {
-    id: number;
-    name: string;
-    location_url: string | null;
-  };
-  financial_transaction: {
-    total_cost: string;
-    paid_amount: string;
-    remaining_amount: string;
-    is_paid: boolean;
-    payment_type: 'single' | 'two_installments';
-    status: 'paid' | 'unpaid' | 'installments' | 'completed' | 'cancelled';
-    first_installment_amount: string | null;
-    second_installment_amount: string | null;
-    second_installment_due_date: string | null;
-  };
-  welcome_message: string;
-  invitations: {
-    sent_whatsapp_count: number;
-  };
-  payment_button?: {
-    state: string;
-    payable: boolean;
-    installment: string | null;
-    amount: number;
-    label: string;
-  };
-  /** @deprecated use related_employee instead */
-  employees?: Array<{
-    id: number;
-    name: string;
-    phone?: string;
-  }>;
-  available_employees: Array<{
-    id: number;
-    name: string;
-  }>;
-  related_employee: Array<{
-    id: number;
-    name: string;
-  }>;
-  actions: {
-    can_delete: boolean;
-    can_edit: boolean;
-    can_update_payment: boolean;
-  };
-}
-
-/** GET /admin/events/:id */
-export async function getEventById(id: number, token: string): Promise<ApiResponse<EventDetailData>> {
-  return apiRequest<EventDetailData>(`/admin/events/${id}`, { method: 'GET', token });
-}
-
-
-
-/** PATCH /admin/events/:id/payment-status */
-export async function updateEventPaymentStatus(
-  id: number,
-  status: 'paid' | 'unpaid' | 'installments' | 'completed' | 'cancelled',
-  token: string
-): Promise<ApiResponse<unknown>> {
-  const formData = new FormData();
-  formData.append('status', status);
-  return apiRequest(`/admin/events/${id}/payment-status?_method=patch`, {
-    method: 'POST',
-    body: formData,
-    token,
-  });
-}
-
-export interface ApiGuest {
-  id: number;
-  name: string;
-  country_code: string;
-  phone: string;
-  full_phone: string;
-  have_whatsapp: boolean;
-  invitation_sent: boolean;
-  invitation_sent_at: string | null;
-  checked_in: boolean;
-  checked_in_at: string | null;
-}
-
-export interface GuestListData {
-  items: ApiGuest[];
-  pagination: {
-    current_page: number;
-    last_page: number;
-    per_page: number;
-    total: number;
-  };
-}
-
-export interface GetEventGuestsParams {
-  page?: number;
-  per_page?: number;
-  has_whatsapp?: boolean | null;
-}
-
-/** GET /admin/events/:id/guests */
-export async function getEventGuests(
-  eventId: number,
-  params: GetEventGuestsParams,
-  token: string
-): Promise<ApiResponse<GuestListData>> {
-  const query = new URLSearchParams();
-  if (params.page !== undefined) query.set('page', String(params.page));
-  if (params.per_page !== undefined) query.set('per_page', String(params.per_page));
-  if (params.has_whatsapp === true) query.set('has_whatsapp', '1');
-  else if (params.has_whatsapp === false) query.set('has_whatsapp', '0');
-
-  const qs = query.toString();
-  return apiRequest<GuestListData>(`/admin/events/${eventId}/guests${qs ? `?${qs}` : ''}`, {
-    method: 'GET',
-    token,
-  });
-}
-
-export interface CreateGuestPayload {
-  name: string;
-  phone: string;
-  country_code: string;
-}
-
-export interface CreateGuestResponse {
-  id: number;
-  have_whatsapp: boolean;
-}
-
-/** POST /admin/events/:id/guests */
-export async function createEventGuest(
-  eventId: number,
-  payload: CreateGuestPayload,
-  token: string
-): Promise<ApiResponse<CreateGuestResponse>> {
-  const formData = new FormData();
-  formData.append('name', payload.name);
-  formData.append('phone', payload.phone);
-  formData.append('country_code', payload.country_code);
-  return apiRequest<CreateGuestResponse>(`/admin/events/${eventId}/guests`, {
-    method: 'POST',
-    body: formData,
-    token,
-  });
-}
-
-export interface ImportGuestsResponse {
-  imported: number;
-  failed: number;
-  errors: string[];
-}
-
-/** POST /admin/events/:id/guests/import */
-export async function importEventGuests(
-  eventId: number,
-  file: File,
-  token: string
-): Promise<ApiResponse<ImportGuestsResponse>> {
-  const formData = new FormData();
-  formData.append('file', file);
-  return apiRequest<ImportGuestsResponse>(`/admin/events/${eventId}/guests/import`, {
-    method: 'POST',
-    body: formData,
-    token,
-  });
-}
-
-/** POST /admin/events/:eventId/guests/:guestId?_method=put */
-export async function updateEventGuest(
-  eventId: number,
-  guestId: number,
-  payload: CreateGuestPayload,
-  token: string
-): Promise<ApiResponse<CreateGuestResponse>> {
-  const formData = new FormData();
-  formData.append('name', payload.name);
-  formData.append('phone', payload.phone);
-  formData.append('country_code', payload.country_code);
-  return apiRequest<CreateGuestResponse>(`/admin/events/${eventId}/guests/${guestId}?_method=put`, {
-    method: 'POST',
-    body: formData,
-    token,
-  });
-}
-
-/** DELETE /admin/events/:eventId/guests/:guestId */
-export async function deleteEventGuest(
-  eventId: number,
-  guestId: number,
-  token: string
-): Promise<ApiResponse<unknown>> {
-  return apiRequest(`/admin/events/${eventId}/guests/${guestId}`, {
-    method: 'DELETE',
-    token,
-  });
-}
 
 export interface ApiInvitation {
   id: number;
+  /** Null for legacy invitations still attached to an event. */
+  service_order_id: number | null;
+  service_order_reference: string | null;
   client_id: number;
-  client_name: string;
-  client_phone: string;
+  client_name: string | null;
+  client_phone: string | null;
   client_email: string;
   reference_number: string;
-  whatsapp_url: string;
-  event_name: string;
+  whatsapp_url: string | null;
+  event_name: string | null;
+  execution_date: string | null;
   guest_count: number;
-  deadline_date: string;
+  /** Guest allowance from the order's package; null when uncapped. */
+  guests_included: number | null;
+  is_barcode_suspended: boolean;
+  deadline_date: string | null;
+  deadline_time: string | null;
   is_sent: boolean;
   status: 'upcoming' | 'previous';
   status_label: string;
@@ -873,7 +531,12 @@ export interface InvitationDetailData {
   id: number;
   reference_code: string;
   name: string;
-  event_id: number;
+  service_order_id: number | null;
+  service_order_reference: string | null;
+  is_barcode_suspended: boolean;
+  guests_included: number | null;
+  /** Legacy — populated only for invitations created before the migration. */
+  event_id?: number;
   response_stats: {
     total_sent: { count: number };
     accepted: { count: number; percentage: number };
@@ -940,7 +603,7 @@ export async function getInvitations(
 }
 
 export interface CreateInvitationPayload {
-  event_id: string;
+  service_order_id: string;
   logic_type: 'strict_action' | 'default_accept' | 'view_only';
   deadline_date: string;
   deadline_time: string;
@@ -953,7 +616,7 @@ export async function createInvitation(
   token: string
 ): Promise<ApiResponse<CreateInvitationResponse>> {
   const formData = new FormData();
-  formData.append('event_id', payload.event_id);
+  formData.append('service_order_id', payload.service_order_id);
   formData.append('logic_type', payload.logic_type);
   formData.append('deadline_date', payload.deadline_date);
   formData.append('deadline_time', payload.deadline_time);
@@ -976,7 +639,7 @@ export async function getInvitationById(
 }
 
 export interface UpdateInvitationPayload {
-  event_id: string;
+  service_order_id: string;
   logic_type: 'strict_action' | 'default_accept' | 'view_only';
   deadline_date: string;
   deadline_time: string;
@@ -990,7 +653,7 @@ export async function updateInvitation(
   token: string
 ): Promise<ApiResponse<CreateInvitationResponse>> {
   const formData = new FormData();
-  formData.append('event_id', payload.event_id);
+  formData.append('service_order_id', payload.service_order_id);
   formData.append('logic_type', payload.logic_type);
   formData.append('deadline_date', payload.deadline_date);
   formData.append('deadline_time', payload.deadline_time);
@@ -1022,6 +685,8 @@ export interface GetInvitationGuestsParams {
   status?: string;
   page?: number;
   per_page?: number;
+  service_order_id?: number;
+  /** Legacy only — for invitations predating the service-orders migration. */
   event_id?: number;
 }
 
@@ -1037,17 +702,44 @@ export async function getInvitationGuests(
   if (params.status) query.set('status', params.status);
   if (params.page !== undefined) query.set('page', String(params.page));
   if (params.per_page !== undefined) query.set('per_page', String(params.per_page));
+  if (params.service_order_id !== undefined) query.set('service_order_id', String(params.service_order_id));
   if (params.event_id !== undefined) query.set('event_id', String(params.event_id));
   const qs = query.toString();
   return apiRequest<PaginatedItems<InvitationGuest>>(`/admin/invitations/guests${qs ? `?${qs}` : ''}`, { token });
 }
 
-/** PATCH /admin/invitations/:id/send */
+/** Payload of the 422 returned when the guest count exceeds the package allowance. */
+export interface InvitationOverageError {
+  guest_count: number;
+  guests_included: number;
+  requires_confirmation: true;
+}
+
+/** Narrows an ApiError to the guest-overage confirmation case. */
+export function isInvitationOverageError(err: unknown): err is ApiError & { data: InvitationOverageError } {
+  return (
+    err instanceof ApiError &&
+    typeof err.data === 'object' &&
+    err.data !== null &&
+    (err.data as InvitationOverageError).requires_confirmation === true
+  );
+}
+
+/**
+ * PATCH /admin/invitations/:id/send
+ *
+ * Rejected with a 422 carrying `requires_confirmation` when the guest count
+ * exceeds the package allowance — retry with `forceOverage` after the user
+ * confirms. Also blocked when the barcode is suspended, payment is incomplete,
+ * or the event has already started.
+ */
 export async function sendInvitation(
   id: number,
-  token: string
+  token: string,
+  forceOverage = false
 ): Promise<ApiResponse<CreateInvitationResponse>> {
-  return apiRequest<CreateInvitationResponse>(`/admin/invitations/${id}/send`, {
+  const qs = forceOverage ? '?force_overage=1' : '';
+  return apiRequest<CreateInvitationResponse>(`/admin/invitations/${id}/send${qs}`, {
     method: 'PATCH',
     token,
   });
@@ -1060,7 +752,14 @@ export interface ApiService {
   image: string | null;
   sort_order: number;
   options_count: number;
+  /** System services are created by the backend and cannot be deleted. */
+  is_system: boolean;
+  /** e.g. "barcode_invitations" — identifies special-cased services. */
+  system_key: string | null;
 }
+
+/** Services whose packages must declare a guest allowance. */
+export const BARCODE_INVITATIONS_KEY = 'barcode_invitations';
 
 export interface ApiServiceOptionValue {
   id: number;
@@ -1085,12 +784,20 @@ export interface ApiServiceOption {
 export interface ApiServicePackage {
   id: number;
   service_id: number;
+  /** Localised display name resolved by the API from name_ar / name_en. */
+  name: string;
   name_ar: string;
   name_en: string;
   description_ar: string | null;
   description_en: string | null;
   price: string;
   sort_order: number;
+  /** Required for packages of the barcode-invitations service. */
+  guests_included: number | null;
+  option_values?: Array<{
+    service_option_id: number;
+    service_option_value_id: number;
+  }>;
 }
 
 export interface ApiServiceAddon {
@@ -1214,6 +921,8 @@ export interface ServicePackagePayload {
   description_en?: string;
   price: number;
   sort_order?: number;
+  /** Mandatory when the parent service is the barcode-invitations system service. */
+  guests_included?: number;
 }
 
 /** GET /admin/services/:serviceId/packages */
@@ -1379,16 +1088,6 @@ export interface ApiEmployeeDetail extends ApiEmployee {
   };
 }
 
-export interface ApiAssignableEvent {
-  id: number;
-  reference_number: number;
-  reference_label: string;
-  name: string;
-  event_date: string;
-  is_assigned: boolean;
-  other_staff?: { id: number; name: string }[];
-}
-
 export interface GetEmployeesParams {
   page?: number;
   per_page?: number;
@@ -1417,21 +1116,6 @@ export async function getEmployees(
   }
   const qs = query.toString();
   return apiRequest<PaginatedItems<ApiEmployee>>(`/admin/employees${qs ? `?${qs}` : ''}`, { token });
-}
-
-/** POST /admin/events/:id/employees — assign employees to an event */
-export async function assignEventEmployees(
-  eventId: number,
-  employeeIds: number[],
-  token: string
-): Promise<ApiResponse<unknown>> {
-  const formData = new FormData();
-  employeeIds.forEach((id) => formData.append('employee_ids[]', String(id)));
-  return apiRequest(`/admin/events/${eventId}/employees`, {
-    method: 'POST',
-    body: formData,
-    token,
-  });
 }
 
 /** GET /admin/employees/:id */
@@ -1493,29 +1177,6 @@ export async function deleteEmployee(
 ): Promise<ApiResponse<unknown>> {
   return apiRequest(`/admin/employees/${id}`, {
     method: 'DELETE',
-    token,
-  });
-}
-
-/** GET /admin/employees/:id/assignable-events */
-export async function getEmployeeAssignableEvents(
-  id: number,
-  token: string
-): Promise<ApiResponse<PaginatedItems<ApiAssignableEvent>>> {
-  return apiRequest<PaginatedItems<ApiAssignableEvent>>(`/admin/employees/${id}/assignable-events`, {
-    token,
-  });
-}
-
-/** PUT /admin/employees/:id/events */
-export async function assignEmployeeEvents(
-  id: number,
-  eventIds: number[],
-  token: string
-): Promise<ApiResponse<ApiEmployeeDetail>> {
-  return apiRequest<ApiEmployeeDetail>(`/admin/employees/${id}/events`, {
-    method: 'PUT',
-    body: { event_ids: eventIds },
     token,
   });
 }
@@ -1658,18 +1319,33 @@ export interface ServiceOrderStatus {
   label: string;
 }
 
+/**
+ * Money fields are serialised as strings by the Laravel resources but the spec
+ * documents them as numbers — accept both and normalise at the render site.
+ */
+export type ApiAmount = string | number;
+
+/** Safe numeric coercion for the `ApiAmount` union. */
+export function parseAmount(value: ApiAmount | null | undefined): number {
+  if (value === null || value === undefined || value === '') return 0;
+  const n = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(n) ? n : 0;
+}
+
 export interface ApiServiceOrderItem {
   id: number;
   reference_number: number;
   reference_label: string;
-  service_name: string;
-  client_name: string;
-  event_date: string;
-  total_amount: string;
+  service_name: string | null;
+  client_name: string | null;
+  client_phone: string | null;
+  event_date: string | null;
+  total_amount: ApiAmount;
   currency: string;
   statuses: ServiceOrderStatus[];
   has_pending_second_payment: boolean;
-  whatsapp_url: string;
+  is_barcode_suspended: boolean;
+  whatsapp_url: string | null;
 }
 
 export interface ServiceOrdersResponse {
@@ -1679,16 +1355,28 @@ export interface ServiceOrdersResponse {
     per_page: number;
     current_page: number;
     last_page: number;
-    from: number;
-    to: number;
+    from: number | null;
+    to: number | null;
   };
   statuses: ServiceOrderStatus[];
+  payment_statuses: ServiceOrderStatus[];
 }
+
+/** Values accepted by the `status` filter on the service-orders list. */
+export type ServiceOrderListStatus =
+  | 'upcoming'
+  | 'rejected'
+  | 'installments'
+  | 'paid'
+  | 'unpaid'
+  | 'cancelled';
 
 export interface GetServiceOrdersParams {
   page?: number;
   per_page?: number;
   keyword?: string;
+  status?: ServiceOrderListStatus | '';
+  client_id?: number;
   order_by?: string;
   order?: 'ASC' | 'DESC';
 }
@@ -1701,7 +1389,9 @@ export async function getAdminServiceOrders(
   const query = new URLSearchParams();
   if (params?.page !== undefined) query.set('page', String(params.page));
   if (params?.per_page !== undefined) query.set('per_page', String(params.per_page));
-  if (params?.keyword !== undefined) query.set('filters[keyword]', params.keyword);
+  if (params?.keyword) query.set('filters[keyword]', params.keyword);
+  if (params?.status) query.set('filters[status]', params.status);
+  if (params?.client_id !== undefined) query.set('filters[client_id]', String(params.client_id));
   if (params?.order_by !== undefined) query.set('filters[order_by]', params.order_by);
   if (params?.order !== undefined) query.set('filters[order]', params.order);
 
@@ -1725,14 +1415,54 @@ export interface ApiServiceOrderDetailOption {
   employee: { id: number; name: string; reference_label: string; full_phone: string } | null;
 }
 
+/** Employee attached to the order as a whole (`order_employees[]`). */
+export interface ApiServiceOrderEmployee {
+  id: number;
+  name: string;
+  reference_label?: string;
+  full_phone?: string;
+}
+
+/** Employee attached to a single item — only the first is returned by the API. */
+export interface ApiServiceOrderItemEmployee {
+  type: 'employee' | 'freelancer';
+  id?: number;
+  employee_id?: number;
+  name?: string;
+  username?: string;
+  country_code?: string;
+  phone?: string;
+  full_phone?: string;
+  reference_label?: string;
+}
+
+/** Client data embedded in the order — replaces the standalone clients module. */
+export interface ApiServiceOrderClient {
+  name: string | null;
+  country_code: string | null;
+  phone: string | null;
+  alt_country_code: string | null;
+  alt_phone: string | null;
+  data_status: 'complete' | 'incomplete' | null;
+  completed_at: string | null;
+  whatsapp_url: string | null;
+  legacy_client_id: number | null;
+}
+
 export interface ApiServiceOrderDetailItem {
   id: number;
   service_id: number;
+  service_package_id: number | null;
   service: { id: number; name: string; description: string; image: string | null; sort_order: number };
-  price: string;
+  package?: ApiServicePackage | null;
+  base_price: ApiAmount;
+  addon_total_price: ApiAmount;
+  guests_included: number | null;
+  price: ApiAmount;
   notes: string | null;
   sort: number;
-  employee: { type: string; id: number; name: string; reference_label: string; full_phone: string } | null;
+  employee: ApiServiceOrderItemEmployee | null;
+  addons?: unknown[];
   options: ApiServiceOrderDetailOption[];
 }
 
@@ -1740,28 +1470,48 @@ export interface ApiServiceOrderDetail {
   id: number;
   reference_number: number;
   reference_label: string;
-  client_id: number;
-  client: {
-    id: number; reference_label: string; name: string; country_code: string;
-    phone: string; full_phone: string; whatsapp_url: string; email: string; notes: string | null;
-  };
+  client_id: number | null;
+  client: ApiServiceOrderClient;
+  legacy_client?: unknown;
   event_date: string;
   event_time: string;
+  event_end_time: string;
+  /** Aliases of event_time / event_end_time. */
+  start_time: string;
+  end_time: string;
   hall_name: string;
   location_url: string | null;
+  governorate: string | null;
+  block_number: string | null;
+  street_name: string | null;
+  house_number: string | null;
+  address_notes: string | null;
+  client_notes: string | null;
+  execution_notes: string | null;
+  portal_url: string;
+  cancelled_at: string | null;
+  cancelled_by: number | null;
+  /** Present when the invitation relationship is loaded. */
+  invitation_id?: number;
+  order_employees: ApiServiceOrderEmployee[];
   statuses: ServiceOrderStatus[];
   is_paid: boolean;
   payment_type: string;
-  paid_amount: string;
-  first_installment_amount: string | null;
-  second_installment_amount: string | null;
+  paid_amount: ApiAmount;
+  first_installment_amount: ApiAmount | null;
+  second_installment_amount: ApiAmount | null;
+  second_installment_due_date: string | null;
   second_payment_status: string | null;
   has_pending_second_payment: boolean;
-  total_amount: string;
+  is_barcode_suspended: boolean;
+  installment_step: string | null;
+  available_payment_statuses: ServiceOrderStatus[];
+  total_amount: ApiAmount;
   notes: string | null;
-  primary_service_name: { ar: string; en: string };
+  primary_service_name: { ar: string; en: string } | null;
   items: ApiServiceOrderDetailItem[];
-  whatsapp_url: string;
+  items_count?: number;
+  whatsapp_url: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -1774,12 +1524,31 @@ export async function getAdminServiceOrderById(
   return apiRequest<ApiServiceOrderDetail>(`/admin/service-orders/${id}`, { token });
 }
 
-/** DELETE /admin/service-orders/:id */
+/**
+ * DELETE /admin/service-orders/:id
+ * Only valid for unpaid orders — use `cancelAdminServiceOrder` once any amount
+ * has been paid.
+ */
 export async function deleteAdminServiceOrder(
   id: number,
   token: string
 ): Promise<ApiResponse<any>> {
   return apiRequest<any>(`/admin/service-orders/${id}`, { method: 'DELETE', token });
+}
+
+/**
+ * POST /admin/service-orders/:id/cancel
+ * Sets the order to `cancelled` and suspends the barcode. Does not refund.
+ */
+export async function cancelAdminServiceOrder(
+  id: number,
+  token: string
+): Promise<ApiResponse<ApiServiceOrderDetail>> {
+  return apiRequest<ApiServiceOrderDetail>(`/admin/service-orders/${id}/cancel`, {
+    method: 'POST',
+    body: { confirm: true },
+    token,
+  });
 }
 
 /** POST /admin/service-orders/:id/payment-status?_method=patch */
@@ -1822,8 +1591,14 @@ export type CreateServiceOrderItemOption =
 
 export interface CreateServiceOrderItemEmployee {
   type: 'employee' | 'freelancer';
+  /**
+   * Required by backend validation even when `employee_ids` is supplied —
+   * always send the first entry of `employee_ids` here.
+   */
   employee_id?: number;
+  employee_ids?: number[];
   username?: string;
+  name?: string;
   country_code?: string;
   phone?: string;
 }
@@ -1832,34 +1607,155 @@ export interface CreateServiceOrderItem {
   service_id: number;
   service_package_id?: number;
   addon_ids?: number[];
-  options: CreateServiceOrderItemOption[];
+  /** Optional once a `service_package_id` is chosen — the package carries them. */
+  options?: CreateServiceOrderItemOption[];
+  price?: number;
   employee?: CreateServiceOrderItemEmployee;
   notes?: string;
 }
 
-export interface CreateServiceOrderPayload {
-  client_id: number;
+/** Embedded client — send this when there is no legacy `client_id`. */
+export interface CreateServiceOrderClient {
+  name?: string;
+  country_code?: string;
+  phone?: string;
+  alt_country_code?: string;
+  alt_phone?: string;
+}
+
+/** Fields shared by create and update. */
+export interface ServiceOrderBasePayload {
+  client_id?: number;
+  client?: CreateServiceOrderClient;
   event_date: string;
   event_time: string;
+  /** Required — must be later than `event_time`. */
+  event_end_time: string;
   hall_name: string;
   location_url?: string;
+  governorate?: string;
+  block_number?: string;
+  street_name?: string;
+  house_number?: string;
+  address_notes?: string;
+  execution_notes?: string;
   notes?: string;
-  is_paid: 0 | 1;
-  payment_type: 'single' | 'two_installments';
-  first_installment_amount?: number;
+  order_employee_ids?: number[];
   items: CreateServiceOrderItem[];
 }
+
+export interface CreateServiceOrderPayload extends ServiceOrderBasePayload {
+  /** Create only — payment cannot be changed through the update endpoint. */
+  is_paid: 0 | 1 | boolean;
+  payment_type: 'single' | 'two_installments' | string;
+  first_installment_amount?: number;
+}
+
+export type UpdateServiceOrderPayload = ServiceOrderBasePayload;
 
 /** POST /admin/service-orders — body sent as JSON */
 export async function createAdminServiceOrder(
   payload: CreateServiceOrderPayload,
   token: string
-): Promise<ApiResponse<any>> {
-  return apiRequest<any>('/admin/service-orders', {
+): Promise<ApiResponse<ApiServiceOrderDetail>> {
+  return apiRequest<ApiServiceOrderDetail>('/admin/service-orders', {
     method: 'POST',
     body: payload as any,
     token,
   });
+}
+
+/**
+ * PUT /admin/service-orders/:id — sent as POST + `?_method=put` to match the
+ * method-spoofing convention used elsewhere in this client.
+ */
+export async function updateAdminServiceOrder(
+  id: number,
+  payload: UpdateServiceOrderPayload,
+  token: string
+): Promise<ApiResponse<ApiServiceOrderDetail>> {
+  return apiRequest<ApiServiceOrderDetail>(`/admin/service-orders/${id}?_method=put`, {
+    method: 'POST',
+    body: payload as any,
+    token,
+  });
+}
+
+export interface ServiceOrderCalculatedTotal {
+  total_amount: ApiAmount;
+  currency?: string;
+  items?: Array<{
+    service_id: number;
+    base_price: ApiAmount;
+    addon_total_price: ApiAmount;
+    price: ApiAmount;
+  }>;
+}
+
+/** POST /admin/service-orders/calculate-total — price preview before saving */
+export async function calculateServiceOrderTotal(
+  items: CreateServiceOrderItem[],
+  token: string
+): Promise<ApiResponse<ServiceOrderCalculatedTotal>> {
+  return apiRequest<ServiceOrderCalculatedTotal>('/admin/service-orders/calculate-total', {
+    method: 'POST',
+    body: { items } as any,
+    token,
+  });
+}
+
+/* ─── Service order item attachments ────────────────────────── */
+export interface ApiServiceOrderItemAttachment {
+  id: number;
+  service_order_item_id: number;
+  file_path: string;
+  file_url: string;
+  original_name: string;
+  mime_type: string;
+  notes: string | null;
+  created_at: string;
+}
+
+/** GET /admin/service-orders/:id/items/:itemId/attachments */
+export async function getServiceOrderItemAttachments(
+  orderId: number,
+  itemId: number,
+  token: string
+): Promise<ApiResponse<{ items: ApiServiceOrderItemAttachment[] }>> {
+  return apiRequest<{ items: ApiServiceOrderItemAttachment[] }>(
+    `/admin/service-orders/${orderId}/items/${itemId}/attachments`,
+    { token }
+  );
+}
+
+/** POST /admin/service-orders/:id/items/:itemId/attachments — multipart */
+export async function uploadServiceOrderItemAttachment(
+  orderId: number,
+  itemId: number,
+  file: File,
+  token: string,
+  notes?: string
+): Promise<ApiResponse<ApiServiceOrderItemAttachment>> {
+  const formData = new FormData();
+  formData.append('file', file);
+  if (notes) formData.append('notes', notes);
+  return apiRequest<ApiServiceOrderItemAttachment>(
+    `/admin/service-orders/${orderId}/items/${itemId}/attachments`,
+    { method: 'POST', body: formData, token }
+  );
+}
+
+/** DELETE /admin/service-orders/:id/items/:itemId/attachments/:attachmentId */
+export async function deleteServiceOrderItemAttachment(
+  orderId: number,
+  itemId: number,
+  attachmentId: number,
+  token: string
+): Promise<ApiResponse<unknown>> {
+  return apiRequest(
+    `/admin/service-orders/${orderId}/items/${itemId}/attachments/${attachmentId}`,
+    { method: 'DELETE', token }
+  );
 }
 
 export interface ApiFinancialRecordItem {
@@ -1869,8 +1765,11 @@ export interface ApiFinancialRecordItem {
   client_id: number;
   client_name: string;
   client_phone: string;
-  event_id: number;
-  event_name: string;
+  /** Records are linked to service orders; the event fields persist for legacy rows. */
+  service_order_id: number | null;
+  service_order_reference: string | null;
+  event_id?: number;
+  event_name?: string | null;
   amount: string;
   paid_amount: string;
   remaining_amount: string;
@@ -1898,7 +1797,18 @@ export interface ApiFinancialRecordDetail {
     full_phone: string;
     email: string | null;
   };
-  event: {
+  /** Present for records created against a service order. */
+  service_order?: {
+    id: number;
+    reference_number: number;
+    reference_label: string;
+    event_date: string;
+    event_time: string;
+    hall_name?: string;
+    status?: string;
+  } | null;
+  /** Legacy shape, still returned for pre-migration records. */
+  event?: {
     id: number;
     reference_number: number;
     reference_label: string;
@@ -1906,7 +1816,7 @@ export interface ApiFinancialRecordDetail {
     event_date: string;
     event_time: string;
     status: string;
-  };
+  } | null;
   transactions: any[];
   created_at: string;
   updated_at: string;

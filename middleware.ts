@@ -23,8 +23,6 @@ const PUBLIC_PATHS = [
 const ROUTE_PERMISSIONS: Record<string, string> = {
   '/admins':          'admins',
   '/roles':           'roles',
-  '/clients':         'clients',
-  '/events':          'events',
   '/invitations':     'invitations',
   '/service-orders':  'service-orders',
   '/services':        'services',

@@ -4,42 +4,67 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   X, User, Calendar, Clock, MapPin, Briefcase, DollarSign,
-  Phone, Mail, ExternalLink, Loader2, CheckCircle2, XCircle,
+  Phone, ExternalLink, Loader2, CheckCircle2, XCircle,
+  Copy, Check, Link2, AlertTriangle, ShieldOff, Users, Ban, Trash2, Edit2, MailPlus,
 } from 'lucide-react';
+import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { useLanguage } from '@/lib/i18n';
-import { ApiServiceOrderDetail, ServiceOrderStatus, updateServiceOrderPaymentStatus } from '@/lib/api';
+import {
+  ApiServiceOrderDetail,
+  parseAmount,
+  updateServiceOrderPaymentStatus,
+  cancelAdminServiceOrder,
+  deleteAdminServiceOrder,
+} from '@/lib/api';
 import { getToken } from '@/lib/auth';
+import { usePermissions } from '@/hooks/use-permissions';
 import { toast } from 'sonner';
 import Image from 'next/image';
-
-const getStatusBadgeClass = (val: string) => {
-  switch (val) {
-    case 'upcoming': case 'coming': return 'bg-blue-100 text-blue-700';
-    case 'in-progress': return 'bg-amber-100 text-amber-700';
-    case 'finished': case 'paid': return 'bg-emerald-100 text-emerald-700';
-    case 'rejected': return 'bg-red-100 text-red-700';
-    case 'unpaid': return 'bg-orange-100 text-orange-700';
-    default: return 'bg-secondary/10 text-secondary/70';
-  }
-};
-
-const getStatusDotClass = (val: string) => {
-  switch (val) {
-    case 'upcoming': case 'coming': return 'bg-blue-500';
-    case 'in-progress': return 'bg-amber-500';
-    case 'finished': case 'paid': return 'bg-emerald-500';
-    case 'rejected': return 'bg-red-500';
-    case 'unpaid': return 'bg-orange-500';
-    default: return 'bg-secondary/40';
-  }
-};
+import {
+  PAYMENT_STATUS_VALUES,
+  getStatusBadgeClass,
+  getStatusDotClass,
+  isOrderCancelled,
+  isOrderPaid,
+} from './order-list';
+import { ItemAttachments } from './item-attachments';
 
 interface OrderDetailModalProps {
   order: ApiServiceOrderDetail | null;
   loading: boolean;
+  token: string;
   onClose: () => void;
+  onEdit?: (id: number) => void;
+  /** Called after a mutation that invalidates the list (cancel / delete). */
+  onChanged?: () => void;
   onPaymentStatusChange?: (newStatus: string) => void;
+}
+
+/** Copy-to-clipboard button that briefly confirms the copy. */
+function CopyButton({ value, label }: { value: string; label: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      toast.error(label);
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/70 hover:bg-white border border-primary/20 text-primary text-[11px] font-medium transition-colors cursor-pointer shrink-0"
+    >
+      {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+      {label}
+    </button>
+  );
 }
 
 function InfoRow({ icon: Icon, label, value }: { icon: any; label: string; value: React.ReactNode }) {
@@ -56,16 +81,57 @@ function InfoRow({ icon: Icon, label, value }: { icon: any; label: string; value
   );
 }
 
-export function OrderDetailModal({ order, loading, onClose, onPaymentStatusChange }: OrderDetailModalProps) {
+export function OrderDetailModal({
+  order,
+  loading,
+  token: propToken,
+  onClose,
+  onEdit,
+  onChanged,
+  onPaymentStatusChange,
+}: OrderDetailModalProps) {
   const { language, dir } = useLanguage();
   const isAr = language === 'ar';
-  const [token] = useState(() => getToken() ?? '');
+  const { can } = usePermissions();
+  const [token] = useState(() => getToken() ?? propToken ?? '');
   const [updatingPayment, setUpdatingPayment] = useState(false);
+  const [actionRunning, setActionRunning] = useState(false);
   const [localOrder, setLocalOrder] = useState<ApiServiceOrderDetail | null>(null);
   const effectiveOrder = localOrder ?? order;
 
   // Reset local order when the main order changes
   React.useEffect(() => { setLocalOrder(null); }, [order?.id]);
+
+  const cancelled = effectiveOrder ? isOrderCancelled(effectiveOrder.statuses) : false;
+  const paid = effectiveOrder ? isOrderPaid(effectiveOrder.statuses) : false;
+
+  const handleCancel = async () => {
+    if (!effectiveOrder) return;
+    setActionRunning(true);
+    try {
+      await cancelAdminServiceOrder(effectiveOrder.id, token);
+      toast.success(isAr ? 'تم إلغاء الطلب' : 'Order cancelled');
+      onChanged?.();
+    } catch (err) {
+      toast.error((err as Error).message || (isAr ? 'فشل إلغاء الطلب' : 'Failed to cancel order'));
+    } finally {
+      setActionRunning(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!effectiveOrder) return;
+    setActionRunning(true);
+    try {
+      await deleteAdminServiceOrder(effectiveOrder.id, token);
+      toast.success(isAr ? 'تم حذف الطلب' : 'Order deleted');
+      onChanged?.();
+    } catch (err) {
+      toast.error((err as Error).message || (isAr ? 'فشل حذف الطلب' : 'Failed to delete order'));
+    } finally {
+      setActionRunning(false);
+    }
+  };
 
   return (
     <AnimatePresence>
@@ -124,7 +190,7 @@ export function OrderDetailModal({ order, loading, onClose, onPaymentStatusChang
                   {/* Status badges + payment status select */}
                   <div className="flex flex-wrap items-center gap-2">
                     {effectiveOrder.statuses
-                      .filter(st => !['paid', 'unpaid', 'installments', 'rejected'].includes(st.value))
+                      .filter(st => !PAYMENT_STATUS_VALUES.includes(st.value))
                       .map((st, i) => (
                         <span
                           key={i}
@@ -143,7 +209,7 @@ export function OrderDetailModal({ order, loading, onClose, onPaymentStatusChang
                         </div>
                       )}
                       <select
-                        disabled={updatingPayment}
+                        disabled={updatingPayment || cancelled || !can('edit-service-order')}
                         value={effectiveOrder.statuses.find(s => ['paid', 'unpaid', 'installments'].includes(s.value))?.value ?? (effectiveOrder.is_paid ? 'paid' : 'unpaid')}
                         onChange={async (e) => {
                           const nextStatus = e.target.value as 'paid' | 'unpaid' | 'installments';
@@ -175,9 +241,17 @@ export function OrderDetailModal({ order, loading, onClose, onPaymentStatusChang
                           )
                         )}
                       >
-                        <option value="paid">{isAr ? 'مدفوع' : 'Paid'}</option>
-                        <option value="unpaid">{isAr ? 'غير مدفوع' : 'Unpaid'}</option>
-                        <option value="installments">{isAr ? 'أقساط' : 'Installments'}</option>
+                        {/* Options come from the order's own allowed transitions */}
+                        {(effectiveOrder.available_payment_statuses?.length
+                          ? effectiveOrder.available_payment_statuses
+                          : [
+                              { value: 'paid', label: isAr ? 'مدفوع' : 'Paid' },
+                              { value: 'unpaid', label: isAr ? 'غير مدفوع' : 'Unpaid' },
+                              { value: 'installments', label: isAr ? 'أقساط' : 'Installments' },
+                            ]
+                        ).map(ps => (
+                          <option key={ps.value} value={ps.value}>{ps.label}</option>
+                        ))}
                       </select>
                       <div className={cn('pointer-events-none absolute inset-y-0 flex items-center', dir === 'ltr' ? 'right-2' : 'left-2')}>
                         <svg className="w-3 h-3 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
@@ -185,25 +259,100 @@ export function OrderDetailModal({ order, loading, onClose, onPaymentStatusChang
                     </div>
                   </div>
 
+                  {/* ── Alerts ── */}
+                  {(effectiveOrder.is_barcode_suspended || effectiveOrder.has_pending_second_payment) && (
+                    <div className="space-y-2">
+                      {effectiveOrder.is_barcode_suspended && (
+                        <div className="flex items-start gap-2.5 p-3 rounded-2xl bg-rose-50 border border-rose-200">
+                          <ShieldOff className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                          <div>
+                            <p className="text-sm font-bold text-rose-700">
+                              {isAr ? 'الباركود موقوف' : 'Barcode suspended'}
+                            </p>
+                            <p className="text-xs text-rose-600/80 mt-0.5">
+                              {isAr
+                                ? 'لا يمكن إرسال الدعوات أو مسح الباركود لهذا الطلب.'
+                                : 'Invitations cannot be sent and scanning is disabled for this order.'}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                      {effectiveOrder.has_pending_second_payment && (
+                        <div className="flex items-start gap-2.5 p-3 rounded-2xl bg-amber-50 border border-amber-200">
+                          <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                          <div>
+                            <p className="text-sm font-bold text-amber-700">
+                              {isAr ? 'قسط ثانٍ مستحق' : 'Second payment pending'}
+                            </p>
+                            {effectiveOrder.second_installment_due_date && (
+                              <p className="text-xs text-amber-600/80 mt-0.5">
+                                {isAr ? 'تاريخ الاستحقاق: ' : 'Due: '}
+                                {effectiveOrder.second_installment_due_date}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* ── Client portal link ── */}
+                  {effectiveOrder.portal_url && (
+                    <div className="flex items-center gap-2 p-3 rounded-2xl bg-primary/5 border border-primary/15">
+                      <Link2 className="w-4 h-4 text-primary shrink-0" />
+                      <span className="text-xs text-secondary/60 flex-1 truncate font-mono" dir="ltr">
+                        {effectiveOrder.portal_url}
+                      </span>
+                      <CopyButton
+                        value={effectiveOrder.portal_url}
+                        label={isAr ? 'نسخ الرابط' : 'Copy link'}
+                      />
+                    </div>
+                  )}
+
                   {/* ── Client ── */}
                   <section>
-                    <h3 className="text-xs font-bold text-secondary/40 uppercase tracking-wider mb-2">
-                      {isAr ? 'بيانات العميل' : 'Client'}
-                    </h3>
-                    <div className="bg-secondary/3 rounded-2xl px-4 py-1">
-                      <InfoRow icon={User} label={isAr ? 'الاسم' : 'Name'} value={effectiveOrder.client.name} />
-                      <InfoRow icon={Phone} label={isAr ? 'الهاتف' : 'Phone'} value={
-                        <a href={effectiveOrder.client.whatsapp_url} target="_blank" rel="noreferrer"
-                          className="inline-flex items-center gap-1 text-emerald-600 hover:underline">
-                          {effectiveOrder.client.full_phone}
-                          <ExternalLink className="w-3 h-3" />
-                        </a>
-                      } />
-                      {effectiveOrder.client.email && (
-                        <InfoRow icon={Mail} label={isAr ? 'البريد' : 'Email'} value={effectiveOrder.client.email} />
+                    <div className="flex items-center justify-between mb-2">
+                      <h3 className="text-xs font-bold text-secondary/40 uppercase tracking-wider">
+                        {isAr ? 'بيانات العميل' : 'Client'}
+                      </h3>
+                      {/* The client fills their own details through the portal —
+                          flag when that has not happened yet. */}
+                      {effectiveOrder.client?.data_status === 'incomplete' && (
+                        <span className="px-2 py-0.5 rounded-md bg-amber-100 text-amber-700 text-[10px] font-bold">
+                          {isAr ? 'بيانات غير مكتملة' : 'Incomplete data'}
+                        </span>
                       )}
-                      {effectiveOrder.client.notes && (
-                        <InfoRow icon={Briefcase} label={isAr ? 'ملاحظات' : 'Notes'} value={effectiveOrder.client.notes} />
+                      {effectiveOrder.client?.data_status === 'complete' && (
+                        <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-700 text-[10px] font-bold">
+                          {isAr ? 'بيانات مكتملة' : 'Complete'}
+                        </span>
+                      )}
+                    </div>
+                    <div className="bg-secondary/3 rounded-2xl px-4 py-1">
+                      <InfoRow icon={User} label={isAr ? 'الاسم' : 'Name'} value={effectiveOrder.client?.name} />
+                      <InfoRow icon={Phone} label={isAr ? 'الهاتف' : 'Phone'} value={
+                        effectiveOrder.client?.phone
+                          ? (effectiveOrder.client.whatsapp_url ? (
+                            <a href={effectiveOrder.client.whatsapp_url} target="_blank" rel="noreferrer"
+                              className="inline-flex items-center gap-1 text-emerald-600 hover:underline" dir="ltr">
+                              {`${effectiveOrder.client.country_code ?? ''} ${effectiveOrder.client.phone}`.trim()}
+                              <ExternalLink className="w-3 h-3" />
+                            </a>
+                          ) : (
+                            <span dir="ltr">{`${effectiveOrder.client.country_code ?? ''} ${effectiveOrder.client.phone}`.trim()}</span>
+                          ))
+                          : null
+                      } />
+                      {effectiveOrder.client?.alt_phone && (
+                        <InfoRow icon={Phone} label={isAr ? 'رقم بديل' : 'Alt. Phone'} value={
+                          <span dir="ltr">
+                            {`${effectiveOrder.client.alt_country_code ?? ''} ${effectiveOrder.client.alt_phone}`.trim()}
+                          </span>
+                        } />
+                      )}
+                      {effectiveOrder.client_notes && (
+                        <InfoRow icon={Briefcase} label={isAr ? 'ملاحظات العميل' : 'Client Notes'} value={effectiveOrder.client_notes} />
                       )}
                     </div>
                   </section>
@@ -215,7 +364,11 @@ export function OrderDetailModal({ order, loading, onClose, onPaymentStatusChang
                     </h3>
                     <div className="bg-secondary/3 rounded-2xl px-4 py-1">
                       <InfoRow icon={Calendar} label={isAr ? 'التاريخ' : 'Date'} value={effectiveOrder.event_date} />
-                      <InfoRow icon={Clock} label={isAr ? 'الوقت' : 'Time'} value={effectiveOrder.event_time?.slice(0, 5)} />
+                      <InfoRow icon={Clock} label={isAr ? 'الوقت' : 'Time'} value={
+                        [effectiveOrder.event_time?.slice(0, 5), effectiveOrder.event_end_time?.slice(0, 5)]
+                          .filter(Boolean)
+                          .join(' — ')
+                      } />
                       <InfoRow icon={Briefcase} label={isAr ? 'القاعة' : 'Hall'} value={effectiveOrder.hall_name} />
                       {effectiveOrder.location_url && (
                         <InfoRow icon={MapPin} label={isAr ? 'الموقع' : 'Location'} value={
@@ -226,8 +379,60 @@ export function OrderDetailModal({ order, loading, onClose, onPaymentStatusChang
                           </a>
                         } />
                       )}
+                      {(effectiveOrder.governorate || effectiveOrder.block_number ||
+                        effectiveOrder.street_name || effectiveOrder.house_number) && (
+                        <InfoRow icon={MapPin} label={isAr ? 'العنوان' : 'Address'} value={
+                          [
+                            effectiveOrder.governorate,
+                            effectiveOrder.block_number && `${isAr ? 'قطعة' : 'Block'} ${effectiveOrder.block_number}`,
+                            effectiveOrder.street_name && `${isAr ? 'شارع' : 'St.'} ${effectiveOrder.street_name}`,
+                            effectiveOrder.house_number && `${isAr ? 'منزل' : 'House'} ${effectiveOrder.house_number}`,
+                          ].filter(Boolean).join('، ')
+                        } />
+                      )}
+                      {effectiveOrder.address_notes && (
+                        <InfoRow icon={MapPin} label={isAr ? 'ملاحظات العنوان' : 'Address Notes'} value={effectiveOrder.address_notes} />
+                      )}
+                      {effectiveOrder.execution_notes && (
+                        <InfoRow icon={Briefcase} label={isAr ? 'ملاحظات التنفيذ' : 'Execution Notes'} value={effectiveOrder.execution_notes} />
+                      )}
                     </div>
                   </section>
+
+                  {/* ── Order-level employees ── */}
+                  {effectiveOrder.order_employees?.length > 0 && (
+                    <section>
+                      <h3 className="text-xs font-bold text-secondary/40 uppercase tracking-wider mb-2">
+                        {isAr ? 'موظفو الطلب' : 'Order Employees'}
+                      </h3>
+                      <div className="flex flex-wrap gap-2">
+                        {effectiveOrder.order_employees.map(emp => (
+                          <span key={emp.id}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary/8 text-primary text-xs font-semibold">
+                            <Users className="w-3 h-3" />
+                            {emp.name}
+                            {emp.reference_label && (
+                              <span className="text-primary/50 font-mono text-[10px]">{emp.reference_label}</span>
+                            )}
+                          </span>
+                        ))}
+                      </div>
+                    </section>
+                  )}
+
+                  {/* ── Linked invitation ── */}
+                  {effectiveOrder.invitation_id && (
+                    <Link
+                      href={`/invitations?invitationId=${effectiveOrder.invitation_id}`}
+                      className="flex items-center gap-2.5 p-3 rounded-2xl bg-secondary/5 hover:bg-secondary/10 border border-secondary/10 transition-colors"
+                    >
+                      <MailPlus className="w-4 h-4 text-primary shrink-0" />
+                      <span className="text-sm font-medium text-secondary flex-1">
+                        {isAr ? 'عرض الدعوة المرتبطة' : 'View linked invitation'}
+                      </span>
+                      <ExternalLink className="w-3.5 h-3.5 text-secondary/40" />
+                    </Link>
+                  )}
 
                   {/* ── Payment ── */}
                   <section>
@@ -237,13 +442,13 @@ export function OrderDetailModal({ order, loading, onClose, onPaymentStatusChang
                     <div className="bg-secondary/3 rounded-2xl px-4 py-1">
                       <InfoRow icon={DollarSign} label={isAr ? 'الإجمالي' : 'Total'} value={
                         <span className="text-primary font-bold">
-                          {Number(effectiveOrder.total_amount).toLocaleString(isAr ? 'ar-EG' : 'en-US')}{' '}
+                          {parseAmount(effectiveOrder.total_amount).toLocaleString(isAr ? 'ar-EG' : 'en-US')}{' '}
                           {isAr ? 'د.ك' : 'KD'}
                         </span>
                       } />
                       <InfoRow icon={DollarSign} label={isAr ? 'المدفوع' : 'Paid'} value={
                         <span className="text-emerald-600 font-bold">
-                          {Number(effectiveOrder.paid_amount).toLocaleString(isAr ? 'ar-EG' : 'en-US')}{' '}
+                          {parseAmount(effectiveOrder.paid_amount).toLocaleString(isAr ? 'ar-EG' : 'en-US')}{' '}
                           {isAr ? 'د.ك' : 'KD'}
                         </span>
                       } />
@@ -263,9 +468,27 @@ export function OrderDetailModal({ order, loading, onClose, onPaymentStatusChang
                           ? (isAr ? 'دفعة واحدة' : 'Single Payment')
                           : (isAr ? 'دفعتان' : 'Two Installments')
                       } />
-                      {effectiveOrder.first_installment_amount && (
+                      {effectiveOrder.first_installment_amount != null && (
                         <InfoRow icon={DollarSign} label={isAr ? 'الدفعة الأولى' : '1st Installment'} value={
-                          `${Number(effectiveOrder.first_installment_amount).toLocaleString(isAr ? 'ar-EG' : 'en-US')} ${isAr ? 'د.ك' : 'KD'}`
+                          `${parseAmount(effectiveOrder.first_installment_amount).toLocaleString(isAr ? 'ar-EG' : 'en-US')} ${isAr ? 'د.ك' : 'KD'}`
+                        } />
+                      )}
+                      {effectiveOrder.second_installment_amount != null && (
+                        <InfoRow icon={DollarSign} label={isAr ? 'الدفعة الثانية' : '2nd Installment'} value={
+                          <span>
+                            {parseAmount(effectiveOrder.second_installment_amount).toLocaleString(isAr ? 'ar-EG' : 'en-US')}{' '}
+                            {isAr ? 'د.ك' : 'KD'}
+                            {effectiveOrder.second_installment_due_date && (
+                              <span className="text-secondary/45 text-xs font-normal">
+                                {' '}({effectiveOrder.second_installment_due_date})
+                              </span>
+                            )}
+                          </span>
+                        } />
+                      )}
+                      {effectiveOrder.cancelled_at && (
+                        <InfoRow icon={Ban} label={isAr ? 'تاريخ الإلغاء' : 'Cancelled At'} value={
+                          <span className="text-rose-600">{effectiveOrder.cancelled_at}</span>
                         } />
                       )}
                     </div>
@@ -288,17 +511,42 @@ export function OrderDetailModal({ order, loading, onClose, onPaymentStatusChang
                               )}
                             </div>
                             <span className="text-sm font-bold text-primary shrink-0">
-                              {Number(item.price).toLocaleString(isAr ? 'ar-EG' : 'en-US')}{' '}{isAr ? 'د.ك' : 'KD'}
+                              {parseAmount(item.price).toLocaleString(isAr ? 'ar-EG' : 'en-US')}{' '}{isAr ? 'د.ك' : 'KD'}
                             </span>
                           </div>
+
+                          {/* Package + guest allowance */}
+                          {(item.package || item.guests_included != null) && (
+                            <div className="flex flex-wrap items-center gap-2 text-[11px]">
+                              {item.package && (
+                                <span className="px-2 py-0.5 rounded-md bg-white/70 text-secondary/70 font-medium">
+                                  {item.package.name}
+                                </span>
+                              )}
+                              {item.guests_included != null && (
+                                <span className="px-2 py-0.5 rounded-md bg-primary/10 text-primary font-bold">
+                                  {isAr ? `المدعوون: ${item.guests_included}` : `Guests: ${item.guests_included}`}
+                                </span>
+                              )}
+                            </div>
+                          )}
 
                           {/* Responsible employee */}
                           {item.employee && (
                             <div className="flex items-center gap-2 text-xs bg-white/60 rounded-xl px-3 py-2">
                               <User className="w-3.5 h-3.5 text-secondary/50 shrink-0" />
                               <span className="text-secondary/60">{isAr ? 'المسؤول:' : 'Assigned:'}</span>
-                              <span className="font-semibold text-secondary">{item.employee.name}</span>
-                              <span className="text-secondary/40 font-mono text-[10px]">{item.employee.reference_label}</span>
+                              <span className="font-semibold text-secondary">
+                                {item.employee.name || item.employee.username}
+                              </span>
+                              {item.employee.type === 'freelancer' && (
+                                <span className="px-1.5 py-0.5 rounded bg-violet-100 text-violet-700 text-[9px] font-bold">
+                                  {isAr ? 'مستقل' : 'Freelancer'}
+                                </span>
+                              )}
+                              {item.employee.reference_label && (
+                                <span className="text-secondary/40 font-mono text-[10px]">{item.employee.reference_label}</span>
+                              )}
                             </div>
                           )}
 
@@ -365,6 +613,15 @@ export function OrderDetailModal({ order, loading, onClose, onPaymentStatusChang
                               })}
                             </div>
                           )}
+
+                          {/* Attachments — only for users who can edit the order */}
+                          {can('edit-service-order') && (
+                            <ItemAttachments
+                              orderId={effectiveOrder.id}
+                              itemId={item.id}
+                              token={token}
+                            />
+                          )}
                         </div>
                       ))}
                     </div>
@@ -386,28 +643,67 @@ export function OrderDetailModal({ order, loading, onClose, onPaymentStatusChang
 
             {/* Footer actions */}
             {effectiveOrder && (
-              <div className="px-6 py-4 border-t border-secondary/8 shrink-0 flex items-center gap-3">
-                <a
-                  href={effectiveOrder.whatsapp_url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-semibold transition-colors cursor-pointer"
-                >
-                  <Image
-                    src="https://raiyansoft.com/wp-content/uploads/2026/05/whatsapp.png"
-                    alt="WA"
-                    width={16}
-                    height={16}
-                    referrerPolicy="no-referrer"
-                  />
-                  {isAr ? 'واتساب' : 'WhatsApp'}
-                </a>
-                <button
-                  onClick={onClose}
-                  className="flex-1 py-2.5 rounded-xl bg-secondary/8 hover:bg-secondary/15 text-secondary text-sm font-semibold transition-colors cursor-pointer"
-                >
-                  {isAr ? 'إغلاق' : 'Close'}
-                </button>
+              <div className="px-6 py-4 border-t border-secondary/8 shrink-0 space-y-2">
+                <div className="flex items-center gap-3">
+                  {effectiveOrder.whatsapp_url && (
+                    <a
+                      href={effectiveOrder.whatsapp_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-semibold transition-colors cursor-pointer"
+                    >
+                      <Image
+                        src="https://raiyansoft.com/wp-content/uploads/2026/05/whatsapp.png"
+                        alt="WA"
+                        width={16}
+                        height={16}
+                        referrerPolicy="no-referrer"
+                      />
+                      {isAr ? 'واتساب' : 'WhatsApp'}
+                    </a>
+                  )}
+                  {can('edit-service-order') && !cancelled && onEdit && (
+                    <button
+                      onClick={() => onEdit(effectiveOrder.id)}
+                      className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-primary hover:bg-primary-dark text-white text-sm font-semibold transition-colors cursor-pointer"
+                    >
+                      <Edit2 className="w-4 h-4" />
+                      {isAr ? 'تعديل' : 'Edit'}
+                    </button>
+                  )}
+                  <button
+                    onClick={onClose}
+                    className="flex-1 py-2.5 rounded-xl bg-secondary/8 hover:bg-secondary/15 text-secondary text-sm font-semibold transition-colors cursor-pointer"
+                  >
+                    {isAr ? 'إغلاق' : 'Close'}
+                  </button>
+                </div>
+
+                {/* Cancelled orders offer neither destructive action. Paid orders
+                    cancel; unpaid ones delete outright. */}
+                {!cancelled && (
+                  paid
+                    ? can('cancel-service-order') && (
+                      <button
+                        onClick={handleCancel}
+                        disabled={actionRunning}
+                        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-600 text-sm font-semibold transition-colors cursor-pointer disabled:opacity-50"
+                      >
+                        {actionRunning ? <Loader2 className="w-4 h-4 animate-spin" /> : <Ban className="w-4 h-4" />}
+                        {isAr ? 'إلغاء الطلب' : 'Cancel Order'}
+                      </button>
+                    )
+                    : can('delete-service-order') && (
+                      <button
+                        onClick={handleDelete}
+                        disabled={actionRunning}
+                        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-red-50 hover:bg-red-100 border border-red-200 text-red-600 text-sm font-semibold transition-colors cursor-pointer disabled:opacity-50"
+                      >
+                        {actionRunning ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                        {isAr ? 'حذف الطلب' : 'Delete Order'}
+                      </button>
+                    )
+                )}
               </div>
             )}
           </motion.div>

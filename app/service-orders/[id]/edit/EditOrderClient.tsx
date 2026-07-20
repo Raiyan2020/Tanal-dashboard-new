@@ -5,28 +5,35 @@ import { useRouter } from 'next/navigation';
 import { useLanguage } from '@/lib/i18n';
 import { toast } from 'sonner';
 import { getToken } from '@/lib/auth';
-import { createAdminServiceOrder, ApiError } from '@/lib/api';
 import {
-  createEmptyOrderForm,
-  buildCreatePayload,
+  updateAdminServiceOrder,
+  ApiError,
+  type ApiServiceOrderDetail,
+} from '@/lib/api';
+import {
+  formStateFromDetail,
+  buildUpdatePayload,
   validateOrderForm,
   type FormState,
   type OrderFormErrors,
 } from '@/lib/service-order-form';
-import { OrderForm } from '../components/order-form';
+import { OrderForm } from '../../components/order-form';
 
-interface CreateOrderClientProps {
+interface EditOrderClientProps {
   token: string;
+  order: ApiServiceOrderDetail;
 }
 
-export function CreateOrderClient({ token: serverToken }: CreateOrderClientProps) {
+/**
+ * Edits an existing order against the API. Previously this screen read and wrote
+ * a localStorage mock, so changes never reached the backend.
+ */
+export function EditOrderClient({ token: serverToken, order }: EditOrderClientProps) {
   const router = useRouter();
   const { language } = useLanguage();
 
-  // Prefer the client-side token (fresher) but fall back to the server-rendered one
   const [token] = useState(() => getToken() ?? serverToken);
-
-  const [form, setForm] = useState<FormState>(createEmptyOrderForm);
+  const [form, setForm] = useState<FormState>(() => formStateFromDetail(order));
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<OrderFormErrors>({});
 
@@ -42,14 +49,13 @@ export function CreateOrderClient({ token: serverToken }: CreateOrderClientProps
 
     setSubmitting(true);
     try {
-      const res = await createAdminServiceOrder(buildCreatePayload(form), token);
+      const res = await updateAdminServiceOrder(order.id, buildUpdatePayload(form), token);
       toast.success(
-        res.msg || (language === 'ar' ? 'تم إنشاء الطلب بنجاح' : 'Order created successfully')
+        res.msg || (language === 'ar' ? 'تم تحديث الطلب بنجاح' : 'Order updated successfully')
       );
       router.push('/service-orders');
       router.refresh();
     } catch (err) {
-      // Map server-side field errors back onto the form where the names line up.
       if (err instanceof ApiError) {
         setErrors({
           client: err.fieldError('client.phone') ?? err.fieldError('client_id'),
@@ -70,7 +76,7 @@ export function CreateOrderClient({ token: serverToken }: CreateOrderClientProps
     <OrderForm
       form={form}
       setForm={setForm}
-      editing={false}
+      editing
       loading={submitting}
       errors={errors}
       onCancel={() => router.push('/service-orders')}

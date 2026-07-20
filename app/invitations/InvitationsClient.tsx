@@ -17,11 +17,43 @@ export type InvitationStatus = 'sent' | 'unsent' | 'past';
 
 export interface Invitation {
   id: string;
-  eventId: string;
-  eventName: string;
+  /** Empty for legacy invitations that were never migrated off an event. */
+  serviceOrderId: string;
+  serviceOrderReference: string;
+  clientName: string;
+  clientPhone: string;
+  executionDate: string;
   deadlineDate: string;
   guestsNumber: number;
+  guestsIncluded: number | null;
+  isBarcodeSuspended: boolean;
+  whatsappUrl: string;
   status: InvitationStatus;
+}
+
+/**
+ * Maps an API invitation to the view model. Shared with the server component so
+ * the prefetched page and client refetches agree on shape.
+ */
+export function mapApiInvitation(apiInv: ApiInvitation): Invitation {
+  const status: InvitationStatus = apiInv.status === 'previous'
+    ? 'past'
+    : apiInv.is_sent ? 'sent' : 'unsent';
+
+  return {
+    id: String(apiInv.id),
+    serviceOrderId: apiInv.service_order_id != null ? String(apiInv.service_order_id) : '',
+    serviceOrderReference: apiInv.service_order_reference ?? apiInv.event_name ?? '—',
+    clientName: apiInv.client_name ?? '',
+    clientPhone: apiInv.client_phone ?? '',
+    executionDate: apiInv.execution_date ?? '',
+    deadlineDate: apiInv.deadline_date ?? '',
+    guestsNumber: apiInv.guest_count,
+    guestsIncluded: apiInv.guests_included,
+    isBarcodeSuspended: apiInv.is_barcode_suspended,
+    whatsappUrl: apiInv.whatsapp_url ?? '',
+    status,
+  };
 }
 
 export default function InvitationsClient({
@@ -83,24 +115,7 @@ export default function InvitationsClient({
         period: periodParam,
       });
 
-      const mapped = res.data.items.map((apiInv) => {
-        let status: InvitationStatus = 'unsent';
-        if (apiInv.status === 'previous') {
-          status = 'past';
-        } else {
-          status = apiInv.is_sent ? 'sent' : 'unsent';
-        }
-        return {
-          id: String(apiInv.id),
-          eventId: String(apiInv.client_id),
-          eventName: apiInv.event_name,
-          deadlineDate: apiInv.deadline_date,
-          guestsNumber: apiInv.guest_count,
-          status,
-        };
-      });
-
-      setInvitations(mapped);
+      setInvitations(res.data.items.map(mapApiInvitation));
       setTotalPages(res.data.pagination.last_page);
     } catch (err) {
       toast.error((err as Error).message || 'حدث خطأ أثناء تحميل قائمة الدعوات');
@@ -117,11 +132,17 @@ export default function InvitationsClient({
     fetchInvitations();
   }, [fetchInvitations, initialData]);
 
-  // Auto-open invitation when navigated from an event
+  // Auto-open an invitation when arriving from a service order
   useEffect(() => {
-    const eventId = searchParams.get('eventId');
-    if (!eventId || invitations.length === 0) return;
-    const matched = invitations.find(inv => inv.eventId === eventId);
+    if (invitations.length === 0) return;
+
+    const invitationId = searchParams.get('invitationId');
+    const serviceOrderId = searchParams.get('serviceOrderId');
+    if (!invitationId && !serviceOrderId) return;
+
+    const matched = invitationId
+      ? invitations.find(inv => inv.id === invitationId)
+      : invitations.find(inv => inv.serviceOrderId === serviceOrderId);
     if (matched) {
       setViewingInvitation(matched);
     }
@@ -213,8 +234,8 @@ export default function InvitationsClient({
       <InvitationDetails
         invitation={viewingInvitation}
         onBack={() => setViewingInvitation(null)}
-        onNavigateToEventGuests={(eventId) => {
-          router.push(`/events?eventId=${eventId}`);
+        onNavigateToServiceOrder={(serviceOrderId) => {
+          router.push(`/service-orders?orderId=${serviceOrderId}`);
         }}
         onEdit={(invitation) => {
           setViewingInvitation(null);
@@ -326,25 +347,47 @@ export default function InvitationsClient({
                           <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
                             <Ticket className="w-4 h-4" />
                           </div>
-                          <h3 className="font-semibold text-secondary text-base truncate">{invitation.eventName}</h3>
+                          <h3 className="font-semibold text-secondary text-base truncate font-mono">{invitation.serviceOrderReference}</h3>
+                          {invitation.clientName && (
+                            <span className="text-sm text-secondary/60 truncate">{invitation.clientName}</span>
+                          )}
                           <span className={cn("px-2.5 py-1 text-[11px] font-medium rounded-full ring-1 shadow-sm flex items-center gap-1 shrink-0", statusInfo.colors)}>
                             <StatusIcon className="w-3 h-3" />
                             {statusInfo.label}
                           </span>
+                          {invitation.isBarcodeSuspended && (
+                            <span className="px-2 py-0.5 rounded-md bg-rose-100 text-rose-700 text-[10px] font-bold shrink-0">
+                              {dir === 'ltr' ? 'Suspended' : 'موقوف'}
+                            </span>
+                          )}
                         </div>
 
                         <div className="flex flex-col sm:flex-row sm:items-center text-sm text-secondary/60 gap-2 sm:gap-4 mt-1">
+                          {invitation.executionDate && (
+                            <>
+                              <div className="flex items-center gap-1.5">
+                                <Calendar className="w-3.5 h-3.5 shrink-0" />
+                                <span>{dir === 'ltr' ? 'Execution' : 'التنفيذ'}: {invitation.executionDate}</span>
+                              </div>
+                              <span className="hidden sm:block w-1 h-1 rounded-full bg-secondary/20 shrink-0" />
+                            </>
+                          )}
                           <div className="flex items-center gap-1.5">
-                            <Calendar className="w-3.5 h-3.5 shrink-0" />
-                            <span>{t('deadline' as any) || (dir === 'ltr' ? 'Deadline' : 'الموعد النهائي')}: {invitation.deadlineDate}</span>
+                            <Clock className="w-3.5 h-3.5 shrink-0" />
+                            <span>{t('deadline' as any) || (dir === 'ltr' ? 'Deadline' : 'الموعد النهائي')}: {invitation.deadlineDate || '—'}</span>
                           </div>
                           <span className="hidden sm:block w-1 h-1 rounded-full bg-secondary/20 shrink-0" />
                           <div className="flex items-center gap-1.5">
                             <Users className="w-3.5 h-3.5 shrink-0" />
-                            <span>{invitation.guestsNumber} {t('guests' as any) || (dir === 'ltr' ? 'Guests' : 'الضيوف')}</span>
+                            <span className={cn(
+                              invitation.guestsIncluded != null && invitation.guestsNumber > invitation.guestsIncluded
+                                && 'text-amber-600 font-semibold'
+                            )}>
+                              {invitation.guestsNumber}
+                              {invitation.guestsIncluded != null && ` / ${invitation.guestsIncluded}`}
+                              {' '}{t('guests' as any) || (dir === 'ltr' ? 'Guests' : 'الضيوف')}
+                            </span>
                           </div>
-                          <span className="hidden sm:block w-1 h-1 rounded-full bg-secondary/20 shrink-0" />
-                          <span className="font-mono text-xs">{invitation.id}</span>
                         </div>
                       </div>
 

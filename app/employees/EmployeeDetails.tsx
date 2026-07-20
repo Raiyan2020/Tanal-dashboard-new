@@ -3,13 +3,12 @@ import { motion, AnimatePresence } from 'motion/react';
 import {
   ArrowLeft, ArrowRight, Shield, Edit2, Trash2,
   User, Phone, KeyRound, Copy, Calendar,
-  QrCode, CheckCircle2, X, Loader2, Plus
+  QrCode, CheckCircle2, X, Loader2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useLanguage } from '@/lib/i18n';
-import { AssignEventsModal } from './AssignEventsModal';
 import { AttendanceDetails } from '../invitations/InvitationDetails';
-import { getEmployeeById, assignEmployeeEvents } from '@/lib/api';
+import { getEmployeeById } from '@/lib/api';
 import type { ApiEmployeeDetail } from '@/lib/api';
 import { getToken } from '@/lib/auth';
 import { toast } from 'sonner';
@@ -37,7 +36,6 @@ export function EmployeeDetails({
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [showAttendanceForEvent, setShowAttendanceForEvent] = useState<any | null>(null);
   const [activeEventTab, setActiveEventTab] = useState<'upcoming' | 'past'>('upcoming');
-  const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
 
   const fetchDetail = useCallback(async () => {
     if (!token || !employee.id) return;
@@ -55,13 +53,6 @@ export function EmployeeDetails({
   useEffect(() => {
     fetchDetail();
   }, [fetchDetail]);
-
-  const assignedEventIds = useMemo(() => {
-    if (!detail) return [];
-    const upcoming = detail.assigned_events?.upcoming || detail.upcomingEvents || [];
-    const past = detail.assigned_events?.past || detail.pastEvents || [];
-    return [...upcoming, ...past].map(e => String(e.id));
-  }, [detail]);
 
   const upcomingEventsList = useMemo(() => {
     return detail?.assigned_events?.upcoming || detail?.upcomingEvents || [];
@@ -83,37 +74,6 @@ export function EmployeeDetails({
   const handleCopy = (text: string, type: string) => {
     navigator.clipboard.writeText(text);
     setToastMessage(`${type} copied to clipboard!`);
-  };
-
-  const handleUnassign = async (eventId: number) => {
-    if (!token || !detail) return;
-    const saveToast = toast.loading(language === 'ar' ? 'جاري إلغاء التعيين...' : 'Unassigning event...');
-    try {
-      const updatedIds = assignedEventIds.map(Number).filter(id => id !== eventId);
-      await assignEmployeeEvents(detail.id, updatedIds, token);
-      toast.success(t('unassignEventSuccess' as any) || 'Event unassigned successfully');
-      fetchDetail();
-      onUpdate(); // refresh listing page
-    } catch (err) {
-      toast.error((err as Error).message || 'فشل إلغاء تعيين المناسبة');
-    } finally {
-      toast.dismiss(saveToast);
-    }
-  };
-
-  const handleAssignSubmit = async (selectedIds: number[]) => {
-    if (!token || !detail) return;
-    const saveToast = toast.loading(language === 'ar' ? 'جاري تعيين المناسبات...' : 'Assigning events...');
-    try {
-      await assignEmployeeEvents(detail.id, selectedIds, token);
-      toast.success(language === 'ar' ? 'تم تعيين المناسبات بنجاح' : 'Events assigned successfully');
-      fetchDetail();
-      onUpdate(); // refresh listing page
-    } catch (err) {
-      toast.error((err as Error).message || 'فشل تعيين المناسبات للموظف');
-    } finally {
-      toast.dismiss(saveToast);
-    }
   };
 
   if (showAttendanceForEvent) {
@@ -265,13 +225,13 @@ export function EmployeeDetails({
                     </button>
                   </div>
                 </div>
-                <button
-                  onClick={() => setIsAssignModalOpen(true)}
-                  className="w-full px-4 py-2.5 bg-primary hover:bg-primary-dark text-white rounded-xl text-sm font-medium transition-colors shadow-sm shadow-primary/20 flex items-center justify-center gap-2 cursor-pointer"
-                >
-                  <Plus className="w-4 h-4" />
-                  {language === 'ar' ? 'تعيين مناسبات' : 'Assign Events'}
-                </button>
+                {/* Assignment is managed from the service order itself
+                    (order_employee_ids / items[].employee), so this list is read-only. */}
+                <p className="text-xs text-secondary/50">
+                  {language === 'ar'
+                    ? 'يتم تعيين الموظفين من داخل طلب الخدمة.'
+                    : 'Employees are assigned from within the service order.'}
+                </p>
               </div>
 
               {displayedEventsList.length === 0 ? (
@@ -300,15 +260,6 @@ export function EmployeeDetails({
                           </div>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2 mt-2 sm:mt-0 self-end sm:self-auto shrink-0" onClick={e => e.stopPropagation()}>
-                        <button
-                          onClick={() => handleUnassign(event.id)}
-                          className="p-2 bg-red-50 text-red-500 hover:bg-red-100 hover:text-red-600 rounded-lg transition-colors flex items-center justify-center cursor-pointer"
-                          title={t('unassignEvent' as any) || 'Unassign'}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
                     </div>
                   ))}
                 </div>
@@ -323,15 +274,6 @@ export function EmployeeDetails({
         </div>
       )}
 
-      {isAssignModalOpen && (
-        <AssignEventsModal
-          isOpen={isAssignModalOpen}
-          onClose={() => setIsAssignModalOpen(false)}
-          assignedEventIds={assignedEventIds}
-          currentEmployeeId={employee.id}
-          onAssign={handleAssignSubmit}
-        />
-      )}
     </div>
   );
 }

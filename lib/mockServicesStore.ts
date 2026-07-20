@@ -8,6 +8,8 @@ export interface ServicePackage {
   price: number;
   description_ar?: string;
   description_en?: string;
+  /** Only set for barcode-invitation packages. */
+  guests_included?: number | null;
 }
 
 export interface ServiceAddon {

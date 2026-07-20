@@ -130,8 +130,10 @@ export default function FinancialClient({
     const nameLabel = isAr ? 'الاسم' : 'Name';
     const phoneLabel = isAr ? 'الهاتف' : 'Phone';
     const emailLabel = isAr ? 'البريد الإلكتروني' : 'Email';
-    const eventLabel = isAr ? 'بيانات المناسبة' : 'Event Details';
-    const eventNameLabel = isAr ? 'اسم المناسبة' : 'Event Name';
+    const eventLabel = isAr ? 'بيانات الطلب' : 'Order Details';
+    const eventNameLabel = isAr ? 'مرجع الطلب' : 'Order Reference';
+    // Records point at a service order; legacy rows still carry an event.
+    const printSource = detailRecord?.service_order ?? detailRecord?.event;
     const eventDateLabel = isAr ? 'تاريخ المناسبة' : 'Event Date';
     const eventTimeLabel = isAr ? 'توقيت المناسبة' : 'Event Time';
     const referenceLabel = isAr ? 'الرقم المرجعي للمناسبة' : 'Event Ref';
@@ -361,10 +363,10 @@ export default function FinancialClient({
 
             <div class="info-card">
               <h3>${eventLabel}</h3>
-              <p><span class="info-label">${eventNameLabel}:</span> ${detailRecord.event?.name || ''}</p>
-              <p><span class="info-label">${eventDateLabel}:</span> ${detailRecord.event?.event_date || ''}</p>
-              <p><span class="info-label">${eventTimeLabel}:</span> ${detailRecord.event?.event_time || ''}</p>
-              <p><span class="info-label">${referenceLabel}:</span> <span class="font-mono">${detailRecord.event?.reference_label || `#${detailRecord.event?.reference_number || ''}`}</span></p>
+              <p><span class="info-label">${eventNameLabel}:</span> ${printSource?.reference_label || detailRecord.event?.name || ''}</p>
+              <p><span class="info-label">${eventDateLabel}:</span> ${printSource?.event_date || ''}</p>
+              <p><span class="info-label">${eventTimeLabel}:</span> ${printSource?.event_time || ''}</p>
+              <p><span class="info-label">${referenceLabel}:</span> <span class="font-mono">${printSource?.reference_label || `#${printSource?.reference_number || ''}`}</span></p>
             </div>
           </div>
 

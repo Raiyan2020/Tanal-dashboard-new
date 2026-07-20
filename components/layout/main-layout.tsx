@@ -3,7 +3,7 @@
 import React, { useState, Suspense, useMemo } from 'react';
 import { useLanguage } from '@/lib/i18n';
 import { motion, AnimatePresence } from 'motion/react';
-import { LayoutDashboard, CalendarDays, Users, UserCog, Briefcase, MailPlus, Settings, Globe, Menu, Bell, LogOut, Loader2, Wallet, ShoppingBag, Layers, SlidersHorizontal, UserPen, ShieldCheck, } from 'lucide-react';
+import { LayoutDashboard, UserCog, Briefcase, MailPlus, Settings, Globe, Menu, Bell, LogOut, Loader2, Wallet, ShoppingBag, Layers, SlidersHorizontal, UserPen, ShieldCheck, } from 'lucide-react';
 import logo from "@/public/logo.webp";
 import { cn } from '@/lib/utils';
 import Image from 'next/image';
@@ -18,10 +18,9 @@ const navItems = [
   { icon: LayoutDashboard, id: 'dashboard', permission: null },
   { icon: UserCog, id: 'admins', permission: 'admins' },
   { icon: ShieldCheck, id: 'roles', permission: 'roles' },
-  { icon: Users, id: 'clients', permission: 'clients' },
-  { icon: CalendarDays, id: 'events', permission: 'events' },
-  { icon: MailPlus, id: 'invitations', permission: 'invitations' },
+  // Service orders are the central entity — clients/events are embedded in them
   { icon: ShoppingBag, id: 'serviceOrders', permission: 'service-orders' },
+  { icon: MailPlus, id: 'invitations', permission: 'invitations' },
   { icon: Layers, id: 'services', permission: 'services' },
   { icon: SlidersHorizontal, id: 'serviceOptions', permission: 'service-options' },
   { icon: Briefcase, id: 'employees', permission: 'employees' },

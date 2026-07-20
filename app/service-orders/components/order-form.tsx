@@ -1,99 +1,44 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useLanguage } from '@/lib/i18n';
 import { motion } from 'motion/react';
-import { ChevronLeft, ChevronRight, Plus, Send, Loader2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Send, Loader2, Calculator, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
-import { getClients, getServices, getEmployees, getServiceById } from '@/lib/api';
-import { type ServiceOrder } from '@/lib/orderStore';
+import { getServices, getEmployees, getServiceById, calculateServiceOrderTotal, parseAmount } from '@/lib/api';
 import { getMockDataForService } from '@/lib/mockServicesStore';
+import {
+  type FormState,
+  type FormServiceItem,
+  type FormServiceItemOption,
+  type ServicePackage,
+  type ServiceAddon,
+  type OrderFormErrors,
+  createEmptyServiceItem,
+  buildItemPayload,
+} from '@/lib/service-order-form';
 
 import { ClientSection } from './client-section';
 import { EventDetailsSection } from './event-details-section';
 import { ServiceItemRow } from './service-item-row';
 import { PaymentSection } from './payment-section';
 
-export interface ServicePackage {
-  id: number;
-  name_ar: string;
-  name_en: string;
-  description_ar?: string;
-  description_en?: string;
-  price: number | string;
-}
-
-export interface ServiceAddon {
-  id: number;
-  name_ar: string;
-  name_en: string;
-  price: number | string;
-}
-
-export interface FormServiceItemOption {
-  service_option_id: number;
-  type: string; // text, number, list, employee, color
-  name: string; // label
-  is_required: boolean;
-  values?: any[];                  // available choices from API (colors / labels)
-  value?: any;                     // selected value for text / number
-  selectedEmployeeIds?: number[];  // employee type — selected employee IDs
-  selectedColorIds?: number[];     // color type — selected color value IDs from API
-  labelValues?: { service_option_value_id: number; text_value: string }[]; // list type
-}
-
-export interface FormServiceItem {
-  id: string; // local temp key
-  serviceId: string;
-  serviceName: string;
-  serviceNameAr: string;
-  price: string;
-  description: string;
-  options: FormServiceItemOption[];
-  employeeType: 'employee' | 'freelancer' | 'none';
-  employeeId?: number;
-  freelancerUsername?: string;
-  freelancerCountryCode?: string;
-  freelancerPhone?: string;
-  selectedPackageId?: number;
-  selectedAddonIds?: number[];
-  packages?: ServicePackage[];
-  addons?: ServiceAddon[];
-}
-
-export type FormState = {
-  services: FormServiceItem[];
-  description: string;
-  date: string;
-  time: string;
-  hallName: string;
-  hallLocation: string;
-  paymentType: 'single' | 'two_installments';
-  firstInstallmentAmount: string;
-  clientId: string;
-  clientName: string;
-  clientPhone: string;
-  isPaid: boolean;
+// Re-exported so existing component imports keep resolving from one place.
+export type {
+  FormState,
+  FormServiceItem,
+  FormServiceItemOption,
+  ServicePackage,
+  ServiceAddon,
 };
-
-export const createEmptyServiceItem = (): FormServiceItem => ({
-  id: Math.random().toString(),
-  serviceId: '',
-  serviceName: '',
-  serviceNameAr: '',
-  price: '0',
-  description: '',
-  options: [],
-  employeeType: 'none',
-  selectedAddonIds: [],
-  packages: [],
-  addons: [],
-});
+export { createEmptyServiceItem };
 
 interface OrderFormProps {
   form: FormState;
   setForm: React.Dispatch<React.SetStateAction<FormState>>;
-  editing: ServiceOrder | null;
+  /** True when editing an existing order — hides the create-only payment section. */
+  editing: boolean;
   loading: boolean;
+  errors?: OrderFormErrors;
   onCancel: () => void;
   onSubmit: (e: React.FormEvent) => void;
   token: string;
@@ -104,36 +49,38 @@ export function OrderForm({
   setForm,
   editing,
   loading,
+  errors = {},
   onCancel,
   onSubmit,
   token,
 }: OrderFormProps) {
   const { t, dir, language } = useLanguage();
-  const clientDropdownValue = form.clientName ? `${form.clientName}` : '';
 
-  // Compute tomorrow's date in YYYY-MM-DD format for the date input min constraint
-  const tomorrow = useMemo(() => {
+  // On create the event must be in the future; when editing, an order may
+  // legitimately sit in the past, so the constraint is dropped.
+  const minDate = useMemo(() => {
+    if (editing) return undefined;
     const d = new Date();
-    d.setDate(d.getDate() + 1);
     return d.toISOString().split('T')[0];
-  }, []);
+  }, [editing]);
 
-  const [dbClients, setDbClients] = useState<any[]>([]);
   const [dbServices, setDbServices] = useState<any[]>([]);
   const [dbEmployees, setDbEmployees] = useState<any[]>([]);
   const [dbLoading, setDbLoading] = useState(true);
+
+  // Server-calculated total — authoritative once requested.
+  const [calculatedTotal, setCalculatedTotal] = useState<number | null>(null);
+  const [calculating, setCalculating] = useState(false);
 
   // Fetch foundational database lists from APIs
   useEffect(() => {
     if (!token) return;
     setDbLoading(true);
     Promise.all([
-      getClients(token, { page: 1, per_page: 100 }),
       getServices({ page: 1, per_page: 100 }, token),
       getEmployees({ page: 1, per_page: 100 }, token)
     ])
-      .then(([clientsRes, servicesRes, employeesRes]) => {
-        setDbClients(clientsRes.data.items || []);
+      .then(([servicesRes, employeesRes]) => {
         setDbServices(servicesRes.data.items || []);
         setDbEmployees(employeesRes.data.items || []);
       })
@@ -144,6 +91,28 @@ export function OrderForm({
         setDbLoading(false);
       });
   }, [token]);
+
+  // Any change to the items invalidates a previously calculated total.
+  useEffect(() => {
+    setCalculatedTotal(null);
+  }, [form.services]);
+
+  const handleCalculateTotal = async () => {
+    const items = form.services.filter(s => s.serviceId).map(buildItemPayload);
+    if (items.length === 0) {
+      toast.error(language === 'ar' ? 'اختر خدمة أولاً' : 'Select a service first');
+      return;
+    }
+    setCalculating(true);
+    try {
+      const res = await calculateServiceOrderTotal(items, token);
+      setCalculatedTotal(parseAmount(res.data?.total_amount));
+    } catch (err) {
+      toast.error((err as Error).message || (language === 'ar' ? 'فشل حساب الإجمالي' : 'Failed to calculate total'));
+    } finally {
+      setCalculating(false);
+    }
+  };
 
   const getServicePackagesAndAddons = (serviceId: number, apiData: any) => {
     if (apiData?.packages && apiData.packages.length > 0) {
@@ -171,9 +140,12 @@ export function OrderForm({
     setForm(prev => {
       const copy = [...prev.services];
       if (copy[index]) {
+        const pkg = copy[index].packages?.find(p => p.id === packageId);
         const updatedItem = {
           ...copy[index],
           selectedPackageId: packageId,
+          // Surface the package's guest allowance in the UI immediately.
+          guestsIncluded: pkg?.guests_included ?? null,
         };
         updatedItem.price = recalculateServicePrice(updatedItem);
         copy[index] = updatedItem;
@@ -258,6 +230,7 @@ export function OrderForm({
           copy[index].selectedPackageId = defaultPackage?.id;
           copy[index].selectedAddonIds = [];
           copy[index].price = defaultPrice;
+          copy[index].guestsIncluded = defaultPackage?.guests_included ?? null;
         }
         return { ...prev, services: copy };
       });
@@ -295,20 +268,59 @@ export function OrderForm({
         </h2>
 
         <form onSubmit={onSubmit} className="space-y-5">
-          {/* Client Selection Section */}
-          <ClientSection
-            form={form}
-            setForm={setForm}
-            dbClients={dbClients}
-            clientDropdownValue={clientDropdownValue}
-          />
+          {/* Client data — embedded in the order, no separate clients module */}
+          <ClientSection form={form} setForm={setForm} error={errors.client} />
 
           {/* Event Details Section */}
           <EventDetailsSection
             form={form}
             setForm={setForm}
-            tomorrow={tomorrow}
+            minDate={minDate}
+            errors={errors}
           />
+
+          {/* Order-level employees */}
+          <div className="space-y-1.5 border-t border-secondary/10 pt-4">
+            <label className="flex items-center gap-2 text-sm font-medium text-secondary/80">
+              <Users className="w-4 h-4 text-secondary/40" />
+              {language === 'ar' ? 'موظفو الطلب' : 'Order Employees'}
+            </label>
+            <p className="text-xs text-secondary/45">
+              {language === 'ar'
+                ? 'موظفون مسؤولون عن الطلب ككل، بالإضافة إلى موظفي كل خدمة.'
+                : 'Responsible for the order as a whole, in addition to per-service employees.'}
+            </p>
+            <div className="flex flex-wrap gap-2 pt-1">
+              {dbEmployees.map(emp => {
+                const selected = form.orderEmployeeIds.includes(emp.id);
+                return (
+                  <button
+                    key={emp.id}
+                    type="button"
+                    onClick={() => setForm(prev => ({
+                      ...prev,
+                      orderEmployeeIds: selected
+                        ? prev.orderEmployeeIds.filter(id => id !== emp.id)
+                        : [...prev.orderEmployeeIds, emp.id],
+                    }))}
+                    className={cn(
+                      'px-3 py-1.5 rounded-xl text-xs font-medium border transition-all cursor-pointer',
+                      selected
+                        ? 'bg-primary text-white border-primary shadow-sm'
+                        : 'bg-white/50 text-secondary/70 border-secondary/15 hover:bg-white'
+                    )}
+                  >
+                    {emp.name}
+                  </button>
+                );
+              })}
+              {dbEmployees.length === 0 && (
+                <span className="text-xs text-secondary/40">
+                  {language === 'ar' ? 'لا يوجد موظفون' : 'No employees available'}
+                </span>
+              )}
+            </div>
+          </div>
 
           {/* Dynamic Services List Section */}
           <div className="space-y-4 border-t border-secondary/10 pt-4">
@@ -341,20 +353,35 @@ export function OrderForm({
             </button>
           </div>
 
-          {/* Total readout */}
-          <div className="p-4 bg-primary/5 rounded-2xl border border-primary/10 flex justify-between items-center">
-            <span className="text-sm font-medium text-secondary/70">{t('totalCostKd') || 'Total Price'}</span>
-            <span className="text-lg font-bold text-primary">
-              {derivedTotalPrice.toLocaleString(language === 'ar' ? 'ar-EG' : 'en-US')}{' '}
-              {language === 'ar' ? 'د.ك' : 'KD'}
-            </span>
+          {/* Total readout — local estimate until confirmed against the server */}
+          <div className="p-4 bg-primary/5 rounded-2xl border border-primary/10 space-y-3">
+            <div className="flex justify-between items-center">
+              <span className="text-sm font-medium text-secondary/70">{t('totalCostKd') || 'Total Price'}</span>
+              <span className="text-lg font-bold text-primary">
+                {(calculatedTotal ?? derivedTotalPrice).toLocaleString(language === 'ar' ? 'ar-EG' : 'en-US')}{' '}
+                {language === 'ar' ? 'د.ك' : 'KD'}
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-[11px] text-secondary/45">
+                {calculatedTotal !== null
+                  ? (language === 'ar' ? 'محسوب من الخادم' : 'Calculated by the server')
+                  : (language === 'ar' ? 'تقدير مبدئي' : 'Local estimate')}
+              </span>
+              <button
+                type="button"
+                onClick={handleCalculateTotal}
+                disabled={calculating}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/70 hover:bg-white border border-primary/20 text-primary text-xs font-medium transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {calculating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Calculator className="w-3.5 h-3.5" />}
+                {language === 'ar' ? 'حساب الإجمالي' : 'Calculate Total'}
+              </button>
+            </div>
           </div>
 
-          {/* Payment Section */}
-          <PaymentSection
-            form={form}
-            setForm={setForm}
-          />
+          {/* Payment — create only; the update endpoint does not accept these fields */}
+          {!editing && <PaymentSection form={form} setForm={setForm} />}
 
           {/* Actions */}
           <div className="flex gap-3 pt-2">
@@ -362,7 +389,7 @@ export function OrderForm({
               className="flex-1 py-3 text-sm font-medium text-secondary/70 bg-white/60 hover:bg-white border border-secondary/15 rounded-xl transition-colors cursor-pointer">
               {t('cancel') || 'Cancel'}
             </button>
-            <button type="submit" disabled={loading || form.services.length === 0 || form.services.some(s => !s.serviceId || !s.price) || !form.clientId}
+            <button type="submit" disabled={loading || form.services.length === 0 || form.services.some(s => !s.serviceId)}
               className="flex-1 flex items-center justify-center gap-2 py-3 text-sm font-medium text-white bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-all cursor-pointer shadow-md shadow-primary/20 hover:-translate-y-0.5">
               {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
               {editing ? t('saveChanges') || 'Save Changes' : t('createSendLinks') || 'Create & Send Link'}
