@@ -50,7 +50,8 @@ export interface FormServiceItem {
   price: string;
   description: string;
   options: FormServiceItemOption[];
-  employeeType: 'employee' | 'freelancer' | 'none';
+  /** Defaults to `employee`; an empty `employeeIds` means nobody is assigned yet. */
+  employeeType: 'employee' | 'freelancer';
   /** Internal employees assigned to this item. The first is also sent as `employee_id`. */
   employeeIds: number[];
   freelancerUsername?: string;
@@ -67,7 +68,20 @@ export interface FormServiceItem {
   serverItemId?: number;
 }
 
+/**
+ * How the order is being created.
+ *
+ * - `full`  — the admin enters every detail up front.
+ * - `quick` — the admin enters only the client's phone, the event date and the
+ *   start time (plus the services being ordered). The backend then WhatsApps
+ *   the client a form to fill in their own name, address and hall data, and the
+ *   order sits at `client.data_status === 'incomplete'` until they do.
+ */
+export type OrderCreationMode = 'full' | 'quick';
+
 export type FormState = {
+  /** Create-only; editing always presents the full form. */
+  creationMode: OrderCreationMode;
   services: FormServiceItem[];
   description: string;
   date: string;
@@ -94,6 +108,17 @@ export type FormState = {
   clientAltPhone: string;
   /** Employees assigned to the order as a whole. */
   orderEmployeeIds: number[];
+  /**
+   * Mirrors "one of the selected services is the barcode/QR system service".
+   * Derived by the form from the services list, and kept here so validation and
+   * payload building can see it without re-fetching the service catalogue.
+   */
+  requiresInvitationDesign: boolean;
+  /** Single-use token from `uploadInvitationDesign`; empty until one is uploaded. */
+  invitationDesignToken: string;
+  invitationDesignPreviewUrl: string;
+  /** ISO timestamp after which the token is rejected and must be re-uploaded. */
+  invitationDesignExpiresAt: string;
 };
 
 export const createEmptyServiceItem = (): FormServiceItem => ({
@@ -104,7 +129,7 @@ export const createEmptyServiceItem = (): FormServiceItem => ({
   price: '0',
   description: '',
   options: [],
-  employeeType: 'none',
+  employeeType: 'employee',
   employeeIds: [],
   selectedAddonIds: [],
   packages: [],
@@ -112,6 +137,7 @@ export const createEmptyServiceItem = (): FormServiceItem => ({
 });
 
 export const createEmptyOrderForm = (): FormState => ({
+  creationMode: 'full',
   services: [createEmptyServiceItem()],
   description: '',
   date: '',
@@ -135,6 +161,10 @@ export const createEmptyOrderForm = (): FormState => ({
   clientAltCountryCode: '',
   clientAltPhone: '',
   orderEmployeeIds: [],
+  requiresInvitationDesign: false,
+  invitationDesignToken: '',
+  invitationDesignPreviewUrl: '',
+  invitationDesignExpiresAt: '',
 });
 
 /** `"18:00"` → minutes since midnight, or null when unparseable. */
@@ -145,7 +175,8 @@ function toMinutes(time: string): number | null {
 }
 
 export type OrderFormErrors = Partial<Record<
-  'client' | 'event_date' | 'event_time' | 'event_end_time' | 'hall_name' | 'items',
+  'client' | 'event_date' | 'event_time' | 'event_end_time' | 'hall_name' | 'items'
+  | 'invitation_design',
   string
 >>;
 
@@ -156,6 +187,7 @@ export type OrderFormErrors = Partial<Record<
 export function validateOrderForm(form: FormState, language: 'ar' | 'en'): OrderFormErrors {
   const ar = language === 'ar';
   const errors: OrderFormErrors = {};
+  const quick = form.creationMode === 'quick';
 
   // Either a legacy client id, or an embedded client with at least a phone.
   if (!form.clientId && !form.clientPhone.trim()) {
@@ -167,9 +199,12 @@ export function validateOrderForm(form: FormState, language: 'ar' | 'en'): Order
   if (!form.time) {
     errors.event_time = ar ? 'وقت البدء مطلوب' : 'Start time is required';
   }
-  if (!form.endTime) {
+
+  // In quick mode the end time and hall come from the client's own form later,
+  // so they are optional here — but still validated when supplied.
+  if (!quick && !form.endTime) {
     errors.event_end_time = ar ? 'وقت الانتهاء مطلوب' : 'End time is required';
-  } else {
+  } else if (form.endTime) {
     const start = toMinutes(form.time);
     const end = toMinutes(form.endTime);
     if (start !== null && end !== null && end <= start) {
@@ -178,14 +213,29 @@ export function validateOrderForm(form: FormState, language: 'ar' | 'en'): Order
         : 'End time must be after the start time';
     }
   }
-  if (!form.hallName.trim()) {
+  if (!quick && !form.hallName.trim()) {
     errors.hall_name = ar ? 'اسم القاعة مطلوب' : 'Hall name is required';
   }
+
   if (form.services.length === 0 || form.services.some(s => !s.serviceId)) {
     errors.items = ar ? 'يجب اختيار خدمة واحدة على الأقل' : 'At least one service is required';
   }
 
+  // The QR service cannot be ordered without a design uploaded up front.
+  if (form.requiresInvitationDesign && !form.invitationDesignToken) {
+    errors.invitation_design = ar
+      ? 'يجب رفع تصميم الدعوة أولاً'
+      : 'An invitation design must be uploaded first';
+  }
+
   return errors;
+}
+
+/** True when the upload token has passed its expiry and must be replaced. */
+export function isInvitationDesignExpired(form: FormState): boolean {
+  if (!form.invitationDesignToken || !form.invitationDesignExpiresAt) return false;
+  const expiry = new Date(form.invitationDesignExpiresAt).getTime();
+  return Number.isFinite(expiry) && expiry <= Date.now();
 }
 
 /** Maps a single form row to the `items[]` entry the API expects. */
@@ -254,8 +304,9 @@ function buildBasePayload(form: FormState): UpdateServiceOrderPayload {
   const payload: UpdateServiceOrderPayload = {
     event_date: form.date,
     event_time: form.time,
-    event_end_time: form.endTime,
-    hall_name: form.hallName.trim(),
+    // Both are omitted entirely in quick mode — the client supplies them.
+    event_end_time: trimmed(form.endTime),
+    hall_name: trimmed(form.hallName),
     location_url: trimmed(form.hallLocation),
     governorate: trimmed(form.governorate),
     block_number: trimmed(form.blockNumber),
@@ -290,6 +341,12 @@ function buildBasePayload(form: FormState): UpdateServiceOrderPayload {
 export function buildCreatePayload(form: FormState): CreateServiceOrderPayload {
   return {
     ...buildBasePayload(form),
+    creation_mode: form.creationMode,
+    // Sent only alongside the QR service — the backend rejects it otherwise.
+    invitation_design_token:
+      form.requiresInvitationDesign && form.invitationDesignToken
+        ? form.invitationDesignToken
+        : undefined,
     is_paid: form.isPaid ? 1 : 0,
     payment_type: form.paymentType,
     first_installment_amount:
@@ -313,6 +370,8 @@ const normaliseCode = (code: string | null | undefined) =>
  */
 export function formStateFromDetail(detail: ApiServiceOrderDetail): FormState {
   return {
+    // Editing always shows the complete form, whichever way the order was made.
+    creationMode: 'full',
     services: detail.items.map(item => ({
       id: `server-${item.id}`,
       serverItemId: item.id,
@@ -322,12 +381,9 @@ export function formStateFromDetail(detail: ApiServiceOrderDetail): FormState {
       price: String(item.price ?? '0'),
       description: item.notes ?? '',
       options: [],
-      employeeType:
-        item.employee?.type === 'freelancer'
-          ? 'freelancer'
-          : item.employee
-            ? 'employee'
-            : 'none',
+      // An item with no employee hydrates as `employee` with nothing selected,
+      // which builds the same payload as the old `none` did.
+      employeeType: item.employee?.type === 'freelancer' ? 'freelancer' : 'employee',
       employeeIds:
         item.employee?.type === 'employee' && (item.employee.employee_id ?? item.employee.id)
           ? [(item.employee.employee_id ?? item.employee.id) as number]
@@ -367,5 +423,11 @@ export function formStateFromDetail(detail: ApiServiceOrderDetail): FormState {
     clientAltCountryCode: normaliseCode(detail.client?.alt_country_code),
     clientAltPhone: detail.client?.alt_phone ?? '',
     orderEmployeeIds: (detail.order_employees ?? []).map(e => e.id),
+    // Design upload is a create-time concern; editing goes through the
+    // invitation's own edit screen instead.
+    requiresInvitationDesign: false,
+    invitationDesignToken: '',
+    invitationDesignPreviewUrl: '',
+    invitationDesignExpiresAt: '',
   };
 }

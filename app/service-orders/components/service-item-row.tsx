@@ -196,7 +196,6 @@ export function ServiceItemRow({
 
         <div className="flex bg-secondary/5 rounded-xl p-0.5 gap-0.5 max-w-xs">
           {([
-            { id: 'none', label: t('unassigned') || 'Unassigned' },
             { id: 'employee', label: t('existingStaff') || 'Existing Staff' },
             { id: 'freelancer', label: t('freelancer') || 'Freelancer' }
           ] as const).map(mode => (

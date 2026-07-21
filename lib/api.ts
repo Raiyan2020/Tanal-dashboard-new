@@ -602,33 +602,12 @@ export async function getInvitations(
   return apiRequest<PaginatedItems<ApiInvitation>>(`/admin/invitations${qs ? `?${qs}` : ''}`, { token });
 }
 
-export interface CreateInvitationPayload {
-  service_order_id: string;
-  logic_type: 'strict_action' | 'default_accept' | 'view_only';
-  deadline_date: string;
-  deadline_time: string;
-  design?: File | null;
-}
-
-/** POST /admin/invitations */
-export async function createInvitation(
-  payload: CreateInvitationPayload,
-  token: string
-): Promise<ApiResponse<CreateInvitationResponse>> {
-  const formData = new FormData();
-  formData.append('service_order_id', payload.service_order_id);
-  formData.append('logic_type', payload.logic_type);
-  formData.append('deadline_date', payload.deadline_date);
-  formData.append('deadline_time', payload.deadline_time);
-  if (payload.design) {
-    formData.append('design', payload.design);
-  }
-  return apiRequest<CreateInvitationResponse>('/admin/invitations', {
-    method: 'POST',
-    body: formData,
-    token,
-  });
-}
+/*
+ * There is no client-side invitation create call any more. Invitations are
+ * created by the backend as part of POST /admin/service-orders whenever the
+ * order includes the `barcode_invitations` system service, and the new id comes
+ * back as `invitation_id` on the order detail.
+ */
 
 /** GET /admin/invitations/:id */
 export async function getInvitationById(
@@ -1447,6 +1426,13 @@ export interface ApiServiceOrderClient {
   completed_at: string | null;
   whatsapp_url: string | null;
   legacy_client_id: number | null;
+  /**
+   * Public, tokenised page where the client fills in their own name, address
+   * and hall data. Present while `data_status === 'incomplete'`.
+   */
+  form_url?: string | null;
+  /** WhatsApp deep link that sends `form_url` to the client. */
+  form_whatsapp_url?: string | null;
 }
 
 export interface ApiServiceOrderDetailItem {
@@ -1491,8 +1477,13 @@ export interface ApiServiceOrderDetail {
   portal_url: string;
   cancelled_at: string | null;
   cancelled_by: number | null;
-  /** Present when the invitation relationship is loaded. */
-  invitation_id?: number;
+  /** How the order was created. Absent on orders predating the two-mode flow. */
+  creation_mode?: 'full' | 'quick';
+  /**
+   * Set when the order includes the `barcode_invitations` system service — the
+   * backend creates the invitation as part of the create request.
+   */
+  invitation_id?: number | null;
   order_employees: ApiServiceOrderEmployee[];
   statuses: ServiceOrderStatus[];
   is_paid: boolean;
@@ -1629,9 +1620,13 @@ export interface ServiceOrderBasePayload {
   client?: CreateServiceOrderClient;
   event_date: string;
   event_time: string;
-  /** Required — must be later than `event_time`. */
-  event_end_time: string;
-  hall_name: string;
+  /**
+   * Must be later than `event_time` when present. Optional only for
+   * `creation_mode: 'quick'`, where the client supplies it through their form.
+   */
+  event_end_time?: string;
+  /** Optional only for `creation_mode: 'quick'` — see `event_end_time`. */
+  hall_name?: string;
   location_url?: string;
   governorate?: string;
   block_number?: string;
@@ -1645,6 +1640,18 @@ export interface ServiceOrderBasePayload {
 }
 
 export interface CreateServiceOrderPayload extends ServiceOrderBasePayload {
+  /**
+   * `full`  — every detail supplied by the admin.
+   * `quick` — only phone + date + start time + items; the backend WhatsApps the
+   *           client a form for the rest and marks the order data-incomplete.
+   * Defaults to `full` server-side when omitted.
+   */
+  creation_mode?: 'full' | 'quick';
+  /**
+   * From `uploadInvitationDesign`. Required when `items[]` includes the
+   * `barcode_invitations` system service; must be omitted otherwise.
+   */
+  invitation_design_token?: string;
   /** Create only — payment cannot be changed through the update endpoint. */
   is_paid: 0 | 1 | boolean;
   payment_type: 'single' | 'two_installments' | string;
@@ -1677,6 +1684,34 @@ export async function updateAdminServiceOrder(
   return apiRequest<ApiServiceOrderDetail>(`/admin/service-orders/${id}?_method=put`, {
     method: 'POST',
     body: payload as any,
+    token,
+  });
+}
+
+export interface InvitationDesignUploadResponse {
+  /** Single-use; pass as `invitation_design_token` when creating the order. */
+  design_token: string;
+  preview_url: string;
+  /** ISO timestamp — the token is valid for roughly an hour. */
+  expires_at: string;
+}
+
+/**
+ * POST /admin/service-orders/invitation-design — multipart
+ *
+ * The design must be uploaded *before* the order is created; the returned token
+ * is then sent as `invitation_design_token`. Required whenever `items[]`
+ * contains the `barcode_invitations` system service.
+ */
+export async function uploadInvitationDesign(
+  design: File,
+  token: string
+): Promise<ApiResponse<InvitationDesignUploadResponse>> {
+  const formData = new FormData();
+  formData.append('design', design);
+  return apiRequest<InvitationDesignUploadResponse>('/admin/service-orders/invitation-design', {
+    method: 'POST',
+    body: formData,
     token,
   });
 }

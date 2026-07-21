@@ -12,7 +12,6 @@ import { Invitation } from './InvitationsClient';
 import {
   getAdminServiceOrders,
   getInvitationById,
-  createInvitation,
   updateInvitation,
   type ApiServiceOrderItem,
 } from '@/lib/api';
@@ -40,8 +39,12 @@ interface FormValues {
   deadlineTime: string;
 }
 
+/**
+ * Edit-only. Invitations are created by the backend as part of a service order
+ * that includes the barcode/QR system service — there is no create path here.
+ */
 interface InvitationEditFormProps {
-  invitation?: Invitation | null;
+  invitation: Invitation;
   onBack: () => void;
   onSave: (invitation: Invitation, rawData?: any) => void;
 }
@@ -75,7 +78,7 @@ export function InvitationEditForm({ invitation, onBack, onSave }: InvitationEdi
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
-      serviceOrderId: invitation?.serviceOrderId || '',
+      serviceOrderId: invitation.serviceOrderId || '',
       logic: 'strict',
       deadlineDate: '',
       deadlineTime: '',
@@ -150,7 +153,7 @@ export function InvitationEditForm({ invitation, onBack, onSave }: InvitationEdi
 
   // Fetch full details if editing
   useEffect(() => {
-    if (!token || !invitation?.id) return;
+    if (!token || !invitation.id) return;
     setDetailLoading(true);
     getInvitationById(Number(invitation.id), token)
       .then(res => {
@@ -164,82 +167,45 @@ export function InvitationEditForm({ invitation, onBack, onSave }: InvitationEdi
       })
       .catch(err => toast.error((err as Error).message || 'فشل تحميل تفاصيل الدعوة'))
       .finally(() => setDetailLoading(false));
-  }, [token, invitation?.id]);
+  }, [token, invitation.id]);
 
   const onSubmit = async (values: FormValues) => {
     if (submitting) return;
-
-    if (!invitation && !selectedFile) {
-      setFileError(dir === 'ltr' ? 'Please upload a design file' : 'يرجى رفع ملف التصميم');
-      return;
-    }
     setFileError(null);
 
     const mappedLogic = values.logic === 'strict' ? 'strict_action' : values.logic;
     const order = orders.find(o => String(o.id) === values.serviceOrderId);
 
     setSubmitting(true);
-    const formToast = toast.loading(invitation ? t('savingChanges') : t('creatingInvitation'));
+    const formToast = toast.loading(t('savingChanges'));
 
     try {
-      if (invitation) {
-        // Update Invitation
-        const res = await updateInvitation(
-          Number(invitation.id),
-          {
-            service_order_id: values.serviceOrderId,
-            logic_type: mappedLogic,
-            deadline_date: values.deadlineDate,
-            deadline_time: values.deadlineTime,
-            image: selectedFile,
-          },
-          token
-        );
-        toast.dismiss(formToast);
-        toast.success(res.msg || 'تم تحديث الدعوة بنجاح');
+      const res = await updateInvitation(
+        Number(invitation.id),
+        {
+          service_order_id: values.serviceOrderId,
+          logic_type: mappedLogic,
+          deadline_date: values.deadlineDate,
+          deadline_time: values.deadlineTime,
+          image: selectedFile,
+        },
+        token
+      );
+      toast.dismiss(formToast);
+      toast.success(res.msg || 'تم تحديث الدعوة بنجاح');
 
-        onSave({
-          ...invitation,
-          id: invitation.id,
-          serviceOrderId: values.serviceOrderId,
-          serviceOrderReference: order?.reference_label || invitation.serviceOrderReference,
-          clientName: order?.client_name ?? invitation.clientName,
-          executionDate: order?.event_date ?? invitation.executionDate,
-          deadlineDate: values.deadlineDate,
-          guestsNumber: res.data?.guest_count ?? invitation.guestsNumber,
-          isBarcodeSuspended: order?.is_barcode_suspended ?? invitation.isBarcodeSuspended,
-          status: res.data?.status === 'previous' ? 'past' : (res.data?.is_sent ? 'sent' : 'unsent'),
-        }, res.data);
-      } else {
-        // Create Invitation
-        const res = await createInvitation(
-          {
-            service_order_id: values.serviceOrderId,
-            logic_type: mappedLogic,
-            deadline_date: values.deadlineDate,
-            deadline_time: values.deadlineTime,
-            design: selectedFile,
-          },
-          token
-        );
-        toast.dismiss(formToast);
-        toast.success(res.msg || 'تم إنشاء الدعوة بنجاح');
-
-        onSave({
-          id: String(res.data.id),
-          serviceOrderId: values.serviceOrderId,
-          serviceOrderReference: order?.reference_label || res.data.name || '—',
-          clientName: order?.client_name ?? '',
-          clientPhone: order?.client_phone ?? '',
-          executionDate: order?.event_date ?? '',
-          deadlineDate: values.deadlineDate,
-          guestsNumber: 0,
-          guestsIncluded: null,
-          isBarcodeSuspended: order?.is_barcode_suspended ?? false,
-          whatsappUrl: order?.whatsapp_url ?? '',
-          status: 'unsent',
-        }, res.data);
-      }
+      onSave({
+        ...invitation,
+        id: invitation.id,
+        serviceOrderId: values.serviceOrderId,
+        serviceOrderReference: order?.reference_label || invitation.serviceOrderReference,
+        clientName: order?.client_name ?? invitation.clientName,
+        executionDate: order?.event_date ?? invitation.executionDate,
+        deadlineDate: values.deadlineDate,
+        guestsNumber: res.data?.guest_count ?? invitation.guestsNumber,
+        isBarcodeSuspended: order?.is_barcode_suspended ?? invitation.isBarcodeSuspended,
+        status: res.data?.status === 'previous' ? 'past' : (res.data?.is_sent ? 'sent' : 'unsent'),
+      }, res.data);
     } catch (err) {
       toast.dismiss(formToast);
       toast.error((err as Error).message || 'حدث خطأ غير متوقع');
@@ -298,7 +264,7 @@ export function InvitationEditForm({ invitation, onBack, onSave }: InvitationEdi
 
       <div className="glass-panel p-6 sm:p-8 rounded-[2rem] border border-secondary/5 shadow-sm w-full max-w-3xl mx-auto crystal-accent">
         <h2 className={cn("text-2xl font-medium text-secondary mb-8", dir === 'ltr' ? 'font-serif' : 'font-arabic font-bold')}>
-          {invitation ? (t('editInvitation' as any) || (dir === 'ltr' ? 'Edit Invitation' : 'تعديل الدعوة')) : (t('createInvitation' as any) || (dir === 'ltr' ? 'Create Invitation' : 'إنشاء دعوة'))}
+          {t('editInvitation' as any) || (dir === 'ltr' ? 'Edit Invitation' : 'تعديل الدعوة')}
         </h2>
 
         <Form {...form}>
@@ -486,7 +452,7 @@ export function InvitationEditForm({ invitation, onBack, onSave }: InvitationEdi
             {/* Design Upload */}
             <div>
               <label className="block text-sm font-medium text-secondary/80 mb-1.5 ml-1">
-                {t('uploadDesign' as any) || (dir === 'ltr' ? 'Upload Design' : 'رفع التصميم')} {!invitation && <span className="text-red-500">*</span>}
+                {t('uploadDesign' as any) || (dir === 'ltr' ? 'Upload Design' : 'رفع التصميم')}
               </label>
               <div
                 onDragOver={e => e.preventDefault()}
@@ -540,7 +506,7 @@ export function InvitationEditForm({ invitation, onBack, onSave }: InvitationEdi
                     {dir === 'ltr' ? 'Saving...' : 'جاري الحفظ...'}
                   </>
                 ) : (
-                  invitation ? (t('saveChanges' as any) || (dir === 'ltr' ? 'Save Changes' : 'حفظ التغييرات')) : (t('createInvitation' as any) || (dir === 'ltr' ? 'Create Invitation' : 'إنشاء دعوة'))
+                  t('saveChanges' as any) || (dir === 'ltr' ? 'Save Changes' : 'حفظ التغييرات')
                 )}
               </button>
             </div>

@@ -12,6 +12,11 @@ interface EventDetailsSectionProps {
   /** YYYY-MM-DD lower bound, or undefined to allow past dates (edit mode). */
   minDate?: string;
   errors?: OrderFormErrors;
+  /**
+   * Quick mode asks only for the date and start time. End time, hall and
+   * address all come from the client's own form afterwards.
+   */
+  quick?: boolean;
 }
 
 /** Hour options shared by the start and end time selects. */
@@ -22,6 +27,7 @@ export function EventDetailsSection({
   setForm,
   minDate,
   errors = {},
+  quick = false,
 }: EventDetailsSectionProps) {
   const { t, dir, language } = useLanguage();
 
@@ -107,8 +113,8 @@ export function EventDetailsSection({
         </div>
       </div>
 
-      {/* Start + End time — the API requires both, with end strictly after start */}
-      <div className="grid grid-cols-2 gap-4">
+      {/* Start + End time — end is required in full mode and must be after start */}
+      <div className={quick ? 'grid grid-cols-1 gap-4' : 'grid grid-cols-2 gap-4'}>
         <div className="space-y-1.5">
           <label className="flex items-center gap-2 text-sm font-medium text-secondary/80">
             <Clock className="w-4 h-4 text-secondary/40" /> {t('eventTime') || 'Start Time'} <span className="text-red-500">*</span>
@@ -127,6 +133,7 @@ export function EventDetailsSection({
           {errors.event_time && <p className={errorText}>{errors.event_time}</p>}
         </div>
 
+        {!quick && (
         <div className="space-y-1.5">
           <label className="flex items-center gap-2 text-sm font-medium text-secondary/80">
             <Clock className="w-4 h-4 text-secondary/40" />
@@ -145,8 +152,12 @@ export function EventDetailsSection({
           </select>
           {errors.event_end_time && <p className={errorText}>{errors.event_end_time}</p>}
         </div>
+        )}
       </div>
 
+      {/* Hall + address — quick mode defers all of this to the client's form */}
+      {quick ? null : (
+      <>
       {/* Hall */}
       <div className="space-y-1.5">
         <label className="text-sm font-medium text-secondary/80">
@@ -260,6 +271,8 @@ export function EventDetailsSection({
           />
         </div>
       </div>
+      </>
+      )}
     </>
   );
 }

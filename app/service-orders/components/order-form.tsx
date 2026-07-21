@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useLanguage } from '@/lib/i18n';
 import { motion } from 'motion/react';
-import { ChevronLeft, ChevronRight, Plus, Send, Loader2, Calculator, Users } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Send, Loader2, Calculator, Users, MessageCircle, ClipboardList, Ticket } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
-import { getServices, getEmployees, getServiceById, calculateServiceOrderTotal, parseAmount } from '@/lib/api';
+import { getServices, getEmployees, getServiceById, calculateServiceOrderTotal, parseAmount, BARCODE_INVITATIONS_KEY } from '@/lib/api';
 import { getMockDataForService } from '@/lib/mockServicesStore';
 import {
   type FormState,
@@ -15,10 +15,12 @@ import {
   type OrderFormErrors,
   createEmptyServiceItem,
   buildItemPayload,
+  isInvitationDesignExpired,
 } from '@/lib/service-order-form';
 
 import { ClientSection } from './client-section';
 import { EventDetailsSection } from './event-details-section';
+import { InvitationDesignSection } from './invitation-design-section';
 import { ServiceItemRow } from './service-item-row';
 import { PaymentSection } from './payment-section';
 
@@ -243,6 +245,48 @@ export function OrderForm({
     return form.services.reduce((sum, s) => sum + (parseFloat(s.price) || 0), 0);
   }, [form.services]);
 
+  const quick = !editing && form.creationMode === 'quick';
+
+  /** Submit stays blocked until a valid, unexpired design token exists. */
+  const missingInvitationDesign =
+    !editing
+    && form.requiresInvitationDesign
+    && (!form.invitationDesignToken || isInvitationDesignExpired(form));
+
+  /**
+   * True once the order includes the barcode/QR system service. The backend
+   * creates the invitation automatically in that case, so we only surface it.
+   */
+  const includesBarcodeService = useMemo(() => {
+    const barcodeIds = new Set(
+      dbServices
+        .filter(s => s.is_system && s.system_key === BARCODE_INVITATIONS_KEY)
+        .map(s => String(s.id))
+    );
+    return form.services.some(s => barcodeIds.has(s.serviceId));
+  }, [dbServices, form.services]);
+
+  /**
+   * Mirror the QR detection onto the form so validation and payload building can
+   * see it. Dropping the service also discards any design already uploaded —
+   * the backend rejects a token that arrives without the QR service.
+   */
+  useEffect(() => {
+    if (editing) return;
+    setForm(prev => {
+      if (prev.requiresInvitationDesign === includesBarcodeService) return prev;
+      return includesBarcodeService
+        ? { ...prev, requiresInvitationDesign: true }
+        : {
+            ...prev,
+            requiresInvitationDesign: false,
+            invitationDesignToken: '',
+            invitationDesignPreviewUrl: '',
+            invitationDesignExpiresAt: '',
+          };
+    });
+  }, [includesBarcodeService, editing, setForm]);
+
   if (dbLoading) {
     return (
       <div className="flex justify-center items-center py-32">
@@ -252,7 +296,7 @@ export function OrderForm({
   }
 
   return (
-    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6 pb-10 max-w-2xl mx-auto text-start">
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6 pb-10 max-w-4xl mx-auto text-start">
       {/* Back */}
       <button type="button" onClick={onCancel}
         className="flex items-center gap-2 text-secondary/60 hover:text-secondary transition-colors cursor-pointer group">
@@ -267,9 +311,65 @@ export function OrderForm({
           {editing ? t('editOrder') || 'Edit Order' : t('createOrder') || 'Create Order'}
         </h2>
 
+        {/* Creation mode — create only; editing always shows the full form */}
+        {!editing && (
+          <div className="mb-6 space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {([
+                {
+                  mode: 'full' as const,
+                  icon: ClipboardList,
+                  title: t('modeFullTitle'),
+                  desc: t('modeFullDesc'),
+                },
+                {
+                  mode: 'quick' as const,
+                  icon: MessageCircle,
+                  title: t('modeQuickTitle'),
+                  desc: t('modeQuickDesc'),
+                },
+              ]).map(option => {
+                const Icon = option.icon;
+                const selected = form.creationMode === option.mode;
+                return (
+                  <button
+                    key={option.mode}
+                    type="button"
+                    onClick={() => setForm(prev => ({ ...prev, creationMode: option.mode }))}
+                    className={cn(
+                      'flex items-start gap-3 p-4 rounded-2xl border text-start transition-all cursor-pointer',
+                      selected
+                        ? 'bg-primary/5 border-primary/40 ring-2 ring-primary/15 shadow-sm'
+                        : 'bg-white/50 border-secondary/15 hover:bg-white'
+                    )}
+                  >
+                    <span className={cn(
+                      'w-9 h-9 rounded-xl flex items-center justify-center shrink-0',
+                      selected ? 'bg-primary text-white' : 'bg-secondary/10 text-secondary/50'
+                    )}>
+                      <Icon className="w-4 h-4" />
+                    </span>
+                    <span className="flex-1 min-w-0">
+                      <span className="block text-sm font-bold text-secondary">{option.title}</span>
+                      <span className="block text-xs text-secondary/55 mt-0.5">{option.desc}</span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {quick && (
+              <div className="flex items-start gap-2.5 p-3 rounded-2xl bg-amber-50 border border-amber-200/70">
+                <MessageCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <p className="text-xs text-amber-800 leading-relaxed">{t('modeQuickNotice')}</p>
+              </div>
+            )}
+          </div>
+        )}
+
         <form onSubmit={onSubmit} className="space-y-5">
           {/* Client data — embedded in the order, no separate clients module */}
-          <ClientSection form={form} setForm={setForm} error={errors.client} />
+          <ClientSection form={form} setForm={setForm} error={errors.client} quick={quick} />
 
           {/* Event Details Section */}
           <EventDetailsSection
@@ -277,6 +377,7 @@ export function OrderForm({
             setForm={setForm}
             minDate={minDate}
             errors={errors}
+            quick={quick}
           />
 
           {/* Order-level employees */}
@@ -351,6 +452,23 @@ export function OrderForm({
               <Plus className="w-4 h-4" />
               {t('addService') || 'Add Service'}
             </button>
+
+            {/* The backend creates the invitation itself when this service is
+                present — but it needs the design uploaded up front. */}
+            {includesBarcodeService && !editing && (
+              <>
+                <div className="flex items-start gap-2.5 p-3 rounded-2xl bg-primary/5 border border-primary/20">
+                  <Ticket className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+                  <p className="text-xs text-secondary/70 leading-relaxed">{t('autoInvitationNotice')}</p>
+                </div>
+                <InvitationDesignSection
+                  form={form}
+                  setForm={setForm}
+                  token={token}
+                  error={errors.invitation_design}
+                />
+              </>
+            )}
           </div>
 
           {/* Total readout — local estimate until confirmed against the server */}
@@ -389,7 +507,7 @@ export function OrderForm({
               className="flex-1 py-3 text-sm font-medium text-secondary/70 bg-white/60 hover:bg-white border border-secondary/15 rounded-xl transition-colors cursor-pointer">
               {t('cancel') || 'Cancel'}
             </button>
-            <button type="submit" disabled={loading || form.services.length === 0 || form.services.some(s => !s.serviceId)}
+            <button type="submit" disabled={loading || form.services.length === 0 || form.services.some(s => !s.serviceId) || missingInvitationDesign}
               className="flex-1 flex items-center justify-center gap-2 py-3 text-sm font-medium text-white bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-all cursor-pointer shadow-md shadow-primary/20 hover:-translate-y-0.5">
               {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
               {editing ? t('saveChanges') || 'Save Changes' : t('createSendLinks') || 'Create & Send Link'}

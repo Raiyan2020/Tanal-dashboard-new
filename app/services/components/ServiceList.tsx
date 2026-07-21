@@ -54,16 +54,14 @@ export function ServiceList({
         </div>
         <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-start">
           <p className="text-sm text-secondary/50">
-            {language === 'ar'
-              ? 'إدارة خدمات ومميزات الحفل'
-              : 'Manage event services and options'}
+            {t('manageServicesDesc')}
           </p>
           <button
             onClick={onAddService}
             className="flex items-center gap-2 px-4 py-2.5 bg-primary text-white rounded-xl text-sm font-medium hover:bg-primary/90 transition-colors shadow-sm shadow-primary/20 cursor-pointer"
           >
             <Plus className="w-4 h-4" />
-            {language === 'ar' ? 'إضافة خدمة' : 'Add Service'}
+            {t('addService')}
           </button>
         </div>
       </div>
@@ -98,7 +96,7 @@ export function ServiceList({
                   <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
                     <button
                       onClick={async () => {
-                        const toastId = toast.loading(language === 'ar' ? 'جاري تحميل الترجمات...' : 'Loading translations...');
+                        const toastId = toast.loading(t('loadingTranslations'));
                         try {
                           const [arRes, enRes] = await Promise.all([
                             getServiceById(svc.id, token, 'ar'),
@@ -115,13 +113,13 @@ export function ServiceList({
                             image_url: svc.image,
                           } as any);
                         } catch (err) {
-                          toast.error(language === 'ar' ? 'فشل تحميل ترجمات الخدمة' : 'Failed to load service translations');
+                          toast.error(t('failedLoadServiceTranslations'));
                         } finally {
                           toast.dismiss(toastId);
                         }
                       }}
                       className="p-1.5 bg-white text-yellow-500 hover:bg-yellow-50 hover:text-yellow-600 rounded-lg transition-colors border border-secondary/5 cursor-pointer shadow-sm"
-                      title={language === 'ar' ? 'تعديل الخدمة' : 'Edit Service'}
+                      title={t('editService')}
                     >
                       <Edit2 className="w-3.5 h-3.5" />
                     </button>
@@ -129,15 +127,15 @@ export function ServiceList({
                     {svc.is_system ? (
                       <span
                         className="px-2.5 py-1 rounded-full bg-secondary/10 text-secondary/60 text-[10px] font-bold shadow-sm"
-                        title={language === 'ar' ? 'خدمة نظام' : 'System service'}
+                        title={t('systemService')}
                       >
-                        {language === 'ar' ? 'نظام' : 'System'}
+                        {t('systemBadge')}
                       </span>
                     ) : (
                       <button
                         onClick={() => onDeleteService(svc)}
                         className="p-1.5 bg-white text-red-500 hover:bg-red-50 hover:text-red-600 rounded-lg transition-colors border border-secondary/5 cursor-pointer shadow-sm"
-                        title={language === 'ar' ? 'حذف الخدمة' : 'Delete Service'}
+                        title={t('deleteService')}
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
@@ -160,7 +158,7 @@ export function ServiceList({
 
                 <div className={cn('flex items-center gap-1 text-xs font-semibold text-primary mt-auto relative', dir === 'rtl' ? 'flex-row-reverse' : '')}>
                   {dir === 'ltr' ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
-                  {language === 'ar' ? 'إدارة الخدمة' : 'Manage Service'}
+                  {t('manageService')}
                 </div>
               </motion.button>
             );

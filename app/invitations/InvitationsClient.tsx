@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useLanguage } from '@/lib/i18n';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, Edit2, Trash2, Eye, Calendar, Users, Send, Clock, Ticket, Plus, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
+import { Search, Edit2, Trash2, Eye, Calendar, Users, Send, Clock, Ticket, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ConfirmModal } from './ConfirmModal';
 import { InvitationDetails } from './InvitationDetails';
@@ -77,11 +77,8 @@ export default function InvitationsClient({
   const [invitations, setInvitations] = useState<Invitation[]>(initialData ?? []);
   const [invitationToDelete, setInvitationToDelete] = useState<string | null>(null);
 
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingInvitation, setEditingInvitation] = useState<Invitation | null>(null);
   const [viewingInvitation, setViewingInvitation] = useState<Invitation | null>(null);
-
-  const [createdInvitationData, setCreatedInvitationData] = useState<any | null>(null);
 
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(initialTotalPages);
@@ -202,27 +199,16 @@ export default function InvitationsClient({
     setPage(1);
   };
 
-  if (isCreateModalOpen || editingInvitation) {
+  if (editingInvitation) {
     return (
       <InvitationEditForm
         invitation={editingInvitation}
-        onBack={() => {
-          setIsCreateModalOpen(false);
-          setEditingInvitation(null);
-        }}
-        onSave={(savedInvitation, rawData) => {
-          if (editingInvitation) {
-            setInvitations(invitations.map(inv => inv.id === savedInvitation.id ? savedInvitation : inv));
-            if (viewingInvitation?.id === savedInvitation.id) {
-              setViewingInvitation(savedInvitation);
-            }
-          } else {
-            if (rawData) {
-              setCreatedInvitationData(rawData);
-            }
-            fetchInvitations();
+        onBack={() => setEditingInvitation(null)}
+        onSave={(savedInvitation) => {
+          setInvitations(invitations.map(inv => inv.id === savedInvitation.id ? savedInvitation : inv));
+          if (viewingInvitation?.id === savedInvitation.id) {
+            setViewingInvitation(savedInvitation);
           }
-          setIsCreateModalOpen(false);
           setEditingInvitation(null);
         }}
       />
@@ -254,13 +240,8 @@ export default function InvitationsClient({
           </h2>
           <p className="text-secondary/60 mt-1">{t('manageInvitations' as any) || (dir === 'ltr' ? 'Manage your event invitations' : 'إدارة دعوات مناسباتك')}</p>
         </div>
-        <button
-          onClick={() => setIsCreateModalOpen(true)}
-          className="flex items-center gap-2 bg-primary hover:bg-primary-dark text-white px-5 py-2.5 rounded-xl transition-all shadow-md shadow-primary/20 hover:shadow-lg hover:shadow-primary/30 active:scale-95 cursor-pointer w-full sm:w-auto justify-center"
-        >
-          <Plus className="w-5 h-5" />
-          <span className="font-medium">{t('createInvitation' as any) || t('addInvitation' as any) || (dir === 'ltr' ? 'Create Invitation' : 'إنشاء دعوة')}</span>
-        </button>
+        {/* No create button — invitations are created by the backend when a
+            service order includes the barcode/QR system service. */}
       </div>
 
       <div className="glass-panel p-4 sm:p-6 rounded-3xl">
@@ -467,79 +448,6 @@ export default function InvitationsClient({
         message={t('confirmDeleteInvitationMessage' as any) || (dir === 'ltr' ? 'Are you sure you want to delete this invitation?' : 'هل أنت متأكد من رغبتك في حذف هذه الدعوة؟')}
       />
 
-      <AnimatePresence>
-        {createdInvitationData && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center backdrop-blur-sm p-4 bg-black/20">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="w-full max-w-lg glass-panel crystal-accent rounded-3xl relative z-10 overflow-hidden shadow-2xl p-6 sm:p-8 flex flex-col gap-6 text-start"
-            >
-              <div className="text-center space-y-2">
-                <div className="mx-auto w-12 h-12 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center">
-                  <Send className="w-6 h-6 animate-bounce" />
-                </div>
-                <h3 className="text-xl font-bold text-secondary">
-                  {dir === 'ltr' ? 'Invitation Created Successfully!' : 'تم إنشاء الدعوة بنجاح!'}
-                </h3>
-                <p className="text-sm text-secondary/60">
-                  {dir === 'ltr' ? 'Here are the details of the generated invitation:' : 'إليك تفاصيل الدعوة التي تم إنشاؤها:'}
-                </p>
-              </div>
-
-              <div className="space-y-4 border-t border-secondary/15 pt-4">
-                <div className="flex justify-between items-center py-2 border-b border-secondary/5 text-sm">
-                  <span className="text-secondary/60 font-medium">{dir === 'ltr' ? 'Reference Code' : 'رمز الدعوة'}</span>
-                  <span className="font-mono font-bold text-secondary">{createdInvitationData.reference_code}</span>
-                </div>
-                <div className="flex justify-between items-start gap-4 py-2 border-b border-secondary/5 text-sm">
-                  <span className="text-secondary/60 font-medium shrink-0">{dir === 'ltr' ? 'Event Name' : 'اسم الحفل'}</span>
-                  <span className="font-bold text-secondary text-end">{createdInvitationData.name || (createdInvitationData.event && createdInvitationData.event.name)}</span>
-                </div>
-                <div className="flex justify-between items-center py-2 border-b border-secondary/5 text-sm">
-                  <span className="text-secondary/60 font-medium">{dir === 'ltr' ? 'Logic Type' : 'منطق الدعوة'}</span>
-                  <span className="font-bold text-secondary bg-primary/10 text-primary px-2.5 py-0.5 rounded-full text-xs">
-                    {(() => {
-                      const type = createdInvitationData.logic_type;
-                      const isRtl = dir === 'rtl';
-                      if (type === 'strict' || type === 'strict_action') return isRtl ? 'إجراء صارم' : 'Strict Action';
-                      if (type === 'default_accept') return isRtl ? 'قبول تلقائي' : 'Default Accept';
-                      if (type === 'view_only') return isRtl ? 'للعرض فقط' : 'View Only';
-                      return type;
-                    })()}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center py-2 border-b border-secondary/5 text-sm">
-                  <span className="text-secondary/60 font-medium">{dir === 'ltr' ? 'Deadline' : 'الموعد النهائي'}</span>
-                  <span className="font-mono font-bold text-secondary">
-                    {createdInvitationData.deadline_date} {createdInvitationData.deadline_time}
-                  </span>
-                </div>
-                {createdInvitationData.design_url && (
-                  <div className="flex flex-col gap-2 py-2">
-                    <span className="text-secondary/60 font-medium text-sm">{dir === 'ltr' ? 'Design Preview' : 'معاينة التصميم'}</span>
-                    <div className="w-full h-40 relative rounded-2xl overflow-hidden border border-secondary/10 bg-secondary/5 flex items-center justify-center">
-                      <img
-                        src={createdInvitationData.design_url}
-                        alt="Invitation design"
-                        className="object-contain max-h-full max-w-full"
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <button
-                onClick={() => setCreatedInvitationData(null)}
-                className="w-full bg-primary hover:bg-primary-dark text-white py-3.5 rounded-xl font-medium transition-all shadow-md hover:shadow-lg flex items-center justify-center cursor-pointer"
-              >
-                {dir === 'ltr' ? 'Dismiss' : 'إغلاق'}
-              </button>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }

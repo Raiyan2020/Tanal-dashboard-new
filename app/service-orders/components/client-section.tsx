@@ -8,6 +8,8 @@ interface ClientSectionProps {
   form: FormState;
   setForm: React.Dispatch<React.SetStateAction<FormState>>;
   error?: string;
+  /** Quick mode collects the phone only — the client fills the rest themselves. */
+  quick?: boolean;
 }
 
 const inputClass =
@@ -21,8 +23,8 @@ const codeSelectClass =
  * module any more. A legacy `client_id` may still be present on older orders,
  * in which case these fields are shown read-only for reference.
  */
-export function ClientSection({ form, setForm, error }: ClientSectionProps) {
-  const { t, dir, language } = useLanguage();
+export function ClientSection({ form, setForm, error, quick = false }: ClientSectionProps) {
+  const { t, dir } = useLanguage();
   const isLegacyClient = !!form.clientId;
 
   return (
@@ -30,34 +32,36 @@ export function ClientSection({ form, setForm, error }: ClientSectionProps) {
       <div className="flex items-center justify-between">
         <h3 className="flex items-center gap-2 text-base font-bold text-secondary">
           <User className="w-4 h-4 text-secondary/40" />
-          {t('clientData') || (language === 'ar' ? 'بيانات العميل' : 'Client Data')}
+          {t('clientData')}
         </h3>
         {isLegacyClient && (
           <span className="px-2 py-0.5 rounded-md bg-secondary/10 text-secondary/60 text-[10px] font-bold">
-            {language === 'ar' ? `عميل سابق #${form.clientId}` : `Legacy client #${form.clientId}`}
+            {t('legacyClient')} #{form.clientId}
           </span>
         )}
       </div>
 
-      {/* Name */}
-      <div className="space-y-1.5">
-        <label className="text-sm font-medium text-secondary/80">
-          {t('clientName') || (language === 'ar' ? 'اسم العميل' : 'Client Name')}
-        </label>
-        <input
-          type="text"
-          value={form.clientName}
-          onChange={e => setForm(prev => ({ ...prev, clientName: e.target.value }))}
-          placeholder={language === 'ar' ? 'أحمد' : 'Ahmed'}
-          className={inputClass}
-        />
-      </div>
+      {/* Name — collected from the client themselves in quick mode */}
+      {!quick && (
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium text-secondary/80">
+            {t('clientName')}
+          </label>
+          <input
+            type="text"
+            value={form.clientName}
+            onChange={e => setForm(prev => ({ ...prev, clientName: e.target.value }))}
+            placeholder={t('clientNamePlaceholder')}
+            className={inputClass}
+          />
+        </div>
+      )}
 
       {/* Primary phone — required unless a legacy client is attached */}
       <div className="space-y-1.5">
         <label className="flex items-center gap-2 text-sm font-medium text-secondary/80">
           <Phone className="w-4 h-4 text-secondary/40" />
-          {t('clientPhone') || (language === 'ar' ? 'رقم الهاتف' : 'Phone')}
+          {t('clientPhone')}
           {!isLegacyClient && <span className="text-red-500">*</span>}
         </label>
         <div className={dir === 'rtl' ? 'flex gap-2 flex-row-reverse' : 'flex gap-2'}>
@@ -85,10 +89,11 @@ export function ClientSection({ form, setForm, error }: ClientSectionProps) {
         {error && <p className="text-xs text-red-500 mt-0.5">{error}</p>}
       </div>
 
-      {/* Alternate phone */}
+      {/* Alternate phone — also part of the client's own form in quick mode */}
+      {!quick && (
       <div className="space-y-1.5">
         <label className="text-sm font-medium text-secondary/80">
-          {language === 'ar' ? 'رقم بديل (اختياري)' : 'Alternate Phone (optional)'}
+          {t('altPhoneOptional')}
         </label>
         <div className={dir === 'rtl' ? 'flex gap-2 flex-row-reverse' : 'flex gap-2'}>
           <select
@@ -114,6 +119,7 @@ export function ClientSection({ form, setForm, error }: ClientSectionProps) {
           />
         </div>
       </div>
+      )}
     </div>
   );
 }

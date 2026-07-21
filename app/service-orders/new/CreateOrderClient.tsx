@@ -46,11 +46,32 @@ export function CreateOrderClient({ token: serverToken }: CreateOrderClientProps
       toast.success(
         res.msg || (language === 'ar' ? 'تم إنشاء الطلب بنجاح' : 'Order created successfully')
       );
-      router.push('/service-orders');
+
+      // Quick orders wait on the client to fill in their own details.
+      if (form.creationMode === 'quick') {
+        toast.info(
+          language === 'ar'
+            ? 'تم إرسال نموذج استكمال البيانات للعميل عبر الواتساب'
+            : 'A data-completion form has been sent to the client on WhatsApp'
+        );
+      }
+
+      // The barcode/QR service makes the backend create an invitation alongside
+      // the order — jump straight to it so guests can be added.
+      const invitationId = res.data?.invitation_id;
+      if (invitationId) {
+        toast.success(
+          language === 'ar' ? 'تم إنشاء الدعوة تلقائياً' : 'Invitation created automatically'
+        );
+        router.push(`/invitations?invitationId=${invitationId}`);
+      } else {
+        router.push('/service-orders');
+      }
       router.refresh();
     } catch (err) {
       // Map server-side field errors back onto the form where the names line up.
       if (err instanceof ApiError) {
+        const designError = err.fieldError('invitation_design_token');
         setErrors({
           client: err.fieldError('client.phone') ?? err.fieldError('client_id'),
           event_date: err.fieldError('event_date'),
@@ -58,7 +79,19 @@ export function CreateOrderClient({ token: serverToken }: CreateOrderClientProps
           event_end_time: err.fieldError('event_end_time'),
           hall_name: err.fieldError('hall_name'),
           items: err.fieldError('items'),
+          invitation_design: designError,
         });
+
+        // The token is single-use and short-lived, so any rejection of it means
+        // the stored one is spent — drop it and make the admin re-upload.
+        if (designError) {
+          setForm(prev => ({
+            ...prev,
+            invitationDesignToken: '',
+            invitationDesignPreviewUrl: '',
+            invitationDesignExpiresAt: '',
+          }));
+        }
       }
       toast.error((err as Error).message || 'فشل حفظ الطلب');
     } finally {
