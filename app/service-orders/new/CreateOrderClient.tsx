@@ -63,7 +63,7 @@ export function CreateOrderClient({ token: serverToken }: CreateOrderClientProps
         toast.success(
           language === 'ar' ? 'تم إنشاء الدعوة تلقائياً' : 'Invitation created automatically'
         );
-        router.push(`/invitations?invitationId=${invitationId}`);
+        router.push(`/invitations/${invitationId}`);
       } else {
         router.push('/service-orders');
       }

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useLanguage } from '@/lib/i18n';
 import { toast } from 'sonner';
@@ -12,12 +12,14 @@ import {
 } from '@/lib/api';
 import {
   formStateFromDetail,
+  hydrateOrderFormItems,
   buildUpdatePayload,
   validateOrderForm,
   type FormState,
   type OrderFormErrors,
 } from '@/lib/service-order-form';
 import { OrderForm } from '../../components/order-form';
+import { Loader2 } from 'lucide-react';
 
 interface EditOrderClientProps {
   token: string;
@@ -36,9 +38,43 @@ export function EditOrderClient({ token: serverToken, order }: EditOrderClientPr
   const [form, setForm] = useState<FormState>(() => formStateFromDetail(order));
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<OrderFormErrors>({});
+  // The order detail carries the saved option values and addons but not their
+  // definitions, so the catalogue has to be pulled in before the form can show
+  // them. Update replaces `items[]` wholesale, so saving before this lands
+  // would drop every option and addon on the order.
+  const [hydrating, setHydrating] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    // No `setHydrating(true)` here — it starts true, and a re-run (language
+    // change) should refresh the labels without blanking the form.
+    hydrateOrderFormItems(order, token, language as 'ar' | 'en')
+      .then(({ items, failed }) => {
+        if (cancelled) return;
+        setForm(prev => ({ ...prev, services: items }));
+        if (failed > 0) {
+          toast.error(
+            language === 'ar'
+              ? 'تعذر تحميل خيارات بعض الخدمات — راجعها قبل الحفظ'
+              : 'Some services could not be loaded — review them before saving'
+          );
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          toast.error(
+            language === 'ar' ? 'تعذر تحميل تفاصيل الخدمات' : 'Failed to load service details'
+          );
+        }
+      })
+      .finally(() => { if (!cancelled) setHydrating(false); });
+    return () => { cancelled = true; };
+  }, [order, token, language]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    // Saving mid-hydration would send half-empty items and wipe the rest.
+    if (hydrating) return;
 
     const validationErrors = validateOrderForm(form, language as 'ar' | 'en');
     if (Object.keys(validationErrors).length > 0) {
@@ -64,6 +100,7 @@ export function EditOrderClient({ token: serverToken, order }: EditOrderClientPr
           event_end_time: err.fieldError('event_end_time'),
           hall_name: err.fieldError('hall_name'),
           items: err.fieldError('items'),
+          invitation_design: err.fieldError('invitation_design_token'),
         });
       }
       toast.error((err as Error).message || 'فشل حفظ الطلب');
@@ -71,6 +108,14 @@ export function EditOrderClient({ token: serverToken, order }: EditOrderClientPr
       setSubmitting(false);
     }
   };
+
+  if (hydrating) {
+    return (
+      <div className="flex justify-center items-center py-32">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <OrderForm

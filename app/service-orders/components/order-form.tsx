@@ -16,6 +16,7 @@ import {
   createEmptyServiceItem,
   buildItemPayload,
   isInvitationDesignExpired,
+  needsInvitationDesignUpload,
 } from '@/lib/service-order-form';
 
 import { ClientSection } from './client-section';
@@ -247,10 +248,13 @@ export function OrderForm({
 
   const quick = !editing && form.creationMode === 'quick';
 
-  /** Submit stays blocked until a valid, unexpired design token exists. */
+  /**
+   * Submit stays blocked until a valid, unexpired design token exists. Applies
+   * when editing too: adding QR to an order that has no invitation yet needs a
+   * design just as much as creating one from scratch does.
+   */
   const missingInvitationDesign =
-    !editing
-    && form.requiresInvitationDesign
+    needsInvitationDesignUpload(form)
     && (!form.invitationDesignToken || isInvitationDesignExpired(form));
 
   /**
@@ -272,7 +276,6 @@ export function OrderForm({
    * the backend rejects a token that arrives without the QR service.
    */
   useEffect(() => {
-    if (editing) return;
     setForm(prev => {
       if (prev.requiresInvitationDesign === includesBarcodeService) return prev;
       return includesBarcodeService
@@ -285,7 +288,7 @@ export function OrderForm({
             invitationDesignExpiresAt: '',
           };
     });
-  }, [includesBarcodeService, editing, setForm]);
+  }, [includesBarcodeService, setForm]);
 
   if (dbLoading) {
     return (
@@ -455,18 +458,22 @@ export function OrderForm({
 
             {/* The backend creates the invitation itself when this service is
                 present — but it needs the design uploaded up front. */}
-            {includesBarcodeService && !editing && (
+            {includesBarcodeService && (
               <>
                 <div className="flex items-start gap-2.5 p-3 rounded-2xl bg-primary/5 border border-primary/20">
                   <Ticket className="w-4 h-4 text-primary shrink-0 mt-0.5" />
                   <p className="text-xs text-secondary/70 leading-relaxed">{t('autoInvitationNotice')}</p>
                 </div>
-                <InvitationDesignSection
-                  form={form}
-                  setForm={setForm}
-                  token={token}
-                  error={errors.invitation_design}
-                />
+                {/* An order that already has an invitation already has a
+                    design — it is changed from the invitation's own screen. */}
+                {needsInvitationDesignUpload(form) && (
+                  <InvitationDesignSection
+                    form={form}
+                    setForm={setForm}
+                    token={token}
+                    error={errors.invitation_design}
+                  />
+                )}
               </>
             )}
           </div>

@@ -2,12 +2,11 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useLanguage } from '@/lib/i18n';
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, Edit2, Trash2, Eye, Calendar, Users, Send, Clock, Ticket, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ConfirmModal } from './ConfirmModal';
-import { InvitationDetails } from './InvitationDetails';
 import { InvitationEditForm } from './InvitationEditForm';
 import { getInvitations, deleteInvitation, type ApiInvitation } from '@/lib/api';
 import { getToken } from '@/lib/auth';
@@ -64,7 +63,6 @@ export default function InvitationsClient({
   initialTotalPages: number;
 }) {
   const { t, dir } = useLanguage();
-  const searchParams = useSearchParams();
   const router = useRouter();
   const [token] = useState(() => getToken() ?? '');
 
@@ -78,7 +76,6 @@ export default function InvitationsClient({
   const [invitationToDelete, setInvitationToDelete] = useState<string | null>(null);
 
   const [editingInvitation, setEditingInvitation] = useState<Invitation | null>(null);
-  const [viewingInvitation, setViewingInvitation] = useState<Invitation | null>(null);
 
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(initialTotalPages);
@@ -129,22 +126,7 @@ export default function InvitationsClient({
     fetchInvitations();
   }, [fetchInvitations, initialData]);
 
-  // Auto-open an invitation when arriving from a service order
-  useEffect(() => {
-    if (invitations.length === 0) return;
-
-    const invitationId = searchParams.get('invitationId');
-    const serviceOrderId = searchParams.get('serviceOrderId');
-    if (!invitationId && !serviceOrderId) return;
-
-    const matched = invitationId
-      ? invitations.find(inv => inv.id === invitationId)
-      : invitations.find(inv => inv.serviceOrderId === serviceOrderId);
-    if (matched) {
-      setViewingInvitation(matched);
-    }
-    router.replace('/invitations');
-  }, [searchParams, invitations, router]);
+  const openInvitation = (invitation: Invitation) => router.push(`/invitations/${invitation.id}`);
 
   // Filter on secondary filter locally (since secondary filter 'sent'/'unsent' is client side)
   const filteredInvitations = invitations.filter((inv) => {
@@ -206,26 +188,7 @@ export default function InvitationsClient({
         onBack={() => setEditingInvitation(null)}
         onSave={(savedInvitation) => {
           setInvitations(invitations.map(inv => inv.id === savedInvitation.id ? savedInvitation : inv));
-          if (viewingInvitation?.id === savedInvitation.id) {
-            setViewingInvitation(savedInvitation);
-          }
           setEditingInvitation(null);
-        }}
-      />
-    );
-  }
-
-  if (viewingInvitation) {
-    return (
-      <InvitationDetails
-        invitation={viewingInvitation}
-        onBack={() => setViewingInvitation(null)}
-        onNavigateToServiceOrder={(serviceOrderId) => {
-          router.push(`/service-orders?orderId=${serviceOrderId}`);
-        }}
-        onEdit={(invitation) => {
-          setViewingInvitation(null);
-          setEditingInvitation(invitation);
         }}
       />
     );
@@ -320,7 +283,7 @@ export default function InvitationsClient({
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, scale: 0.95 }}
-                      onClick={() => setViewingInvitation(invitation)}
+                      onClick={() => openInvitation(invitation)}
                       className="p-4 rounded-2xl bg-white/40 shadow-sm border border-secondary/5 flex flex-col md:flex-row md:items-center justify-between gap-3 group hover:bg-white/60 transition-colors w-full cursor-pointer"
                     >
                       <div className="flex-1 min-w-0 flex flex-col gap-1.5 text-start">
@@ -375,12 +338,15 @@ export default function InvitationsClient({
                       <div className="flex items-center gap-2 mt-3 md:mt-0 border-t border-secondary/5 md:border-none pt-3 md:pt-0 justify-end shrink-0" onClick={e => e.stopPropagation()}>
                         <button
                           title={dir === 'ltr' ? "View" : "عرض"}
-                          onClick={() => setViewingInvitation(invitation)}
+                          onClick={() => openInvitation(invitation)}
                           className="p-2 sm:p-2.5 bg-white text-blue-500 border border-transparent hover:bg-blue-50 hover:border-blue-200 hover:text-blue-600 hover:-translate-y-[2px] hover:scale-[1.03] hover:shadow-md active:scale-95 active:translate-y-0 rounded-xl transition-all duration-200 ease-out flex items-center justify-center cursor-pointer"
                         >
                           <Eye className="w-4 h-4" />
                         </button>
-                        {invitation.status !== 'past' && (
+                        {/* The list resource carries no capability flags, so a
+                            sent invitation is filtered out here on status; the
+                            detail screen enforces `can_be_edited` properly. */}
+                        {invitation.status === 'unsent' && (
                           <button
                             title={t('edit' as any) || (dir === 'ltr' ? 'Edit' : 'تعديل')}
                             onClick={() => setEditingInvitation(invitation)}

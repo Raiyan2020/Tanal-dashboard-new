@@ -6,8 +6,11 @@
  * each assembling its own payload.
  */
 
+import { getServiceById } from '@/lib/api';
 import type {
   ApiServiceOrderDetail,
+  ApiServiceOrderDetailItem,
+  ApiServiceOrderDetailOption,
   CreateServiceOrderItem,
   CreateServiceOrderPayload,
   UpdateServiceOrderPayload,
@@ -114,6 +117,11 @@ export type FormState = {
    * payload building can see it without re-fetching the service catalogue.
    */
   requiresInvitationDesign: boolean;
+  /**
+   * True when the order already has an invitation (and therefore a design), so
+   * no upload token is needed. Only ever set when editing.
+   */
+  hasExistingInvitationDesign: boolean;
   /** Single-use token from `uploadInvitationDesign`; empty until one is uploaded. */
   invitationDesignToken: string;
   invitationDesignPreviewUrl: string;
@@ -162,6 +170,7 @@ export const createEmptyOrderForm = (): FormState => ({
   clientAltPhone: '',
   orderEmployeeIds: [],
   requiresInvitationDesign: false,
+  hasExistingInvitationDesign: false,
   invitationDesignToken: '',
   invitationDesignPreviewUrl: '',
   invitationDesignExpiresAt: '',
@@ -172,6 +181,14 @@ function toMinutes(time: string): number | null {
   const match = /^(\d{1,2}):(\d{2})/.exec(time);
   if (!match) return null;
   return Number(match[1]) * 60 + Number(match[2]);
+}
+
+/**
+ * True when the order needs a fresh design upload: it carries the QR service but
+ * has no invitation yet. Adding QR to an existing order hits this too.
+ */
+export function needsInvitationDesignUpload(form: FormState): boolean {
+  return form.requiresInvitationDesign && !form.hasExistingInvitationDesign;
 }
 
 export type OrderFormErrors = Partial<Record<
@@ -221,8 +238,9 @@ export function validateOrderForm(form: FormState, language: 'ar' | 'en'): Order
     errors.items = ar ? 'يجب اختيار خدمة واحدة على الأقل' : 'At least one service is required';
   }
 
-  // The QR service cannot be ordered without a design uploaded up front.
-  if (form.requiresInvitationDesign && !form.invitationDesignToken) {
+  // The QR service cannot be ordered without a design uploaded up front —
+  // unless the order already has an invitation, which already has one.
+  if (needsInvitationDesignUpload(form) && !form.invitationDesignToken) {
     errors.invitation_design = ar
       ? 'يجب رفع تصميم الدعوة أولاً'
       : 'An invitation design must be uploaded first';
@@ -344,7 +362,7 @@ export function buildCreatePayload(form: FormState): CreateServiceOrderPayload {
     creation_mode: form.creationMode,
     // Sent only alongside the QR service — the backend rejects it otherwise.
     invitation_design_token:
-      form.requiresInvitationDesign && form.invitationDesignToken
+      needsInvitationDesignUpload(form) && form.invitationDesignToken
         ? form.invitationDesignToken
         : undefined,
     is_paid: form.isPaid ? 1 : 0,
@@ -357,7 +375,115 @@ export function buildCreatePayload(form: FormState): CreateServiceOrderPayload {
 }
 
 export function buildUpdatePayload(form: FormState): UpdateServiceOrderPayload {
-  return buildBasePayload(form);
+  return {
+    ...buildBasePayload(form),
+    creation_mode: form.creationMode,
+    // Only when the QR service is being added to an order that has no design.
+    invitation_design_token:
+      needsInvitationDesignUpload(form) && form.invitationDesignToken
+        ? form.invitationDesignToken
+        : undefined,
+  };
+}
+
+// ── Edit-mode hydration ───────────────────────────────────────────────────────
+
+/** Maps the addon rows on a saved item back to the `addon_ids` the API expects. */
+export function savedAddonIds(item: ApiServiceOrderDetailItem): number[] {
+  return (item.addons ?? [])
+    .map(a => a.addon_id ?? a.id)
+    .filter((id): id is number => typeof id === 'number');
+}
+
+/**
+ * Rebuilds the form value for one option from its saved rows. Employee options
+ * can have several rows (one per assignee); every other type has at most one.
+ */
+function savedOptionValue(type: string, rows: ApiServiceOrderDetailOption[]) {
+  const first = rows[0];
+  switch (type) {
+    case 'employee':
+      return {
+        selectedEmployeeIds: rows
+          .map(r => r.employee_id)
+          .filter((id): id is number => typeof id === 'number'),
+      };
+    case 'number':
+      return { value: first?.number_value != null ? Number(first.number_value) : '' };
+    case 'color':
+      // Colours round-trip as a hex string, which the API may return either on
+      // the joined value row or as raw text.
+      return { value: first?.value?.color_hex ?? first?.text_value ?? '' };
+    case 'list':
+      return { value: first?.service_option_value_id ?? first?.value?.id ?? '' };
+    default:
+      return { value: first?.text_value ?? '' };
+  }
+}
+
+/**
+ * Hydrates the item rows of an order being edited.
+ *
+ * `formStateFromDetail` can only fill in what the order detail itself carries.
+ * The option *definitions*, packages and addons live in the service catalogue,
+ * so they need a second round of fetches — without them the form would render
+ * an item with no options and no addon selection, and because update replaces
+ * `items[]` wholesale, saving would then wipe both on the server.
+ *
+ * A service that fails to load keeps its un-hydrated row rather than failing the
+ * whole screen; the caller surfaces `failed` so the UI can warn before saving.
+ */
+export async function hydrateOrderFormItems(
+  detail: ApiServiceOrderDetail,
+  token: string,
+  language: 'ar' | 'en',
+): Promise<{ items: FormServiceItem[]; failed: number }> {
+  const base = formStateFromDetail(detail).services;
+  let failed = 0;
+
+  const items = await Promise.all(
+    detail.items.map(async (item, idx) => {
+      const row = base[idx];
+      try {
+        const res = await getServiceById(item.service_id, token);
+        const data = res.data as any;
+
+        const saved = new Map<number, ApiServiceOrderDetailOption[]>();
+        for (const opt of item.options ?? []) {
+          const list = saved.get(opt.service_option_id);
+          if (list) list.push(opt);
+          else saved.set(opt.service_option_id, [opt]);
+        }
+
+        const options: FormServiceItemOption[] = (data.options ?? []).map((opt: any) => {
+          const choices = opt.labels || opt.values || [];
+          return {
+            service_option_id: opt.id,
+            type: opt.type,
+            name: (language === 'ar' ? opt.name_ar : opt.name_en) || opt.name,
+            is_required: opt.is_required,
+            values: choices,
+            value: '',
+            selectedEmployeeIds: [],
+            ...savedOptionValue(opt.type, saved.get(opt.id) ?? []),
+          };
+        });
+
+        return {
+          ...row,
+          options,
+          packages: (data.packages ?? []) as ServicePackage[],
+          addons: (data.addons ?? []) as ServiceAddon[],
+          selectedAddonIds: savedAddonIds(item),
+        };
+      } catch {
+        failed += 1;
+        return row;
+      }
+    })
+  );
+
+  return { items, failed };
 }
 
 /** Strips a leading `+` difference so `965` and `+965` compare equal. */
@@ -370,8 +496,9 @@ const normaliseCode = (code: string | null | undefined) =>
  */
 export function formStateFromDetail(detail: ApiServiceOrderDetail): FormState {
   return {
-    // Editing always shows the complete form, whichever way the order was made.
-    creationMode: 'full',
+    // Preserved so an update does not silently promote a quick order to full —
+    // the mode drives which fields the backend requires.
+    creationMode: detail.creation_mode === 'quick' ? 'quick' : 'full',
     services: detail.items.map(item => ({
       id: `server-${item.id}`,
       serverItemId: item.id,
@@ -393,7 +520,9 @@ export function formStateFromDetail(detail: ApiServiceOrderDetail): FormState {
       freelancerCountryCode: item.employee?.country_code ?? '',
       freelancerPhone: item.employee?.phone ?? '',
       selectedPackageId: item.service_package_id ?? undefined,
-      selectedAddonIds: [],
+      // The catalogue-backed fields are filled in by `hydrateOrderFormItems`;
+      // these are only the values the order detail carries on its own.
+      selectedAddonIds: savedAddonIds(item),
       packages: [],
       addons: [],
       guestsIncluded: item.guests_included ?? null,
@@ -423,9 +552,12 @@ export function formStateFromDetail(detail: ApiServiceOrderDetail): FormState {
     clientAltCountryCode: normaliseCode(detail.client?.alt_country_code),
     clientAltPhone: detail.client?.alt_phone ?? '',
     orderEmployeeIds: (detail.order_employees ?? []).map(e => e.id),
-    // Design upload is a create-time concern; editing goes through the
-    // invitation's own edit screen instead.
-    requiresInvitationDesign: false,
+    // Mirrored from the services by the form itself; seeded here so the first
+    // render of an existing QR order already knows.
+    requiresInvitationDesign: detail.invitation_id != null || detail.has_barcode_service === true,
+    // An order that already has an invitation has a design, so editing it never
+    // needs a fresh upload token — only adding QR for the first time does.
+    hasExistingInvitationDesign: detail.invitation_id != null,
     invitationDesignToken: '',
     invitationDesignPreviewUrl: '',
     invitationDesignExpiresAt: '',

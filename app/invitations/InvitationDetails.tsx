@@ -7,14 +7,17 @@ import {
   MoreHorizontal, ArrowLeft, ArrowRight, Edit2, Ticket, Users,
   Settings, ImageIcon, QrCode, UploadCloud, PieChart as PieChartIcon,
   BarChart3, Calendar, AlertCircle, Search, SortDesc, User, Loader2,
-  ChevronLeft, ChevronRight, ShieldOff
+  ChevronLeft, ChevronRight, ShieldOff, UserPlus, FileSpreadsheet, Trash2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ResponsiveContainer, Tooltip, Legend, BarChart, CartesianGrid, XAxis, YAxis, Bar } from 'recharts';
 import { ConfirmModal } from './ConfirmModal';
+import { GuestFormModal, type GuestFormValues } from './GuestFormModal';
+import { GuestImportModal } from './GuestImportModal';
 import {
   getInvitationById,
   getInvitationGuests,
+  deleteInvitationGuest,
   sendInvitation,
   isInvitationOverageError,
   type InvitationDetailData,
@@ -190,11 +193,10 @@ const StatCard = ({ title, value, icon: Icon, colorClass, subtitle }: any) => (
 interface InvitationDetailsProps {
   invitation: Invitation;
   onBack: () => void;
-  onNavigateToServiceOrder?: (serviceOrderId: string) => void;
   onEdit?: (invitation: Invitation) => void;
 }
 
-export function InvitationDetails({ invitation, onBack, onNavigateToServiceOrder, onEdit }: InvitationDetailsProps) {
+export function InvitationDetails({ invitation, onBack, onEdit }: InvitationDetailsProps) {
   const { t, dir } = useLanguage();
   const token = getToken() ?? '';
 
@@ -213,6 +215,12 @@ export function InvitationDetails({ invitation, onBack, onNavigateToServiceOrder
 
   const [detail, setDetail] = useState<InvitationDetailData | null>(null);
   const [detailLoading, setDetailLoading] = useState(true);
+
+  // Guest add / edit / import / delete
+  const [guestFormOpen, setGuestFormOpen] = useState(false);
+  const [guestBeingEdited, setGuestBeingEdited] = useState<GuestFormValues | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
+  const [guestToDelete, setGuestToDelete] = useState<InvitationGuest | null>(null);
 
   const [guests, setGuests] = useState<InvitationGuest[]>([]);
   const [guestLoading, setGuestLoading] = useState(false);
@@ -280,22 +288,15 @@ export function InvitationDetails({ invitation, onBack, onNavigateToServiceOrder
   const fetchGuests = useCallback(async () => {
     if (!token) return;
 
-    // Prefer the service order; fall back to event_id only for legacy invitations.
-    const serviceOrderId = detail?.service_order_id ?? Number(invitation.serviceOrderId) ?? undefined;
-    const legacyEventId = detail?.event_id;
-    if (!serviceOrderId && !legacyEventId) return;
-
     setGuestLoading(true);
     try {
       const apiStatus = guestStatusFilter === 'all' ? undefined : (guestStatusFilter === 'declined' ? 'rejected' : guestStatusFilter);
-      const res = await getInvitationGuests({
+      // Guests hang off the invitation itself — no order or event id is sent.
+      const res = await getInvitationGuests(Number(invitation.id), {
         page: guestPage,
         per_page: 15,
         keyword: debouncedGuestSearch || undefined,
         status: apiStatus,
-        ...(serviceOrderId
-          ? { service_order_id: serviceOrderId }
-          : { event_id: legacyEventId }),
       }, token);
 
       const mapped = res.data.items.map((g) => ({
@@ -313,7 +314,25 @@ export function InvitationDetails({ invitation, onBack, onNavigateToServiceOrder
     } finally {
       setGuestLoading(false);
     }
-  }, [token, detail?.service_order_id, detail?.event_id, invitation.serviceOrderId, guestPage, debouncedGuestSearch, guestStatusFilter]);
+  }, [token, invitation.id, guestPage, debouncedGuestSearch, guestStatusFilter]);
+
+  const handleDeleteGuest = async () => {
+    if (!guestToDelete || !token) return;
+    const deleteToast = toast.loading(t('deletingGuest'));
+    try {
+      await deleteInvitationGuest(Number(invitation.id), Number(guestToDelete.id), token);
+      toast.dismiss(deleteToast);
+      toast.success(t('guestDeleted'));
+      // Refetch rather than splice — the guest count and pagination both move.
+      fetchGuests();
+      refreshDetails();
+    } catch (err) {
+      toast.dismiss(deleteToast);
+      toast.error((err as Error).message || t('guestDeleteFailed'));
+    } finally {
+      setGuestToDelete(null);
+    }
+  };
 
   useEffect(() => {
     if (activeTab === 'guests') {
@@ -382,7 +401,9 @@ export function InvitationDetails({ invitation, onBack, onNavigateToServiceOrder
             </div>
           </div>
 
-          {!isPastEvent && (
+          {/* The API freezes an invitation once it is sent, so follow its own
+              capability flag rather than inferring from the event date. */}
+          {(detail ? detail.actions.can_be_edited : !isPastEvent) && (
             <button
               onClick={() => onEdit?.(invitation)}
               className="p-2 sm:p-2 bg-white text-yellow-500 border border-transparent hover:bg-yellow-50 hover:border-yellow-200 hover:text-yellow-600 hover:-translate-y-[2px] hover:scale-[1.03] hover:shadow-md active:scale-95 active:translate-y-0 rounded-xl transition-all duration-200 ease-out flex items-center justify-center cursor-pointer w-11 h-11 shrink-0"
@@ -627,17 +648,48 @@ export function InvitationDetails({ invitation, onBack, onNavigateToServiceOrder
                       ? 'No guests have been added for this service order yet.'
                       : 'لم تتم إضافة أي ضيوف لطلب الخدمة هذا بعد.'}
                   </p>
-                  {invitation.serviceOrderId && (
+                  <div className="flex flex-wrap items-center justify-center gap-3">
                     <button
-                      onClick={() => onNavigateToServiceOrder?.(invitation.serviceOrderId)}
-                      className="px-6 py-3 bg-primary text-white rounded-xl font-medium shadow-md shadow-primary/20 hover:bg-primary-dark transition-all active:scale-95 cursor-pointer"
+                      onClick={() => { setGuestBeingEdited(null); setGuestFormOpen(true); }}
+                      className="flex items-center gap-2 px-6 py-3 bg-primary text-white rounded-xl font-medium shadow-md shadow-primary/20 hover:bg-primary-dark transition-all active:scale-95 cursor-pointer"
                     >
-                      {dir === 'ltr' ? 'Go to Service Order' : 'الذهاب لطلب الخدمة'}
+                      <UserPlus className="w-4 h-4" />
+                      {t('addGuest')}
                     </button>
-                  )}
+                    <button
+                      onClick={() => setImportOpen(true)}
+                      className="flex items-center gap-2 px-6 py-3 bg-white text-secondary/70 border border-secondary/15 rounded-xl font-medium hover:bg-white/80 hover:text-secondary transition-all active:scale-95 cursor-pointer"
+                    >
+                      <FileSpreadsheet className="w-4 h-4" />
+                      {t('uploadSheet')}
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <div className="glass-panel p-4 sm:p-6 rounded-3xl">
+                  {/* Guest actions — always available once the tab is populated */}
+                  <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                    <h3 className="text-sm font-bold text-secondary">
+                      {t('guestList')}
+                    </h3>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setImportOpen(true)}
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white text-secondary/70 border border-secondary/15 text-xs font-medium hover:text-secondary hover:bg-white/80 transition-colors cursor-pointer"
+                      >
+                        <FileSpreadsheet className="w-3.5 h-3.5" />
+                        {t('uploadSheet')}
+                      </button>
+                      <button
+                        onClick={() => { setGuestBeingEdited(null); setGuestFormOpen(true); }}
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-primary text-white text-xs font-medium hover:bg-primary-dark transition-colors cursor-pointer shadow-sm shadow-primary/20"
+                      >
+                        <UserPlus className="w-3.5 h-3.5" />
+                        {t('addGuest')}
+                      </button>
+                    </div>
+                  </div>
+
                   <div className="flex flex-col sm:flex-row gap-4 mb-6">
                     <div className="relative w-full sm:w-[80%]">
                       <Search className={cn("absolute top-1/2 -translate-y-1/2 w-4 h-4 text-secondary/40", dir === 'ltr' ? 'left-4' : 'right-4')} />
@@ -719,6 +771,32 @@ export function InvitationDetails({ invitation, onBack, onNavigateToServiceOrder
                                   <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51a12.8 12.8 0 0 0-.57-.01c-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413Z" />
                                 </svg>
                               </button>
+                              <button
+                                title={t('edit')}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setGuestBeingEdited({
+                                    id: Number(guest.id),
+                                    name: guest.name,
+                                    // The list carries only a combined number —
+                                    // the modal splits it on the dial code.
+                                    countryCode: '',
+                                    phone: guest.phone ?? '',
+                                    haveWhatsapp: guest.have_whatsapp ?? true,
+                                  });
+                                  setGuestFormOpen(true);
+                                }}
+                                className="p-2 bg-white text-yellow-500 border border-transparent hover:bg-yellow-50 hover:border-yellow-200 hover:text-yellow-600 hover:-translate-y-[2px] hover:scale-[1.03] hover:shadow-md active:scale-95 active:translate-y-0 rounded-xl transition-all duration-200 ease-out flex items-center justify-center cursor-pointer"
+                              >
+                                <Edit2 className="w-4 h-4" />
+                              </button>
+                              <button
+                                title={t('delete')}
+                                onClick={(e) => { e.stopPropagation(); setGuestToDelete(guest); }}
+                                className="p-2 bg-white text-red-500 border border-transparent hover:bg-red-50 hover:border-red-200 hover:text-red-600 hover:-translate-y-[2px] hover:scale-[1.03] hover:shadow-md active:scale-95 active:translate-y-0 rounded-xl transition-all duration-200 ease-out flex items-center justify-center cursor-pointer"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
                             </div>
                           </motion.div>
                         );
@@ -760,6 +838,33 @@ export function InvitationDetails({ invitation, onBack, onNavigateToServiceOrder
           )}
         </AnimatePresence>
       </div>
+
+      {guestFormOpen && (
+        <GuestFormModal
+          invitationId={Number(invitation.id)}
+          token={token}
+          guest={guestBeingEdited}
+          onClose={() => { setGuestFormOpen(false); setGuestBeingEdited(null); }}
+          onSaved={() => { fetchGuests(); refreshDetails(); }}
+        />
+      )}
+
+      {importOpen && (
+        <GuestImportModal
+          invitationId={Number(invitation.id)}
+          token={token}
+          onClose={() => setImportOpen(false)}
+          onImported={() => { fetchGuests(); refreshDetails(); }}
+        />
+      )}
+
+      <ConfirmModal
+        isOpen={!!guestToDelete}
+        onClose={() => setGuestToDelete(null)}
+        onConfirm={handleDeleteGuest}
+        title={t('deleteGuestTitle')}
+        message={t('deleteGuestMessage')}
+      />
 
       <ConfirmModal
         isOpen={showSendConfirm}

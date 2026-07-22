@@ -3,7 +3,7 @@
 import React, { useState, Suspense, useMemo } from 'react';
 import { useLanguage } from '@/lib/i18n';
 import { motion, AnimatePresence } from 'motion/react';
-import { LayoutDashboard, UserCog, Briefcase, MailPlus, Settings, Globe, Menu, Bell, LogOut, Loader2, Wallet, ShoppingBag, Layers, SlidersHorizontal, UserPen, ShieldCheck, } from 'lucide-react';
+import { LayoutDashboard, UserCog, Briefcase, MailPlus, Settings, Globe, Menu, Bell, LogOut, Loader2, Wallet, ShoppingBag, Layers, SlidersHorizontal, UserPen, ShieldCheck, CalendarDays, } from 'lucide-react';
 import logo from "@/public/logo.webp";
 import { cn } from '@/lib/utils';
 import Image from 'next/image';
@@ -20,6 +20,8 @@ const navItems = [
   { icon: ShieldCheck, id: 'roles', permission: 'roles' },
   // Service orders are the central entity — clients/events are embedded in them
   { icon: ShoppingBag, id: 'serviceOrders', permission: 'service-orders' },
+  // Day view over the same service orders — gated on the same permission
+  { icon: CalendarDays, id: 'calendar', permission: 'service-orders' },
   { icon: MailPlus, id: 'invitations', permission: 'invitations' },
   { icon: Layers, id: 'services', permission: 'services' },
   { icon: SlidersHorizontal, id: 'serviceOptions', permission: 'service-options' },
@@ -202,10 +204,7 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
 
         {/* Main Content */}
         <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden relative">
-          {/* Decorative background elements */}
-          <div className="absolute top-0 right-0 w-[800px] h-[800px] bg-primary/5 rounded-full blur-[120px] -z-10 pointer-events-none mix-blend-multiply" />
-          <div className="absolute bottom-[-20%] left-[-10%] w-[600px] h-[600px] bg-accent/20 rounded-full blur-[100px] -z-10 pointer-events-none mix-blend-multiply" />
-
+       
           {/* Header */}
           <header className="h-20 lg:h-24 px-6 lg:px-10 flex items-center justify-between shrink-0 z-10">
             <div className="flex items-center gap-4">

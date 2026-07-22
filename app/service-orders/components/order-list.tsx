@@ -4,10 +4,11 @@ import { motion, AnimatePresence } from 'motion/react';
 import {
   Plus, Search, Trash2, Ban, ChevronLeft, ChevronRight,
   Calendar, User, Phone, Briefcase, ClipboardList, Loader2, Eye,
-  AlertTriangle, ShieldOff
+  AlertTriangle, ShieldOff, MailPlus
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Image from 'next/image';
+import Link from 'next/link';
 import {
   ApiServiceOrderItem, ServiceOrderStatus, parseAmount,
   updateServiceOrderPaymentStatus,
@@ -363,6 +364,16 @@ export function OrderList({
                             className="p-2 rounded-lg hover:bg-emerald-50 transition-colors cursor-pointer flex items-center justify-center">
                             <Image src="https://raiyansoft.com/wp-content/uploads/2026/05/whatsapp.png" alt="WA" width={15} height={15} referrerPolicy="no-referrer" />
                           </button>
+                        )}
+                        {/* Barcode/QR orders carry a backend-created invitation — jump straight to it. */}
+                        {order.has_barcode_service && order.invitation_id && (
+                          <Link
+                            href={`/invitations/${order.invitation_id}`}
+                            title={language === 'ar' ? 'عرض الدعوة' : 'View invitation'}
+                            className="p-2 bg-white text-violet-500 hover:bg-violet-50 border border-transparent hover:border-violet-200 rounded-lg transition-all cursor-pointer hover:-translate-y-px flex items-center justify-center"
+                          >
+                            <MailPlus className="w-3.5 h-3.5" />
+                          </Link>
                         )}
                         <button title={language === 'ar' ? 'عرض التفاصيل' : 'View Details'} onClick={() => onViewDetail(order)}
                           className="p-2 bg-white text-primary hover:bg-primary/10 border border-transparent hover:border-primary/20 rounded-lg transition-all cursor-pointer hover:-translate-y-px">

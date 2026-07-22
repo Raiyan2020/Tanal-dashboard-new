@@ -617,27 +617,39 @@ export async function getInvitationById(
   return apiRequest<InvitationDetailData>(`/admin/invitations/${id}`, { token });
 }
 
+/**
+ * `service_order_id` is deliberately absent — an invitation cannot be moved to a
+ * different order. Guests and send-status have their own endpoints too, so this
+ * payload only ever carries invitation metadata plus the design image.
+ */
 export interface UpdateInvitationPayload {
-  service_order_id: string;
+  name?: string;
   logic_type: 'strict_action' | 'default_accept' | 'view_only';
+  /** `YYYY-MM-DD` — must be sent together with `deadline_time`. */
   deadline_date: string;
+  /** `HH:mm` — must be sent together with `deadline_date`. */
   deadline_time: string;
-  image?: File | null;
+  design?: File | null;
 }
 
-/** POST /admin/invitations/:id?_method=put */
+/**
+ * POST /admin/invitations/:id?_method=put — spoofed because the design is a
+ * file upload, so the body has to be multipart.
+ */
 export async function updateInvitation(
   id: number,
   payload: UpdateInvitationPayload,
   token: string
 ): Promise<ApiResponse<CreateInvitationResponse>> {
   const formData = new FormData();
-  formData.append('service_order_id', payload.service_order_id);
+  if (payload.name) {
+    formData.append('name', payload.name);
+  }
   formData.append('logic_type', payload.logic_type);
   formData.append('deadline_date', payload.deadline_date);
   formData.append('deadline_time', payload.deadline_time);
-  if (payload.image) {
-    formData.append('image', payload.image);
+  if (payload.design) {
+    formData.append('design', payload.design);
   }
   return apiRequest<CreateInvitationResponse>(`/admin/invitations/${id}?_method=put`, {
     method: 'POST',
@@ -657,6 +669,11 @@ export async function deleteInvitation(
   });
 }
 
+/*
+ * Guests are addressed through their invitation: the id lives in the path, so
+ * no `service_order_id` / `event_id` is ever sent alongside them.
+ */
+
 export interface GetInvitationGuestsParams {
   keyword?: string;
   name?: string;
@@ -664,13 +681,11 @@ export interface GetInvitationGuestsParams {
   status?: string;
   page?: number;
   per_page?: number;
-  service_order_id?: number;
-  /** Legacy only — for invitations predating the service-orders migration. */
-  event_id?: number;
 }
 
-/** GET /admin/invitations/guests */
+/** GET /admin/invitations/:invitationId/guests */
 export async function getInvitationGuests(
+  invitationId: number,
   params: GetInvitationGuestsParams,
   token: string
 ): Promise<ApiResponse<PaginatedItems<InvitationGuest>>> {
@@ -681,10 +696,101 @@ export async function getInvitationGuests(
   if (params.status) query.set('status', params.status);
   if (params.page !== undefined) query.set('page', String(params.page));
   if (params.per_page !== undefined) query.set('per_page', String(params.per_page));
-  if (params.service_order_id !== undefined) query.set('service_order_id', String(params.service_order_id));
-  if (params.event_id !== undefined) query.set('event_id', String(params.event_id));
   const qs = query.toString();
-  return apiRequest<PaginatedItems<InvitationGuest>>(`/admin/invitations/guests${qs ? `?${qs}` : ''}`, { token });
+  return apiRequest<PaginatedItems<InvitationGuest>>(
+    `/admin/invitations/${invitationId}/guests${qs ? `?${qs}` : ''}`,
+    { token }
+  );
+}
+
+export interface InvitationGuestPayload {
+  name: string;
+  country_code: string;
+  phone: string;
+  have_whatsapp?: boolean;
+}
+
+const guestFormData = (payload: InvitationGuestPayload) => {
+  const fd = new FormData();
+  fd.append('name', payload.name);
+  fd.append('country_code', payload.country_code);
+  fd.append('phone', payload.phone);
+  fd.append('have_whatsapp', payload.have_whatsapp ? '1' : '0');
+  return fd;
+};
+
+/** POST /admin/invitations/:invitationId/guests */
+export async function createInvitationGuest(
+  invitationId: number,
+  payload: InvitationGuestPayload,
+  token: string
+): Promise<ApiResponse<InvitationGuest>> {
+  return apiRequest<InvitationGuest>(`/admin/invitations/${invitationId}/guests`, {
+    method: 'POST',
+    body: guestFormData(payload),
+    token,
+  });
+}
+
+/** GET /admin/invitations/:invitationId/guests/:guestId */
+export async function getInvitationGuest(
+  invitationId: number,
+  guestId: number,
+  token: string
+): Promise<ApiResponse<InvitationGuest>> {
+  return apiRequest<InvitationGuest>(
+    `/admin/invitations/${invitationId}/guests/${guestId}`,
+    { token }
+  );
+}
+
+/** POST /admin/invitations/:invitationId/guests/:guestId?_method=put */
+export async function updateInvitationGuest(
+  invitationId: number,
+  guestId: number,
+  payload: InvitationGuestPayload,
+  token: string
+): Promise<ApiResponse<InvitationGuest>> {
+  return apiRequest<InvitationGuest>(
+    `/admin/invitations/${invitationId}/guests/${guestId}?_method=put`,
+    { method: 'POST', body: guestFormData(payload), token }
+  );
+}
+
+/** DELETE /admin/invitations/:invitationId/guests/:guestId */
+export async function deleteInvitationGuest(
+  invitationId: number,
+  guestId: number,
+  token: string
+): Promise<ApiResponse<unknown>> {
+  return apiRequest(
+    `/admin/invitations/${invitationId}/guests/${guestId}`,
+    { method: 'DELETE', token }
+  );
+}
+
+/**
+ * Shape of a partially-failed import. The backend contract for this is not yet
+ * confirmed, so the fields are all optional and the UI degrades to `msg`.
+ */
+export interface InvitationGuestImportResult {
+  imported_count?: number;
+  failed_count?: number;
+  errors?: Array<{ row?: number; message?: string }>;
+}
+
+/** POST /admin/invitations/:invitationId/guests/import — multipart */
+export async function importInvitationGuests(
+  invitationId: number,
+  file: File,
+  token: string
+): Promise<ApiResponse<InvitationGuestImportResult>> {
+  const fd = new FormData();
+  fd.append('file', file);
+  return apiRequest<InvitationGuestImportResult>(
+    `/admin/invitations/${invitationId}/guests/import`,
+    { method: 'POST', body: fd, token }
+  );
 }
 
 /** Payload of the 422 returned when the guest count exceeds the package allowance. */
@@ -1323,7 +1429,11 @@ export interface ApiServiceOrderItem {
   currency: string;
   statuses: ServiceOrderStatus[];
   has_pending_second_payment: boolean;
+  /** True when the order includes the `barcode_invitations` system service. */
+  has_barcode_service: boolean;
   is_barcode_suspended: boolean;
+  /** Set only when `has_barcode_service` — links straight to /invitations/:id. */
+  invitation_id: number | null;
   whatsapp_url: string | null;
 }
 
@@ -1358,6 +1468,8 @@ export interface GetServiceOrdersParams {
   client_id?: number;
   order_by?: string;
   order?: 'ASC' | 'DESC';
+  /** `YYYY-MM-DD` — returns only orders whose event_date falls on that day. */
+  date?: string;
 }
 
 /** GET /admin/service-orders */
@@ -1373,6 +1485,7 @@ export async function getAdminServiceOrders(
   if (params?.client_id !== undefined) query.set('filters[client_id]', String(params.client_id));
   if (params?.order_by !== undefined) query.set('filters[order_by]', params.order_by);
   if (params?.order !== undefined) query.set('filters[order]', params.order);
+  if (params?.date) query.set('filters[date]', params.date);
 
   const qs = query.toString();
   return apiRequest<ServiceOrdersResponse>(
@@ -1448,8 +1561,19 @@ export interface ApiServiceOrderDetailItem {
   notes: string | null;
   sort: number;
   employee: ApiServiceOrderItemEmployee | null;
-  addons?: unknown[];
+  addons?: ApiServiceOrderDetailAddon[];
   options: ApiServiceOrderDetailOption[];
+}
+
+/**
+ * Addon saved against an order item. The backend has shipped both shapes, so
+ * `addon_id` is preferred and `id` is the fallback when mapping back to input.
+ */
+export interface ApiServiceOrderDetailAddon {
+  id: number;
+  addon_id?: number;
+  name?: string;
+  price?: ApiAmount;
 }
 
 export interface ApiServiceOrderDetail {
@@ -1479,6 +1603,8 @@ export interface ApiServiceOrderDetail {
   cancelled_by: number | null;
   /** How the order was created. Absent on orders predating the two-mode flow. */
   creation_mode?: 'full' | 'quick';
+  /** True while the order still contains the `barcode_invitations` system service. */
+  has_barcode_service?: boolean;
   /**
    * Set when the order includes the `barcode_invitations` system service — the
    * backend creates the invitation as part of the create request.
@@ -1658,7 +1784,20 @@ export interface CreateServiceOrderPayload extends ServiceOrderBasePayload {
   first_installment_amount?: number;
 }
 
-export type UpdateServiceOrderPayload = ServiceOrderBasePayload;
+/**
+ * Update accepts everything create does except the payment fields, which move
+ * through `updateServiceOrderPaymentStatus`. `items[]` is a **full replace** —
+ * always send the complete array you want to end up with.
+ */
+export interface UpdateServiceOrderPayload extends ServiceOrderBasePayload {
+  /** Omit to keep the order's existing mode. */
+  creation_mode?: 'full' | 'quick';
+  /**
+   * Required only when the QR service is being added to an order that has no
+   * design yet. Must be omitted when the order already has one.
+   */
+  invitation_design_token?: string;
+}
 
 /** POST /admin/service-orders — body sent as JSON */
 export async function createAdminServiceOrder(
@@ -1673,16 +1812,16 @@ export async function createAdminServiceOrder(
 }
 
 /**
- * PUT /admin/service-orders/:id — sent as POST + `?_method=put` to match the
- * method-spoofing convention used elsewhere in this client.
+ * PUT /admin/service-orders/:id — a real PUT, not the `?_method=put` spoof used
+ * for the multipart endpoints, because this body is plain JSON.
  */
 export async function updateAdminServiceOrder(
   id: number,
   payload: UpdateServiceOrderPayload,
   token: string
 ): Promise<ApiResponse<ApiServiceOrderDetail>> {
-  return apiRequest<ApiServiceOrderDetail>(`/admin/service-orders/${id}?_method=put`, {
-    method: 'POST',
+  return apiRequest<ApiServiceOrderDetail>(`/admin/service-orders/${id}`, {
+    method: 'PUT',
     body: payload as any,
     token,
   });

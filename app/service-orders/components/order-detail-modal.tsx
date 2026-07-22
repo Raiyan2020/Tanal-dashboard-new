@@ -423,7 +423,7 @@ export function OrderDetailModal({
                   {/* ── Linked invitation ── */}
                   {effectiveOrder.invitation_id && (
                     <Link
-                      href={`/invitations?invitationId=${effectiveOrder.invitation_id}`}
+                      href={`/invitations/${effectiveOrder.invitation_id}`}
                       className="flex items-center gap-2.5 p-3 rounded-2xl bg-secondary/5 hover:bg-secondary/10 border border-secondary/10 transition-colors"
                     >
                       <MailPlus className="w-4 h-4 text-primary shrink-0" />

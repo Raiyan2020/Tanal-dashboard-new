@@ -10,10 +10,10 @@ import { cn } from '@/lib/utils';
 import { useLanguage } from '@/lib/i18n';
 import { Invitation } from './InvitationsClient';
 import {
-  getAdminServiceOrders,
+  getAdminServiceOrderById,
   getInvitationById,
   updateInvitation,
-  type ApiServiceOrderItem,
+  type ApiServiceOrderDetail,
 } from '@/lib/api';
 import { getToken } from '@/lib/auth';
 import { toast } from 'sonner';
@@ -32,8 +32,18 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 
+/** `"18:00"` → minutes since midnight, or null when unparseable. */
+function toMinutes(time: string): number | null {
+  const m = /^(\d{1,2}):(\d{2})/.exec(time);
+  return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+}
+
+/**
+ * `service_order_id` is intentionally absent — an invitation belongs to the
+ * order that created it and cannot be reassigned. Guests and send-status are
+ * managed from their own endpoints.
+ */
 interface FormValues {
-  serviceOrderId: string;
   logic: 'strict' | 'default_accept' | 'view_only';
   deadlineDate: string;
   deadlineTime: string;
@@ -55,7 +65,6 @@ export function InvitationEditForm({ invitation, onBack, onSave }: InvitationEdi
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const schema = React.useMemo(() => z.object({
-    serviceOrderId: z.string().min(1, { message: t('chooseEvent') }),
     logic: z.enum(['strict', 'default_accept', 'view_only']),
     deadlineDate: z.string().min(1, { message: t('pleaseSelectDeadline') }),
     deadlineTime: z.string().min(1, { message: t('pleaseSelectDeadlineTime') }),
@@ -65,9 +74,12 @@ export function InvitationEditForm({ invitation, onBack, onSave }: InvitationEdi
   const [fileName, setFileName] = useState('');
   const [fileError, setFileError] = useState<string | null>(null);
 
-  const [orders, setOrders] = useState<ApiServiceOrderItem[]>([]);
-  const [ordersLoading, setOrdersLoading] = useState(false);
+  // The order this invitation belongs to — read-only, but its event start is
+  // the ceiling for the deadline.
+  const [order, setOrder] = useState<ApiServiceOrderDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  /** From `actions.can_be_edited` — false once the invitation has been sent. */
+  const [canEdit, setCanEdit] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
   // Date picker states
@@ -78,7 +90,6 @@ export function InvitationEditForm({ invitation, onBack, onSave }: InvitationEdi
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
-      serviceOrderId: invitation.serviceOrderId || '',
       logic: 'strict',
       deadlineDate: '',
       deadlineTime: '',
@@ -87,9 +98,8 @@ export function InvitationEditForm({ invitation, onBack, onSave }: InvitationEdi
 
   // Watch deadlineDate value to display it and feed the calendar
   const deadlineDateValue = form.watch('deadlineDate');
-  const selectedOrderId = form.watch('serviceOrderId');
-  const selectedOrder = orders.find(o => String(o.id) === selectedOrderId);
-  const eventDate = selectedOrder?.event_date ?? undefined;
+  const eventDate = order?.event_date ?? undefined;
+  const eventStartMinutes = order?.event_time ? toMinutes(order.event_time) : null;
 
   // Close datepicker when clicking outside
   useEffect(() => {
@@ -127,15 +137,6 @@ export function InvitationEditForm({ invitation, onBack, onSave }: InvitationEdi
 
   const selectedDate = deadlineDateValue ? new Date(deadlineDateValue) : undefined;
 
-  // Fetch service orders for the dropdown — invitations attach to an order now
-  useEffect(() => {
-    if (!token) return;
-    setOrdersLoading(true);
-    getAdminServiceOrders(token, { per_page: 100 })
-      .then(res => setOrders(res.data.items))
-      .catch(err => toast.error((err as Error).message || 'فشل تحميل قائمة الطلبات'))
-      .finally(() => setOrdersLoading(false));
-  }, [token]);
 
   // Parse Jun 20, 2026 into YYYY-MM-DD
   const parseApiDate = (dateStr: string) => {
@@ -151,30 +152,55 @@ export function InvitationEditForm({ invitation, onBack, onSave }: InvitationEdi
     }
   };
 
-  // Fetch full details if editing
+  // Load the invitation, then the order it belongs to (for the deadline ceiling).
   useEffect(() => {
     if (!token || !invitation.id) return;
     setDetailLoading(true);
     getInvitationById(Number(invitation.id), token)
-      .then(res => {
+      .then(async res => {
         const details = res.data.details;
+        setCanEdit(res.data.actions?.can_be_edited !== false);
         form.reset({
-          serviceOrderId: res.data.service_order_id != null ? String(res.data.service_order_id) : '',
           logic: details.logic_type === 'strict_action' ? 'strict' : details.logic_type,
           deadlineDate: parseApiDate(details.deadline_date),
           deadlineTime: details.deadline_time || '',
         });
+        if (res.data.service_order_id != null) {
+          try {
+            const orderRes = await getAdminServiceOrderById(res.data.service_order_id, token);
+            setOrder(orderRes.data);
+          } catch {
+            // Non-fatal: the deadline ceiling falls back to the server's own check.
+          }
+        }
       })
       .catch(err => toast.error((err as Error).message || 'فشل تحميل تفاصيل الدعوة'))
       .finally(() => setDetailLoading(false));
   }, [token, invitation.id]);
 
   const onSubmit = async (values: FormValues) => {
-    if (submitting) return;
+    if (submitting || !canEdit) return;
     setFileError(null);
 
+    // The deadline must fall before the event actually starts — the day-level
+    // check in the picker cannot catch a same-day deadline set after start.
+    if (order?.event_date && eventStartMinutes != null) {
+      const eventDay = parseApiDate(order.event_date);
+      const deadlineMinutes = toMinutes(values.deadlineTime);
+      if (
+        eventDay && values.deadlineDate === eventDay
+        && deadlineMinutes != null && deadlineMinutes >= eventStartMinutes
+      ) {
+        form.setError('deadlineTime', {
+          message: dir === 'ltr'
+            ? 'The deadline must be before the event starts'
+            : 'يجب أن يكون الموعد النهائي قبل بداية المناسبة',
+        });
+        return;
+      }
+    }
+
     const mappedLogic = values.logic === 'strict' ? 'strict_action' : values.logic;
-    const order = orders.find(o => String(o.id) === values.serviceOrderId);
 
     setSubmitting(true);
     const formToast = toast.loading(t('savingChanges'));
@@ -183,11 +209,10 @@ export function InvitationEditForm({ invitation, onBack, onSave }: InvitationEdi
       const res = await updateInvitation(
         Number(invitation.id),
         {
-          service_order_id: values.serviceOrderId,
           logic_type: mappedLogic,
           deadline_date: values.deadlineDate,
           deadline_time: values.deadlineTime,
-          image: selectedFile,
+          design: selectedFile,
         },
         token
       );
@@ -197,9 +222,8 @@ export function InvitationEditForm({ invitation, onBack, onSave }: InvitationEdi
       onSave({
         ...invitation,
         id: invitation.id,
-        serviceOrderId: values.serviceOrderId,
         serviceOrderReference: order?.reference_label || invitation.serviceOrderReference,
-        clientName: order?.client_name ?? invitation.clientName,
+        clientName: order?.client?.name ?? invitation.clientName,
         executionDate: order?.event_date ?? invitation.executionDate,
         deadlineDate: values.deadlineDate,
         guestsNumber: res.data?.guest_count ?? invitation.guestsNumber,
@@ -214,29 +238,74 @@ export function InvitationEditForm({ invitation, onBack, onSave }: InvitationEdi
     }
   };
 
+  const MAX_DESIGN_BYTES = 10 * 1024 * 1024;
+
+  /** Mirrors the backend's `image/*` + 10MB rule so a bad file fails locally. */
+  const acceptFile = (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      setFileError(dir === 'ltr' ? 'The design must be an image' : 'يجب أن يكون التصميم صورة');
+      return;
+    }
+    if (file.size > MAX_DESIGN_BYTES) {
+      setFileError(dir === 'ltr' ? 'Maximum size is 10MB' : 'أقصى حجم 10 ميجابايت');
+      return;
+    }
+    setSelectedFile(file);
+    setFileName(file.name);
+    setFileError(null);
+  };
+
   const handleFileDrop = (e: React.DragEvent) => {
     e.preventDefault();
-    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      const file = e.dataTransfer.files[0];
-      setSelectedFile(file);
-      setFileName(file.name);
-      setFileError(null);
-    }
+    const file = e.dataTransfer.files?.[0];
+    if (file) acceptFile(file);
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      const file = e.target.files[0];
-      setSelectedFile(file);
-      setFileName(file.name);
-      setFileError(null);
-    }
+    const file = e.target.files?.[0];
+    if (file) acceptFile(file);
   };
 
   if (detailLoading) {
     return (
       <div className="flex justify-center items-center py-32">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  // A sent invitation is frozen server-side — showing the form would only lead
+  // to a 422 after the admin has retyped everything.
+  if (!canEdit) {
+    return (
+      <div className="space-y-6 pb-10 w-full text-start">
+        <button
+          onClick={onBack}
+          className="flex items-center gap-2 text-secondary/60 hover:text-secondary transition-colors cursor-pointer group"
+        >
+          {dir === 'ltr' ? (
+            <ChevronLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
+          ) : (
+            <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+          )}
+          <span className="font-medium">{t('back' as any) || (dir === 'ltr' ? 'Back' : 'الرجوع')}</span>
+        </button>
+
+        <div className="glass-panel p-8 rounded-[2rem] border border-secondary/5 w-full max-w-3xl mx-auto flex flex-col items-center gap-4 text-center">
+          <div className="w-14 h-14 rounded-2xl bg-amber-100 text-amber-600 flex items-center justify-center">
+            <Ticket className="w-7 h-7" />
+          </div>
+          <div>
+            <p className="text-base font-medium text-secondary">
+              {dir === 'ltr' ? 'This invitation can no longer be edited' : 'لا يمكن تعديل هذه الدعوة'}
+            </p>
+            <p className="text-sm text-secondary/60 mt-1">
+              {dir === 'ltr'
+                ? 'It has already been sent to the guests.'
+                : 'تم إرسالها بالفعل إلى الضيوف.'}
+            </p>
+          </div>
+        </div>
       </div>
     );
   }
@@ -270,45 +339,23 @@ export function InvitationEditForm({ invitation, onBack, onSave }: InvitationEdi
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
 
-            {/* Service order dropdown */}
-            <FormField
-              control={form.control}
-              name="serviceOrderId"
-              render={({ field }) => (
-                <FormItem className="space-y-1.5">
-                  <FormLabel className="text-sm font-medium text-secondary/80 ml-1 flex items-center gap-2 cursor-pointer">
-                    <Ticket className="w-4 h-4 text-secondary/50" />
-                    {dir === 'ltr' ? 'Select Service Order' : 'اختر طلب الخدمة'} <span className="text-red-500">*</span>
-                  </FormLabel>
-                  <div className="relative">
-                    <FormControl>
-                      <select
-                        {...field}
-                        className="w-full bg-white/50 border border-secondary/20 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-all text-secondary appearance-none font-medium cursor-pointer"
-                        disabled={ordersLoading}
-                      >
-                        <option value="" disabled>
-                          {ordersLoading
-                            ? (dir === 'ltr' ? 'Loading orders...' : 'جاري تحميل الطلبات...')
-                            : (dir === 'ltr' ? 'Choose a service order...' : 'اختر طلب خدمة...')}
-                        </option>
-                        {orders.map(o => (
-                          <option key={o.id} value={o.id}>
-                            {o.reference_label}
-                            {o.client_name ? ` — ${o.client_name}` : ''}
-                            {o.event_date ? ` (${o.event_date})` : ''}
-                          </option>
-                        ))}
-                      </select>
-                    </FormControl>
-                    <div className="absolute inset-y-0 end-4 flex items-center pointer-events-none text-secondary/40">
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>
-                    </div>
-                  </div>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            {/* Linked service order — fixed for the life of the invitation */}
+            <div className="space-y-1.5">
+              <span className="text-sm font-medium text-secondary/80 ml-1 flex items-center gap-2">
+                <Ticket className="w-4 h-4 text-secondary/50" />
+                {dir === 'ltr' ? 'Service Order' : 'طلب الخدمة'}
+              </span>
+              <div className="w-full bg-secondary/5 border border-secondary/10 rounded-xl px-4 py-3 text-secondary font-medium">
+                {order?.reference_label || invitation.serviceOrderReference || '—'}
+                {order?.client?.name ? ` — ${order.client.name}` : ''}
+                {order?.event_date ? ` (${order.event_date})` : ''}
+              </div>
+              <p className="text-xs text-secondary/50 ml-1">
+                {dir === 'ltr'
+                  ? 'An invitation stays with the order that created it.'
+                  : 'ترتبط الدعوة بالطلب الذي أنشأها ولا يمكن نقلها.'}
+              </p>
+            </div>
 
             {/* Logic type */}
             <FormField

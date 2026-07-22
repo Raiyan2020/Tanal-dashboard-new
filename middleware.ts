@@ -25,6 +25,7 @@ const ROUTE_PERMISSIONS: Record<string, string> = {
   '/roles':           'roles',
   '/invitations':     'invitations',
   '/service-orders':  'service-orders',
+  '/calendar':        'service-orders',
   '/services':        'services',
   '/service-options': 'service-options',
   '/employees':       'employees',
