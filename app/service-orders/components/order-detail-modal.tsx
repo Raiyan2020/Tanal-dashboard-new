@@ -29,6 +29,8 @@ import {
   isOrderPaid,
 } from './order-list';
 import { ItemAttachments } from './item-attachments';
+import { LeafletMap } from '@/components/leaflet-map';
+import { buildMapsUrl, toCoord } from '@/lib/map-location';
 
 interface OrderDetailModalProps {
   order: ApiServiceOrderDetail | null;
@@ -104,6 +106,12 @@ export function OrderDetailModal({
 
   const cancelled = effectiveOrder ? isOrderCancelled(effectiveOrder.statuses) : false;
   const paid = effectiveOrder ? isOrderPaid(effectiveOrder.statuses) : false;
+
+  // A pin is only shown when both coordinates came back — orders saved before the
+  // map fields existed, and quick orders awaiting the client, have neither.
+  const mapLat = toCoord(effectiveOrder?.lat);
+  const mapLng = toCoord(effectiveOrder?.lng);
+  const mapPoint = mapLat !== null && mapLng !== null ? { lat: mapLat, lng: mapLng } : null;
 
   const handleCancel = async () => {
     if (!effectiveOrder) return;
@@ -390,6 +398,9 @@ export function OrderDetailModal({
                           ].filter(Boolean).join('، ')
                         } />
                       )}
+                      {effectiveOrder.map_desc && (
+                        <InfoRow icon={MapPin} label={isAr ? 'وصف الموقع' : 'Location Description'} value={effectiveOrder.map_desc} />
+                      )}
                       {effectiveOrder.address_notes && (
                         <InfoRow icon={MapPin} label={isAr ? 'ملاحظات العنوان' : 'Address Notes'} value={effectiveOrder.address_notes} />
                       )}
@@ -397,6 +408,23 @@ export function OrderDetailModal({
                         <InfoRow icon={Briefcase} label={isAr ? 'ملاحظات التنفيذ' : 'Execution Notes'} value={effectiveOrder.execution_notes} />
                       )}
                     </div>
+
+                    {mapPoint && (
+                      <div className="mt-3 rounded-2xl overflow-hidden border border-secondary/10">
+                        <LeafletMap lat={mapPoint.lat} lng={mapPoint.lng} className="h-[200px] w-full z-0" />
+                        <a
+                          // Built from the pin, not `location_url` — the saved
+                          // link may predate the coordinates.
+                          href={buildMapsUrl(mapPoint)}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="flex items-center justify-center gap-1.5 bg-secondary/3 py-2.5 text-xs font-medium text-primary hover:bg-secondary/5 transition-colors"
+                        >
+                          {isAr ? 'فتح في خرائط جوجل' : 'Open in Google Maps'}
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                      </div>
+                    )}
                   </section>
 
                   {/* ── Order-level employees ── */}

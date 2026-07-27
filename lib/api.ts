@@ -1591,6 +1591,14 @@ export interface ApiServiceOrderDetail {
   end_time: string;
   hall_name: string;
   location_url: string | null;
+  /**
+   * Map fields, all optional and returned only by the show endpoint — the list
+   * endpoint omits them. Decimals may arrive as strings; normalise with
+   * `toCoord` from `@/lib/map-location`.
+   */
+  map_desc: string | null;
+  lat: number | string | null;
+  lng: number | string | null;
   governorate: string | null;
   block_number: string | null;
   street_name: string | null;
@@ -1754,6 +1762,12 @@ export interface ServiceOrderBasePayload {
   /** Optional only for `creation_mode: 'quick'` — see `event_end_time`. */
   hall_name?: string;
   location_url?: string;
+  /** Free-text description of the spot on the map (max 500 chars). */
+  map_desc?: string;
+  /** −90…90 */
+  lat?: number;
+  /** −180…180 */
+  lng?: number;
   governorate?: string;
   block_number?: string;
   street_name?: string;

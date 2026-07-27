@@ -5,7 +5,6 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useLanguage } from '@/lib/i18n';
-import { motion } from 'motion/react';
 import { cn } from '@/lib/utils';
 import Image from 'next/image';
 import { Mail, Lock, ArrowRight, ArrowLeft, Loader2, AlertCircle } from 'lucide-react';
@@ -87,18 +86,20 @@ export default function LoginPage() {
       <div className="absolute bottom-[-10%] left-[-5%] w-[500px] h-[500px] bg-accent/20 rounded-full blur-[100px] pointer-events-none mix-blend-multiply" />
       <div className="absolute top-[20%] left-[10%] w-[300px] h-[300px] bg-primary/5 rounded-full blur-[80px] pointer-events-none" />
 
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6, ease: "easeOut" }}
-        className="w-full max-w-md p-8 sm:p-10 mx-4 glass-panel rounded-3xl relative z-10 crystal-accent"
-      >
+      {/* CSS-driven entrance rather than Motion: this card holds the LCP text,
+          and a Motion `initial` renders it as opacity:0 in the SSR HTML, keeping
+          it invisible until the bundle hydrates. */}
+      <div className="w-full max-w-md p-8 sm:p-10 mx-4 glass-panel rounded-3xl relative z-10 crystal-accent animate-enter">
         <div className="flex flex-col items-center mb-8">
           <Image
             src={logo}
             alt="Tanal Logo"
             width={72}
             height={72}
+            // This logo is the LCP element on the login screen; without
+            // `priority` Next marks it loading="lazy" and the browser discovers
+            // it late, adding ~1.6s of load delay.
+            priority
             className="mb-4 object-contain drop-shadow-md w-18 h-18"
             referrerPolicy="no-referrer"
           />
@@ -114,14 +115,10 @@ export default function LoginPage() {
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5 text-start">
             {/* Error Banner */}
             {error && (
-              <motion.div
-                initial={{ opacity: 0, y: -8 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="flex items-start gap-3 bg-red-50/80 border border-red-200/60 text-red-700 text-sm rounded-xl px-4 py-3"
-              >
+              <div className="flex items-start gap-3 bg-red-50/80 border border-red-200/60 text-red-700 text-sm rounded-xl px-4 py-3 animate-enter-down">
                 <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
                 <span>{error}</span>
-              </motion.div>
+              </div>
             )}
 
             {/* Email Field */}
@@ -201,7 +198,7 @@ export default function LoginPage() {
           </form>
         </Form>
 
-      </motion.div>
+      </div>
     </div>
   );
 }

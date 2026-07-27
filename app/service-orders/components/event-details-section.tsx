@@ -5,6 +5,7 @@ import { DayPicker } from '@daypicker/react';
 import '@daypicker/react/dist/style.css';
 import { ar } from 'date-fns/locale';
 import { type FormState, type OrderFormErrors } from '@/lib/service-order-form';
+import { MapLocationPicker } from '@/components/map-location-picker';
 
 interface EventDetailsSectionProps {
   form: FormState;
@@ -178,20 +179,24 @@ export function EventDetailsSection({
         {errors.hall_name && <p className={errorText}>{errors.hall_name}</p>}
       </div>
 
-      {/* Hall Location */}
-      <div className="space-y-1.5">
-        <label className="flex items-center gap-2 text-sm font-medium text-secondary/80">
-          <MapPin className="w-4 h-4 text-secondary/40" /> {t('hallLocationLink') || 'Hall Location Map Link'}
-        </label>
-        <input
-          type="url"
-          placeholder="https://maps.google.com/…"
-          value={form.hallLocation}
-          dir="ltr"
-          onChange={e => setForm({ ...form, hallLocation: e.target.value })}
-          className={`${inputClass} font-mono text-left`}
-        />
-      </div>
+      {/* Hall location — pin, description and link */}
+      <MapLocationPicker
+        value={{
+          locationUrl: form.hallLocation,
+          mapDesc: form.mapDesc,
+          lat: form.lat,
+          lng: form.lng,
+        }}
+        onChange={next =>
+          setForm(prev => ({
+            ...prev,
+            hallLocation: next.locationUrl,
+            mapDesc: next.mapDesc,
+            lat: next.lat,
+            lng: next.lng,
+          }))
+        }
+      />
 
       {/* Address breakdown — all optional */}
       <div className="space-y-4 border-t border-secondary/10 pt-4">

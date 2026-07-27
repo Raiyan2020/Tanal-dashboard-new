@@ -7,6 +7,7 @@
  */
 
 import { getServiceById } from '@/lib/api';
+import { parseLatLng, toCoord } from '@/lib/map-location';
 import type {
   ApiServiceOrderDetail,
   ApiServiceOrderDetailItem,
@@ -92,7 +93,13 @@ export type FormState = {
   /** Required by the API and must be later than `time`. */
   endTime: string;
   hallName: string;
+  /** `location_url` — the maps link, kept in sync with the picked pin. */
   hallLocation: string;
+  /** `map_desc` — how to reach the exact spot once on site. */
+  mapDesc: string;
+  /** Picked pin; both are null until the admin places one. */
+  lat: number | null;
+  lng: number | null;
   governorate: string;
   blockNumber: string;
   streetName: string;
@@ -153,6 +160,9 @@ export const createEmptyOrderForm = (): FormState => ({
   endTime: '',
   hallName: '',
   hallLocation: '',
+  mapDesc: '',
+  lat: null,
+  lng: null,
   governorate: '',
   blockNumber: '',
   streetName: '',
@@ -326,6 +336,10 @@ function buildBasePayload(form: FormState): UpdateServiceOrderPayload {
     event_end_time: trimmed(form.endTime),
     hall_name: trimmed(form.hallName),
     location_url: trimmed(form.hallLocation),
+    // Map fields are optional throughout — an order without a pin simply omits them.
+    map_desc: trimmed(form.mapDesc),
+    lat: form.lat ?? undefined,
+    lng: form.lng ?? undefined,
     governorate: trimmed(form.governorate),
     block_number: trimmed(form.blockNumber),
     street_name: trimmed(form.streetName),
@@ -495,6 +509,14 @@ const normaliseCode = (code: string | null | undefined) =>
  * state rather than a local cache.
  */
 export function formStateFromDetail(detail: ApiServiceOrderDetail): FormState {
+  // The map link is read-only in the form, so an order that carries only a link —
+  // saved before the map fields existed, or filled in through the client's own
+  // form — would otherwise open with an empty map and no way to place the pin.
+  const savedPoint =
+    toCoord(detail.lat) !== null && toCoord(detail.lng) !== null
+      ? { lat: toCoord(detail.lat), lng: toCoord(detail.lng) }
+      : parseLatLng(detail.location_url ?? '');
+
   return {
     // Preserved so an update does not silently promote a quick order to full —
     // the mode drives which fields the backend requires.
@@ -533,6 +555,9 @@ export function formStateFromDetail(detail: ApiServiceOrderDetail): FormState {
     endTime: (detail.event_end_time ?? detail.end_time ?? '').slice(0, 5),
     hallName: detail.hall_name ?? '',
     hallLocation: detail.location_url ?? '',
+    mapDesc: detail.map_desc ?? '',
+    lat: savedPoint?.lat ?? null,
+    lng: savedPoint?.lng ?? null,
     governorate: detail.governorate ?? '',
     blockNumber: detail.block_number ?? '',
     streetName: detail.street_name ?? '',

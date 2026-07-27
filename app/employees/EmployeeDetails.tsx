@@ -35,7 +35,7 @@ export function EmployeeDetails({
   const [detailLoading, setDetailLoading] = useState(true);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [showAttendanceForEvent, setShowAttendanceForEvent] = useState<any | null>(null);
-  const [activeEventTab, setActiveEventTab] = useState<'upcoming' | 'past'>('upcoming');
+  const [activeEventTab, setActiveEventTab] = useState<'upcoming' | 'previous'>('upcoming');
 
   const fetchDetail = useCallback(async () => {
     if (!token || !employee.id) return;
@@ -214,10 +214,10 @@ export function EmployeeDetails({
                       <span className="ml-1.5 text-[10px] opacity-70">({upcomingEventsList.length})</span>
                     </button>
                     <button
-                      onClick={() => setActiveEventTab('past')}
+                      onClick={() => setActiveEventTab('previous')}
                       className={cn(
                         "px-3 py-1.5 text-xs font-medium rounded-full transition-all cursor-pointer",
-                        activeEventTab === 'past' ? "bg-white text-primary shadow-sm ring-1 ring-black/5" : "text-secondary/60 hover:text-secondary"
+                        activeEventTab === 'previous' ? "bg-white text-primary shadow-sm ring-1 ring-black/5" : "text-secondary/60 hover:text-secondary"
                       )}
                     >
                       {t('pastEventsTab')}
