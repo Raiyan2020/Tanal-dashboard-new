@@ -14,7 +14,7 @@ import {
   CheckCircle2,
   AlertCircle,
 } from 'lucide-react';
-import Image from 'next/image';
+import { AvatarImage } from '@/components/ui/avatar-image';
 import { cn } from '@/lib/utils';
 import { updateProfile } from '@/lib/api';
 import { getToken, saveAdmin } from '@/lib/auth';
@@ -150,14 +150,15 @@ export function ProfileEditDialog({
             <div className="flex flex-col items-center gap-3 pb-2">
               <div className="relative group">
                 <div className="w-20 h-20 rounded-full overflow-hidden ring-4 ring-white shadow-lg">
-                  <Image
-                    src={imagePreview ?? admin?.image ?? 'https://raiyansoft.com/wp-content/uploads/2026/06/Untitled-design.png'}
+                  <AvatarImage
+                    src={imagePreview ?? admin?.image}
                     alt="avatar"
-                    width={80}
-                    height={80}
-                    className="object-cover w-full h-full"
-                    referrerPolicy="no-referrer"
-                    unoptimized={!!imagePreview}
+                    className="w-full h-full"
+                    fallback={
+                      <span className="w-full h-full bg-primary/10 flex items-center justify-center">
+                        <User className="w-8 h-8 text-primary/40" />
+                      </span>
+                    }
                   />
                 </div>
                 <button

@@ -17,91 +17,11 @@ interface AppNotification {
   isRead: boolean;
 }
 
-const MOCK_NOTIFICATIONS_EN: AppNotification[] = [
-  {
-    id: '1',
-    type: 'invite',
-    title: 'New Guest Confirmation',
-    message: 'Sarah Ahmed confirmed attendance for Al Olayan Reception.',
-    time: '5 mins ago',
-    isRead: false,
-  },
-  {
-    id: '2',
-    type: 'invoice',
-    title: 'Payment Received',
-    message: 'A payment of 12.5k KWD was received for Al Rajhi Ceremony.',
-    time: '2 hours ago',
-    isRead: false,
-  },
-  {
-    id: '3',
-    type: 'checkin',
-    title: 'QR Scan Alert',
-    message: 'High volume of QR check-ins detected at Gate A.',
-    time: 'Yesterday, 8:45 PM',
-    isRead: true,
-  },
-  {
-    id: '4',
-    type: 'system',
-    title: 'System Update',
-    message: 'The platform will undergo brief maintenance tonight at 2 AM.',
-    time: 'Oct 15, 2026',
-    isRead: true,
-  }
-];
-
-const MOCK_NOTIFICATIONS_AR: AppNotification[] = [
-  {
-    id: '1',
-    type: 'invite',
-    title: 'تأكيد ضيف جديد',
-    message: 'سارة أحمد أكدت حضورها لاستقبال العليان.',
-    time: 'منذ 5 دقائق',
-    isRead: false,
-  },
-  {
-    id: '2',
-    type: 'invoice',
-    title: 'تم استلام الدفعة',
-    message: 'تم استلام دفعة بقيمة 12.5 ألف ريال لحفل الراجحي.',
-    time: 'منذ ساعتين',
-    isRead: false,
-  },
-  {
-    id: '3',
-    type: 'checkin',
-    title: 'تنبيه مسح الباركود',
-    message: 'تم اكتشاف حجم كبير من عمليات مسح الباركود عند البوابة أ.',
-    time: 'أمس، 8:45 مساءً',
-    isRead: true,
-  },
-  {
-    id: '4',
-    type: 'system',
-    title: 'تحديث النظام',
-    message: 'ستخضع المنصة لصيانة قصيرة الليلة الساعة 2 صباحًا.',
-    time: '15 أكتوبر 2026',
-    isRead: true,
-  }
-];
-
 export default function NotificationsContent() {
-  const { t, dir, language } = useLanguage();
-  const [notifications, setNotifications] = React.useState<AppNotification[]>(language === 'ar' ? MOCK_NOTIFICATIONS_AR : MOCK_NOTIFICATIONS_EN);
-
-  React.useEffect(() => {
-    // Only run this when language changes
-    const currentList = language === 'ar' ? MOCK_NOTIFICATIONS_AR : MOCK_NOTIFICATIONS_EN;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setNotifications(prev => {
-      return currentList.map(mock => ({
-        ...mock,
-        isRead: prev.find(p => p.id === mock.id)?.isRead ?? mock.isRead
-      }));
-    });
-  }, [language]);
+  const { t, dir } = useLanguage();
+  // There is no notifications endpoint on the API yet, so the list stays empty
+  // and the page renders its empty state instead of fabricated entries.
+  const [notifications, setNotifications] = React.useState<AppNotification[]>([]);
 
   const unreadCount = notifications.filter(n => !n.isRead).length;
 

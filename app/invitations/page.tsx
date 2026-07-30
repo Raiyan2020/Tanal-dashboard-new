@@ -1,5 +1,5 @@
 import React from 'react';
-import { getServerToken } from '@/lib/server-auth';
+import { getServerToken, handlePrefetchError } from '@/lib/server-auth';
 import { getInvitations } from '@/lib/api';
 import InvitationsClient, { mapApiInvitation, type Invitation } from './InvitationsClient';
 
@@ -14,7 +14,7 @@ export default async function Page() {
       initialData = res.data.items.map(mapApiInvitation);
       initialTotalPages = res.data.pagination.last_page;
     } catch (e) {
-      console.error('Failed to prefetch invitations server-side:', e);
+      handlePrefetchError(e, 'invitations');
     }
   }
 

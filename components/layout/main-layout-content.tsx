@@ -3,10 +3,11 @@
 import React, { useState, Suspense, useMemo } from 'react';
 import { useLanguage } from '@/lib/i18n';
 import { motion, AnimatePresence } from 'motion/react';
-import { LayoutDashboard, UserCog, Briefcase, MailPlus, Settings, Globe, Menu, Bell, LogOut, Loader2, Wallet, ShoppingBag, Layers, SlidersHorizontal, UserPen, ShieldCheck, CalendarDays, } from 'lucide-react';
+import { LayoutDashboard, UserCog, Briefcase, MailPlus, Settings, Globe, Menu, Bell, LogOut, Loader2, Wallet, ShoppingBag, Layers, SlidersHorizontal, UserPen, ShieldCheck, CalendarDays, User } from 'lucide-react';
 import logo from "@/public/logo.webp";
 import { cn } from '@/lib/utils';
 import Image from 'next/image';
+import { AvatarImage } from '@/components/ui/avatar-image';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { clearAuth, getAdmin, getToken, getPermissions } from '@/lib/auth';
 import { logoutAdmin } from '@/lib/api';
@@ -248,13 +249,15 @@ export function MainLayoutContent({ children }: { children: React.ReactNode }) {
                   onClick={() => setProfileOpen(!profileOpen)}
                   className="flex items-center gap-3 p-1 pr-3 rounded-full bg-white/40 hover:bg-white/60 transition-colors shadow-sm ring-1 ring-white/60 border border-transparent cursor-pointer rtl:pl-3 rtl:pr-1"
                 >
-                  <Image
-                    src={admin?.image ?? 'https://raiyansoft.com/wp-content/uploads/2026/06/Untitled-design.png'}
+                  <AvatarImage
+                    src={admin?.image}
                     alt="Profile"
-                    width={36}
-                    height={36}
-                    className="rounded-full ring-2 ring-white object-cover pointer-events-none"
-                    referrerPolicy="no-referrer"
+                    className="w-9 h-9 rounded-full ring-2 ring-white pointer-events-none"
+                    fallback={
+                      <span className="w-9 h-9 rounded-full ring-2 ring-white bg-primary/10 flex items-center justify-center pointer-events-none">
+                        <User className="w-5 h-5 text-primary/40" />
+                      </span>
+                    }
                   />
                   <span className="hidden sm:block text-sm font-medium pointer-events-none">{admin?.name ?? 'Admin'}</span>
                 </button>

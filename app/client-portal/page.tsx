@@ -12,39 +12,9 @@ import {
   Phone,
   Globe,
   Menu,
-  X,
-  CreditCard,
-  CheckCircle2,
-  XCircle,
-  Clock,
-  Wallet,
   CalendarDays,
-  MapPin,
-  Users
 } from 'lucide-react';
 import logo from "@/public/logo.webp"
-
-const mockEvent = {
-  nameEn: 'Royal Wedding - Salem & Sara',
-  nameAr: 'حفل زفاف ملكي - سالم وسارة',
-  date: '2026-10-15',
-  locationEn: 'Ritz-Carlton, Riyadh',
-  locationAr: 'الريتز كارلتون، الرياض',
-  status: 'upcoming',
-  payment: {
-    status: 'installments', // 'paid', 'unpaid', 'installments'
-    totalAmount: 150000,
-    paidAmount: 50000,
-    remainingAmount: 100000,
-    installmentsLeft: 2,
-  },
-  attendance: {
-    total: 300,
-    accepted: 210,
-    declined: 15,
-    pending: 75,
-  }
-};
 
 export default function ClientPortal() {
   const { t, language, setLanguage, dir } = useLanguage();
@@ -53,24 +23,12 @@ export default function ClientPortal() {
   const toggleSidebar = () => setSidebarOpen(!sidebarOpen);
   const toggleLanguage = () => setLanguage(language === 'en' ? 'ar' : 'en');
 
-  const eName = dir === 'ltr' ? mockEvent.nameEn : mockEvent.nameAr;
-  const eLocation = dir === 'ltr' ? mockEvent.locationEn : mockEvent.locationAr;
-
-  const paymentStatusMap = {
-    paid: dir === 'ltr' ? 'Fully Paid' : 'مدفوع بالكامل',
-    unpaid: dir === 'ltr' ? 'Unpaid' : 'غير مدفوع',
-    installments: dir === 'ltr' ? 'Installments' : 'أقساط',
-  };
-
   const navItems = [
     { icon: Info, labelEn: 'About Us', labelAr: 'معلومات عنا' },
     { icon: ShieldCheck, labelEn: 'Privacy Policy', labelAr: 'سياسة الخصوصية' },
     { icon: FileText, labelEn: 'Terms & Conditions', labelAr: 'الشروط والأحكام' },
     { icon: Phone, labelEn: 'Contact Us', labelAr: 'اتصل بنا' },
   ];
-
-  const responded = mockEvent.attendance.accepted + mockEvent.attendance.declined;
-  const progressPercent = Math.round((responded / mockEvent.attendance.total) * 100);
 
   return (
     <div className="flex h-screen luxury-gradient overflow-hidden font-sans text-secondary pb-12">
@@ -182,152 +140,19 @@ export default function ClientPortal() {
         </header>
 
         <main className="flex-1 overflow-auto p-4 sm:p-6 lg:p-10 lg:pl-12 rtl:lg:pl-10 rtl:lg:pr-12">
-          <div className="max-w-4xl mx-auto space-y-8 pb-12">
-
-            {/* Event Header Card */}
-            <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-[0_4px_24px_rgba(54,45,35,0.03)] border border-secondary/5 relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-primary/5 rounded-full blur-[80px] pointer-events-none" />
-
-              <div className="relative z-10 flex flex-col sm:flex-row justify-between items-start gap-4">
-                <div>
-                  <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 text-primary-dark text-sm font-medium mb-4">
-                    <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-                    {dir === 'ltr' ? 'Upcoming Event' : 'حدث قادم'}
-                  </div>
-                  <h1 className={cn("text-2xl sm:text-3xl lg:text-4xl text-primary-dark mb-4 tracking-tight", dir === 'ltr' ? 'font-serif' : 'font-arabic font-bold')}>
-                    {eName}
-                  </h1>
-                </div>
+          <div className="max-w-4xl mx-auto pb-12">
+            {/* No client-portal endpoint exists yet, so the portal shows an
+                honest empty state instead of a fabricated event. */}
+            <div className="bg-white rounded-3xl p-10 sm:p-16 shadow-[0_4px_24px_rgba(54,45,35,0.03)] border border-secondary/5 flex flex-col items-center justify-center text-center gap-4">
+              <div className="w-16 h-16 rounded-full bg-[#F3EBE1] flex items-center justify-center">
+                <CalendarDays className="w-8 h-8 text-primary-dark" />
               </div>
-
-              <div className="relative z-10 grid grid-cols-1 sm:grid-cols-2 gap-4 mt-6 pt-6 border-t border-secondary/5">
-                <div className="flex items-center gap-3 text-secondary/80">
-                  <div className="w-10 h-10 rounded-full bg-[#F3EBE1] flex items-center justify-center shrink-0">
-                    <CalendarDays className="w-5 h-5 text-primary-dark" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-secondary/50 uppercase tracking-wider font-medium">{dir === 'ltr' ? 'Date' : 'التاريخ'}</p>
-                    <p className="font-medium text-[15px]">{mockEvent.date}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3 text-secondary/80">
-                  <div className="w-10 h-10 rounded-full bg-[#F3EBE1] flex items-center justify-center shrink-0">
-                    <MapPin className="w-5 h-5 text-primary-dark" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-secondary/50 uppercase tracking-wider font-medium">{dir === 'ltr' ? 'Location' : 'الموقع'}</p>
-                    <p className="font-medium text-[15px]">{eLocation}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Grid Layout for Payment and Attendance */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
-              {/* Payment Details Card */}
-              <div className="bg-white rounded-3xl p-6 shadow-[0_4px_24px_rgba(54,45,35,0.03)] border border-secondary/5">
-                <div className="flex items-center justify-between mb-6">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-orange-50 text-orange-600 flex items-center justify-center shrink-0">
-                      <CreditCard className="w-5 h-5" />
-                    </div>
-                    <h3 className={cn("text-lg font-semibold text-secondary", dir === 'ltr' ? 'font-serif' : 'font-arabic font-bold')}>
-                      {dir === 'ltr' ? 'Payment Details' : 'تفاصيل الدفع'}
-                    </h3>
-                  </div>
-                  <span className="px-3 py-1 rounded-full text-xs font-medium bg-amber-50 text-amber-600 border border-amber-100">
-                    {paymentStatusMap[mockEvent.payment.status as keyof typeof paymentStatusMap]}
-                  </span>
-                </div>
-
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center p-4 rounded-2xl bg-[#F8F9FA] border border-secondary/5">
-                    <div className="flex items-center gap-3 text-secondary/70">
-                      <Wallet className="w-4 h-4" />
-                      <span className="text-sm font-medium">{dir === 'ltr' ? 'Total Amount' : 'المبلغ الإجمالي'}</span>
-                    </div>
-                    <span className="font-bold text-secondary">KD {mockEvent.payment.totalAmount.toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between items-center p-4 rounded-2xl bg-green-50/50 border border-green-100/50">
-                    <div className="flex items-center gap-3 text-green-700/70">
-                      <CheckCircle2 className="w-4 h-4" />
-                      <span className="text-sm font-medium">{dir === 'ltr' ? 'Paid Amount' : 'المبلغ المدفوع'}</span>
-                    </div>
-                    <span className="font-bold text-green-700">KD {mockEvent.payment.paidAmount.toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between items-center p-4 rounded-2xl bg-orange-50/50 border border-orange-100/50">
-                    <div className="flex items-center gap-3 text-orange-700/70">
-                      <Clock className="w-4 h-4" />
-                      <span className="text-sm font-medium">{dir === 'ltr' ? 'Remaining Amount' : 'المبلغ المتبقي'}</span>
-                    </div>
-                    <span className="font-bold text-orange-700">KD {mockEvent.payment.remainingAmount.toLocaleString()}</span>
-                  </div>
-                </div>
-
-                {mockEvent.payment.status === 'installments' && (
-                  <>
-                    <div className="mt-4 pt-4 border-t border-secondary/5 flex justify-between items-center px-2">
-                      <span className="text-sm text-secondary/60">{dir === 'ltr' ? 'Installments Left' : 'الأقساط المتبقية'}</span>
-                      <span className="font-medium text-lg text-primary-dark">{mockEvent.payment.installmentsLeft}</span>
-                    </div>
-                    <div className="mt-4">
-                      <button className="w-full py-3 px-4 bg-primary hover:bg-primary/90 text-white rounded-xl font-medium shadow-sm transition-colors flex items-center justify-center gap-2 cursor-pointer">
-                        <CreditCard className="w-5 h-5" />
-                        {dir === 'ltr' ? 'Pay Next Payment' : 'دفع القسط التالي'}
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
-
-              {/* Attendance Analytics Card */}
-              <div className="bg-white rounded-3xl p-6 shadow-[0_4px_24px_rgba(54,45,35,0.03)] border border-secondary/5">
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
-                    <Users className="w-5 h-5" />
-                  </div>
-                  <h3 className={cn("text-lg font-semibold text-secondary", dir === 'ltr' ? 'font-serif' : 'font-arabic font-bold')}>
-                    {dir === 'ltr' ? 'Attendance Analytics' : 'تحليلات الحضور'}
-                  </h3>
-                </div>
-
-                <div className="mb-8">
-                  <div className="flex justify-between text-sm mb-2 font-medium">
-                    <span className="text-secondary/70">{dir === 'ltr' ? 'Responded' : 'استجاب'}</span>
-                    <span className="text-secondary">{responded} / {mockEvent.attendance.total}</span>
-                  </div>
-                  <div className="h-3 bg-secondary/5 rounded-full overflow-hidden w-full relative">
-                    <motion.div
-                      initial={{ width: 0 }}
-                      animate={{ width: `${progressPercent}%` }}
-                      transition={{ duration: 1, ease: 'easeOut' }}
-                      className="absolute top-0 bottom-0 left-0 bg-primary rounded-full rtl:right-0 rtl:left-auto"
-                    />
-                  </div>
-                  <div className="text-xs text-secondary/50 text-right mt-1.5">{progressPercent}%</div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="p-4 rounded-2xl bg-green-50/50 border border-green-100/50 flex flex-col items-center justify-center text-center">
-                    <CheckCircle2 className="w-6 h-6 text-green-600 mb-2" />
-                    <span className="text-2xl font-bold text-green-700">{mockEvent.attendance.accepted}</span>
-                    <span className="text-xs font-medium text-green-700/70 mt-1 uppercase tracking-wider">{dir === 'ltr' ? 'Accepted' : 'مقبول'}</span>
-                  </div>
-                  <div className="p-4 rounded-2xl bg-red-50/50 border border-red-100/50 flex flex-col items-center justify-center text-center">
-                    <XCircle className="w-6 h-6 text-red-600 mb-2" />
-                    <span className="text-2xl font-bold text-red-700">{mockEvent.attendance.declined}</span>
-                    <span className="text-xs font-medium text-red-700/70 mt-1 uppercase tracking-wider">{dir === 'ltr' ? 'Declined' : 'مرفوض'}</span>
-                  </div>
-                  <div className="p-4 rounded-2xl bg-secondary/5 border border-secondary/10 flex flex-col items-center justify-center text-center col-span-2">
-                    <Clock className="w-6 h-6 text-secondary/40 mb-2" />
-                    <span className="text-2xl font-bold text-secondary">{mockEvent.attendance.pending}</span>
-                    <span className="text-xs font-medium text-secondary/60 mt-1 uppercase tracking-wider">{dir === 'ltr' ? 'Pending' : 'قيد الانتظار'}</span>
-                  </div>
-                </div>
-
-              </div>
-
+              <h2 className={cn("text-xl sm:text-2xl text-primary-dark", dir === 'ltr' ? 'font-serif' : 'font-arabic font-bold')}>
+                {t('noEventData')}
+              </h2>
+              <p className="text-secondary/60 max-w-md text-sm leading-relaxed">
+                {t('noEventDataHint')}
+              </p>
             </div>
           </div>
         </main>

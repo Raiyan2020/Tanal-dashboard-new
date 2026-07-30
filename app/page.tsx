@@ -1,5 +1,5 @@
 import React from 'react';
-import { getServerToken } from '@/lib/server-auth';
+import { getServerToken, handlePrefetchError } from '@/lib/server-auth';
 import { getDashboardData, type DashboardData } from '@/lib/api';
 import HomeClient from './HomeClient';
 
@@ -12,7 +12,7 @@ export default async function Page() {
       const res = await getDashboardData('this_year', token);
       initialData = res.data;
     } catch (e) {
-      console.error('Failed to prefetch dashboard server-side:', e);
+      handlePrefetchError(e, 'dashboard');
     }
   }
 

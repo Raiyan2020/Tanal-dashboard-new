@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState, useSyncExternalStore } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -10,7 +10,7 @@ import Image from 'next/image';
 import { Mail, Lock, ArrowRight, ArrowLeft, Loader2, AlertCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { loginAdmin } from '@/lib/api';
-import { saveToken, saveAdmin, savePermissions } from '@/lib/auth';
+import { saveToken, saveAdmin, savePermissions, clearAuth } from '@/lib/auth';
 import logo from "@/public/logo.webp"
 import {
   Form,
@@ -31,6 +31,27 @@ export default function LoginPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /*
+   * True when the API rejected the stored token and something redirected here.
+   *
+   * Read through `useSyncExternalStore` rather than `useSearchParams` so the
+   * page stays statically prerendered, and rather than state-from-an-effect so
+   * the server snapshot (`false`) hydrates without a mismatch. The query string
+   * cannot change without a navigation, so the store never needs to notify.
+   */
+  const sessionExpired = useSyncExternalStore(
+    () => () => {},
+    () => new URLSearchParams(window.location.search).get('session') === 'expired',
+    () => false
+  );
+
+  /*
+   * The middleware already expired the cookies on the way in; localStorage is
+   * the half only the browser can reach, so it is dropped here.
+   */
+  useEffect(() => {
+    if (sessionExpired) clearAuth();
+  }, [sessionExpired]);
 
   const schema = React.useMemo(() => z.object({
     email: z.string().min(1, { message: dir === 'ltr' ? 'Email is required' : 'البريد الإلكتروني مطلوب' }).email({ message: t('invalidEmail') }),
@@ -113,6 +134,14 @@ export default function LoginPage() {
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5 text-start">
+            {/* Expired session — shown until the admin submits the form. */}
+            {sessionExpired && !error && (
+              <div className="flex items-start gap-3 bg-amber-50/80 border border-amber-200/60 text-amber-700 text-sm rounded-xl px-4 py-3 animate-enter-down">
+                <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                <span>{t('sessionExpired')}</span>
+              </div>
+            )}
+
             {/* Error Banner */}
             {error && (
               <div className="flex items-start gap-3 bg-red-50/80 border border-red-200/60 text-red-700 text-sm rounded-xl px-4 py-3 animate-enter-down">

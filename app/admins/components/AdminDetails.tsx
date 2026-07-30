@@ -9,7 +9,7 @@ import {
   Lock, Star, Loader2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import Image from 'next/image';
+import { AvatarImage } from '@/components/ui/avatar-image';
 import { toast } from 'sonner';
 import { getToken } from '@/lib/auth';
 import { getAdminById, type Admin } from '@/lib/api';
@@ -92,11 +92,12 @@ export function AdminDetails({ adminId, onBack, onEdit, onDelete }: AdminDetails
           {/* Avatar + name */}
           <div className="flex flex-col items-center text-center gap-3">
             <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full border-4 border-white shadow-xl overflow-hidden relative bg-primary/10 shrink-0">
-              {admin.image ? (
-                <Image src={admin.image} alt={admin.name} fill className="object-cover" />
-              ) : (
-                <User className="absolute inset-0 w-full h-full text-primary opacity-20 p-5" />
-              )}
+              <AvatarImage
+                src={admin.image}
+                alt={admin.name}
+                className="absolute inset-0 w-full h-full"
+                fallback={<User className="absolute inset-0 w-full h-full text-primary opacity-20 p-5" />}
+              />
             </div>
             <div>
               <h2 className={cn('text-xl sm:text-2xl font-semibold text-secondary', dir === 'ltr' ? 'font-serif' : 'font-arabic font-bold')}>

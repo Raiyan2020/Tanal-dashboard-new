@@ -83,6 +83,36 @@ export class ApiError extends Error {
 }
 
 /**
+ * Thrown when the API rejects the stored token (HTTP 401).
+ *
+ * Extends `ApiError` so existing `catch (e) { e.message }` call sites keep
+ * working, while server components can tell an expired session apart from a
+ * genuine failure and redirect to /login instead of rendering a dead page.
+ */
+export class UnauthenticatedError extends ApiError {
+  constructor(message: string) {
+    super(message, 401, {}, null);
+    this.name = 'UnauthenticatedError';
+  }
+}
+
+/**
+ * `instanceof` alone is not enough: server and client get separate module
+ * instances in a Next build, so a 401 crossing that boundary would not match.
+ * The status check is the reliable half.
+ */
+export function isUnauthenticatedError(e: unknown): e is UnauthenticatedError {
+  return e instanceof UnauthenticatedError || (e as { status?: number } | null)?.status === 401;
+}
+
+/**
+ * Endpoints where a 401 is a legitimate answer rather than an expired session.
+ * Signing in with the wrong password answers 401, and force-reloading there
+ * would throw away the form's error message before it could be read.
+ */
+const AUTH_EXEMPT_PATHS = ['/admin/auth/login'];
+
+/**
  * Normalises `response_status.validation_errors` into `Record<field, string[]>`.
  * The API returns either a keyed object or a flat array of messages; the latter
  * is bucketed under `_` since it carries no field association.
@@ -157,14 +187,27 @@ async function apiRequestInternal<T = unknown>(
     throw new Error('حدث خطأ غير متوقع');
   }
 
-  // ── 401 Unauthenticated: clear local auth data and redirect to login ──
-  if (res.status === 401) {
+  // ── 401 Unauthenticated: drop the stored session and get back to /login ──
+  if (res.status === 401 && !AUTH_EXEMPT_PATHS.some((p) => path.startsWith(p))) {
+    const message =
+      (json as any)?.message ?? 'انتهت صلاحية الجلسة، يرجى تسجيل الدخول مجدداً';
+
     if (typeof window !== 'undefined') {
       const { clearAuth } = await import('@/lib/auth');
       clearAuth();
-      window.location.replace('/login');
+      // Already on /login (or heading there) — redirecting again would loop.
+      if (!window.location.pathname.startsWith('/login')) {
+        window.location.replace('/login?session=expired');
+      }
     }
-    throw new Error((json as any)?.message ?? 'انتهت صلاحية الجلسة، يرجى تسجيل الدخول مجدداً');
+
+    /*
+     * On the server there is no localStorage, and cookies cannot be written
+     * while a component renders. So the token is dropped one step later: the
+     * caller catches this and redirects to /login?session=expired, where the
+     * middleware expires the cookies and the login page clears localStorage.
+     */
+    throw new UnauthenticatedError(message);
   }
 
   if (!res.ok || json.response_status?.error) {
@@ -527,6 +570,28 @@ export interface CreateInvitationResponse {
   sent_at: string | null;
 }
 
+/**
+ * Check-in welcome screen settings. The venue screen is a backend-hosted Blade
+ * page — `display_url` is absolute and must be linked verbatim rather than
+ * rebuilt from `display_token`, since it points at the API host, not the SPA.
+ *
+ * `realtime` describes the Pusher channel the Blade page subscribes to; the SPA
+ * does not listen to it, so it is here only for completeness.
+ */
+export interface CheckInDisplay {
+  welcome_message: string | null;
+  /** False until an admin saves a message — there is no default. */
+  is_configured: boolean;
+  /** e.g. ["{guest_name}", "{invitation_name}"] */
+  placeholders: string[];
+  display_url: string;
+  display_token: string;
+  realtime: {
+    channel: string;
+    event: string;
+  };
+}
+
 export interface InvitationDetailData {
   id: number;
   reference_code: string;
@@ -570,6 +635,8 @@ export interface InvitationDetailData {
     can_be_deleted: boolean;
     sent_at: string | null;
   };
+  /** Absent on invitations with no barcode service, and on legacy records. */
+  check_in_display?: CheckInDisplay | null;
 }
 
 export interface InvitationGuest {
@@ -656,6 +723,28 @@ export async function updateInvitation(
     body: formData,
     token,
   });
+}
+
+/**
+ * PATCH /admin/invitations/:id/check-in-welcome-message
+ *
+ * Separate from `updateInvitation` on purpose: the invitation is frozen once it
+ * is sent, but the welcome message stays editable, so this endpoint bypasses
+ * that lock. Requires the `edit-invitation` permission and returns the full
+ * detail payload, which callers can drop straight into state.
+ *
+ * `message` is validated server-side (min 3, max 1000) — the failure comes back
+ * as an `ApiError`, so read `fieldError('message')` for the per-field text.
+ */
+export async function updateInvitationCheckInWelcomeMessage(
+  id: number,
+  message: string,
+  token: string
+): Promise<ApiResponse<InvitationDetailData>> {
+  return apiRequest<InvitationDetailData>(
+    `/admin/invitations/${id}/check-in-welcome-message`,
+    { method: 'PATCH', body: { message }, token }
+  );
 }
 
 /** DELETE /admin/invitations/:id */
@@ -2102,7 +2191,10 @@ export interface LandingFeature {
 
 export interface LandingPortfolioItem {
   id: number;
+  /** Bare stored filename, e.g. "1785396481_4675.webp" — not renderable on its own. */
   image: string | null;
+  /** Absolute URL for the stored image; this is what `next/image` needs. */
+  image_url: string | null;
   name: string;
   sort: number;
   name_ar: string;

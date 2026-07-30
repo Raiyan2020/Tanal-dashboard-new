@@ -1,5 +1,5 @@
 import React from 'react';
-import { getServerToken } from '@/lib/server-auth';
+import { getServerToken, handlePrefetchError } from '@/lib/server-auth';
 import { getAdminServiceOrders, type ApiServiceOrderItem } from '@/lib/api';
 import CalendarClient from './CalendarClient';
 
@@ -22,7 +22,7 @@ export default async function Page() {
       });
       initialOrders = res.data.items;
     } catch (e) {
-      console.error('Failed to prefetch calendar orders server-side:', e);
+      handlePrefetchError(e, 'calendar orders');
     }
   }
 

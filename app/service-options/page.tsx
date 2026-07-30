@@ -1,5 +1,5 @@
 import React from 'react';
-import { getServerToken } from '@/lib/server-auth';
+import { getServerToken, handlePrefetchError } from '@/lib/server-auth';
 import { getAdminServiceOptions, type ServiceOptionItem, type PaginatedItems } from '@/lib/api';
 import ServiceOptionsClient from './ServiceOptionsClient';
 
@@ -14,7 +14,7 @@ export default async function Page() {
       initialData = res.data.items;
       initialPagination = res.data.pagination;
     } catch (e) {
-      console.error('Failed to prefetch service options server-side:', e);
+      handlePrefetchError(e, 'service options');
     }
   }
 

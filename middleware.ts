@@ -63,6 +63,22 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
+  /*
+   * A session the API rejected mid-render lands here. The cookie is still set
+   * at this point, so this must come before the rule below — otherwise that
+   * rule would bounce the request straight back to `/`, which fails the same
+   * way and redirects here again, looping forever.
+   *
+   * Expiring the cookies on this response is also the only place the server
+   * can drop them: a Server Component cannot write cookies while rendering.
+   */
+  if (pathname === '/login' && request.nextUrl.searchParams.get('session') === 'expired') {
+    const response = NextResponse.next();
+    response.cookies.delete('tanal_token');
+    response.cookies.delete('tanal_permissions');
+    return response;
+  }
+
   // If already authenticated and visiting /login → redirect to dashboard
   if (pathname === '/login' && token) {
     return NextResponse.redirect(new URL('/', request.url));

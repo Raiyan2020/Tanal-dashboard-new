@@ -1,7 +1,7 @@
 import React from 'react';
 import { notFound } from 'next/navigation';
-import { getServerToken } from '@/lib/server-auth';
-import { getInvitationById, type InvitationDetailData } from '@/lib/api';
+import { getServerToken, redirectToLogin } from '@/lib/server-auth';
+import { getInvitationById, isUnauthenticatedError, type InvitationDetailData } from '@/lib/api';
 import type { Invitation } from '../InvitationsClient';
 import InvitationDetailClient from './InvitationDetailClient';
 
@@ -38,7 +38,10 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
   let detail: InvitationDetailData;
   try {
     detail = (await getInvitationById(invitationId, token)).data;
-  } catch {
+  } catch (e) {
+    // An expired token is not a missing invitation — send the admin to /login
+    // rather than a 404 they cannot act on.
+    if (isUnauthenticatedError(e)) redirectToLogin();
     notFound();
   }
 

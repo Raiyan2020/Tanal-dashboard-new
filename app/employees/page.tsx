@@ -1,5 +1,5 @@
 import React from 'react';
-import { getServerToken } from '@/lib/server-auth';
+import { getServerToken, handlePrefetchError } from '@/lib/server-auth';
 import { getEmployees, type ApiEmployee, type PaginatedItems } from '@/lib/api';
 import EmployeesClient from './EmployeesClient';
 
@@ -14,7 +14,7 @@ export default async function Page() {
       initialData = res.data.items;
       initialPagination = res.data.pagination;
     } catch (e) {
-      console.error('Failed to prefetch employees server-side:', e);
+      handlePrefetchError(e, 'employees');
     }
   }
 

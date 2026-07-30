@@ -8,7 +8,7 @@ import {
   ChevronDown, Loader2, Shield, CheckCircle2, XCircle, User, Mail,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import Image from 'next/image';
+import { AvatarImage } from '@/components/ui/avatar-image';
 import { toast } from 'sonner';
 import { getToken } from '@/lib/auth';
 import {
@@ -235,9 +235,12 @@ export default function AdminsClient({
                 >
                   <div className="flex items-center gap-3 flex-1 min-w-0">
                     <div className="w-10 h-10 rounded-full overflow-hidden shrink-0 bg-primary/10 border-2 border-white shadow relative">
-                      {admin.image
-                        ? <Image src={admin.image} alt={admin.name} fill className="object-cover" />
-                        : <User className="w-full h-full p-2 text-primary/40" />}
+                      <AvatarImage
+                        src={admin.image}
+                        alt={admin.name}
+                        className="absolute inset-0 w-full h-full"
+                        fallback={<User className="w-full h-full p-2 text-primary/40" />}
+                      />
                     </div>
                     <div className="flex-1 min-w-0 text-start">
                       <div className="flex items-center gap-2 flex-wrap">

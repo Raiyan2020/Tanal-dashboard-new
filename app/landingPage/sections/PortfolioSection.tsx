@@ -177,8 +177,8 @@ export default function PortfolioSection({ token }: { token: string }) {
               className="bg-white/40 border border-secondary/10 rounded-2xl overflow-hidden shadow-sm group hover:shadow-md transition-shadow"
             >
               <div className="aspect-video relative bg-secondary/5">
-                {item.image ? (
-                  <Image src={item.image} alt={item.name} fill className="object-cover" />
+                {item.image_url ? (
+                  <Image src={item.image_url} alt={item.name} fill className="object-cover" />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center">
                     <LayoutGrid className="w-8 h-8 text-secondary/20" />
@@ -257,7 +257,7 @@ export default function PortfolioSection({ token }: { token: string }) {
               </div>
               <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
                 <ImageUploadBox
-                  url={form.imagePreview ?? (modal?.mode === 'edit' ? modal.item.image : null)}
+                  url={form.imagePreview ?? (modal?.mode === 'edit' ? modal.item.image_url : null)}
                   label={t('lpPortfolioImage')}
                   onFile={f => setForm(v => ({ ...v, imageFile: f, imagePreview: URL.createObjectURL(f) }))}
                   onClear={() => setForm(v => ({ ...v, imageFile: undefined, imagePreview: undefined }))}

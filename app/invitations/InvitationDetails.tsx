@@ -14,6 +14,7 @@ import { ResponsiveContainer, Tooltip, Legend, BarChart, CartesianGrid, XAxis, Y
 import { ConfirmModal } from './ConfirmModal';
 import { GuestFormModal, type GuestFormValues } from './GuestFormModal';
 import { GuestImportModal } from './GuestImportModal';
+import { CheckInWelcomeCard } from './CheckInWelcomeCard';
 import {
   getInvitationById,
   getInvitationGuests,
@@ -38,17 +39,6 @@ export interface InvitationGuest {
   have_whatsapp?: boolean;
 }
 
-const MOCK_GUESTS: Record<string, InvitationGuest[]> = {
-  'INV-1001': [
-    { id: '1', name: 'Mohammed Ali', phone: '+966 50 111 2233', status: 'accepted' },
-    { id: '2', name: 'Khalid Saif', phone: '+966 55 222 3344', status: 'declined' },
-    { id: '3', name: 'Ahmed Abdullah', phone: '+966 54 333 4455', status: 'pending' },
-    { id: '4', name: 'Fahad Rashid', phone: '+966 53 444 5566', status: 'pending' },
-    { id: '5', name: 'Saud Nasser', phone: '+966 50 555 6677', status: 'accepted' },
-  ],
-  'INV-1005': []
-};
-
 interface CheckIn {
   id: string;
   guestName: string;
@@ -56,21 +46,17 @@ interface CheckIn {
   checkInTime: string;
 }
 
-const MOCK_CHECKINS: CheckIn[] = [
-  { id: '1', guestName: 'Mohammed Khalid', phoneNumber: '+966 50 123 4567', checkInTime: '2023-08-15T19:30:00Z' },
-  { id: '2', guestName: 'Sarah Ahmed', phoneNumber: '+966 55 987 6543', checkInTime: '2023-08-15T19:45:00Z' },
-  { id: '3', guestName: 'Abdullah Saad', phoneNumber: '+966 54 321 0987', checkInTime: '2023-08-15T20:10:00Z' },
-  { id: '4', guestName: 'Layla Mansour', phoneNumber: '+966 56 789 0123', checkInTime: '2023-08-15T20:25:00Z' },
-  { id: '5', guestName: 'Fahad Saeed', phoneNumber: '+966 53 456 7890', checkInTime: '2023-08-15T20:40:00Z' },
-];
-
-export function AttendanceDetails({ onBack, attendanceNumber, employeeName }: { onBack: () => void; attendanceNumber: number; employeeName: string }) {
+export function AttendanceDetails({ onBack, attendanceNumber, employeeName }: { onBack: () => void; attendanceNumber: number; employeeName?: string }) {
   const { t, dir } = useLanguage();
   const [searchTerm, setSearchTerm] = useState('');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  // The API exposes attendance as counts only (`attendance.checked_in`) — there
+  // is no per-guest check-in endpoint yet, so the list stays empty until one
+  // exists rather than showing invented rows.
+  const [checkIns] = useState<CheckIn[]>([]);
 
   const filteredAndSortedCheckIns = useMemo(() => {
-    let result = MOCK_CHECKINS.filter(c =>
+    const result = checkIns.filter(c =>
       c.guestName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       c.phoneNumber.includes(searchTerm)
     );
@@ -82,7 +68,7 @@ export function AttendanceDetails({ onBack, attendanceNumber, employeeName }: { 
     });
 
     return result;
-  }, [searchTerm, sortOrder]);
+  }, [checkIns, searchTerm, sortOrder]);
 
   return (
     <motion.div
@@ -99,7 +85,7 @@ export function AttendanceDetails({ onBack, attendanceNumber, employeeName }: { 
           {dir === 'ltr' ? <ArrowLeft className="w-5 h-5" /> : <ArrowRight className="w-5 h-5" />}
         </button>
         <h2 className={cn("text-2xl font-medium text-secondary", dir === 'ltr' ? 'font-serif' : 'font-arabic font-bold')}>
-          {t('attendanceDetails' as any) || (dir === 'ltr' ? 'Attendance Details' : 'تفاصيل الحضور')}
+          {t('attendanceDetails')}
         </h2>
       </div>
 
@@ -109,7 +95,7 @@ export function AttendanceDetails({ onBack, attendanceNumber, employeeName }: { 
             <QrCode className="w-6 h-6 text-primary" />
           </div>
           <div>
-            <p className="text-secondary/60 text-sm">{t('attendanceNumber' as any) || (dir === 'ltr' ? 'Attendance Number' : 'رقم الحضور')}</p>
+            <p className="text-secondary/60 text-sm">{t('attendanceNumber')}</p>
             <p className="text-xl font-bold text-secondary">{attendanceNumber}</p>
           </div>
         </div>
@@ -118,7 +104,7 @@ export function AttendanceDetails({ onBack, attendanceNumber, employeeName }: { 
             <User className="w-6 h-6 text-secondary" />
           </div>
           <div>
-            <p className="text-secondary/60 text-sm">{t('assignedEmployee' as any) || (dir === 'ltr' ? 'Assigned Employee' : 'الموظف المختص')}</p>
+            <p className="text-secondary/60 text-sm">{t('assignedEmployee')}</p>
             <p className="text-xl font-bold text-secondary">{employeeName || '-'}</p>
           </div>
         </div>
@@ -128,7 +114,7 @@ export function AttendanceDetails({ onBack, attendanceNumber, employeeName }: { 
         <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
           <h3 className="text-lg font-semibold text-secondary flex items-center gap-2">
             <QrCode className="w-5 h-5 text-primary" />
-            {t('qrCheckIns' as any) || (dir === 'ltr' ? 'QR Check-ins' : 'تسجيلات الحضور عبر مسح الرمز')}
+            {t('qrCheckIns')}
           </h3>
           <div className="flex items-center gap-3 w-full md:w-auto">
             <div className="relative flex-1 md:w-64">
@@ -137,7 +123,7 @@ export function AttendanceDetails({ onBack, attendanceNumber, employeeName }: { 
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder={t('searchGuestOrPhone' as any) || (dir === 'ltr' ? 'Search guest or phone...' : 'البحث عن ضيف أو رقم هاتف...')}
+                placeholder={t('searchGuestOrPhone')}
                 className={cn(
                   "w-full bg-white/50 border border-white/60 focus:border-primary/50 focus:ring-2 focus:ring-primary/20 rounded-xl py-2 transition-all outline-none text-secondary text-sm",
                   dir === 'ltr' ? 'pl-9 pr-4' : 'pr-9 pl-4'
@@ -147,7 +133,7 @@ export function AttendanceDetails({ onBack, attendanceNumber, employeeName }: { 
             <button
               onClick={() => setSortOrder(prev => prev === 'desc' ? 'asc' : 'desc')}
               className="p-2 border border-secondary/10 bg-white/50 rounded-xl hover:bg-white/80 transition-colors flex items-center gap-2 text-secondary text-sm font-medium shrink-0 cursor-pointer"
-              title={dir === 'ltr' ? 'Sort by Time' : 'ترتيب حسب الوقت'}
+              title={t('sortByTime')}
             >
               <SortDesc className={cn("w-4 h-4 transition-transform", sortOrder === 'asc' ? 'rotate-180' : '')} />
             </button>
@@ -170,7 +156,7 @@ export function AttendanceDetails({ onBack, attendanceNumber, employeeName }: { 
           ))}
           {filteredAndSortedCheckIns.length === 0 && (
             <div className="py-10 text-center text-secondary/40">
-              {t('noCheckInsFound' as any) || (dir === 'ltr' ? 'No check-ins found.' : 'لم يتم العثور على تسجيلات حضور.')}
+              {t('noCheckInsFound')}
             </div>
           )}
         </div>
@@ -255,12 +241,12 @@ export function InvitationDetails({ invitation, onBack, onEdit }: InvitationDeta
     setShowSendConfirm(false);
     if (forceOverage) setOverageInfo(null);
 
-    const sendToast = toast.loading(dir === 'ltr' ? 'Sending invitation...' : 'جاري إرسال الدعوة...');
+    const sendToast = toast.loading(t('sendingInvitation'));
     setIsSending(true);
     try {
       const res = await sendInvitation(Number(invitation.id), token, forceOverage);
       toast.dismiss(sendToast);
-      toast.success(res.msg || (dir === 'ltr' ? 'Invitation sent successfully!' : 'تم إرسال الدعوة بنجاح!'));
+      toast.success(res.msg || t('invitationSentSuccess'));
       setSentInvitationData(res.data);
       await refreshDetails(false);
     } catch (err) {
@@ -269,7 +255,7 @@ export function InvitationDetails({ invitation, onBack, onEdit }: InvitationDeta
         setOverageInfo(err.data);
         return;
       }
-      toast.error((err as Error).message || (dir === 'ltr' ? 'Failed to send invitation' : 'فشل إرسال الدعوة'));
+      toast.error((err as Error).message || t('invitationSendFailed'));
     } finally {
       setIsSending(false);
     }
@@ -356,23 +342,22 @@ export function InvitationDetails({ invitation, onBack, onEdit }: InvitationDeta
       <AttendanceDetails
         onBack={() => setShowAttendanceDetails(false)}
         attendanceNumber={detail.attendance?.checked_in?.count || 0}
-        employeeName={dir === 'ltr' ? 'Mohammed Khalid' : 'محمد خالد'}
       />
     );
   }
 
   const getGuestStatusDisplay = (status: string) => {
     switch (status) {
-      case 'pending': return { icon: Clock, label: t('pending' as any) || (dir === 'ltr' ? 'Pending' : 'قيد الانتظار'), color: 'text-amber-500 bg-amber-50 ring-amber-500/20' };
-      case 'accepted': return { icon: CheckCircle2, label: t('accepted' as any) || (dir === 'ltr' ? 'Accepted' : 'مقبول'), color: 'text-emerald-500 bg-emerald-50 ring-emerald-500/20' };
-      case 'declined': return { icon: XCircle, label: t('declined' as any) || (dir === 'ltr' ? 'Declined' : 'مرفوض'), color: 'text-red-600 bg-red-50 ring-red-500/20' };
+      case 'pending': return { icon: Clock, label: t('pending'), color: 'text-amber-500 bg-amber-50 ring-amber-500/20' };
+      case 'accepted': return { icon: CheckCircle2, label: t('accepted'), color: 'text-emerald-500 bg-emerald-50 ring-emerald-500/20' };
+      case 'declined': return { icon: XCircle, label: t('declined'), color: 'text-red-600 bg-red-50 ring-red-500/20' };
       default: return { icon: MoreHorizontal, label: status, color: 'text-gray-500 bg-gray-50 ring-gray-500/20' };
     }
   };
 
   const attendanceData = detail ? [
     {
-      name: t('attendance' as any) || (dir === 'ltr' ? 'Attendance' : 'الحضور'),
+      name: t('attendance'),
       Attended: detail.attendance?.checked_in?.count || 0,
       NotAttended: detail.attendance?.not_checked_in?.count || 0
     }
@@ -421,7 +406,7 @@ export function InvitationDetails({ invitation, onBack, onEdit }: InvitationDeta
               activeTab === 'info' ? "bg-white text-secondary shadow-sm" : "text-secondary/60 hover:text-secondary hover:bg-white/50"
             )}
           >
-            {t('invitationInfo' as any) || (dir === 'ltr' ? 'Invitation Info' : 'معلومات الدعوة')}
+            {t('invitationInfo')}
           </button>
           <button
             onClick={() => setActiveTab('guests')}
@@ -430,7 +415,7 @@ export function InvitationDetails({ invitation, onBack, onEdit }: InvitationDeta
               activeTab === 'guests' ? "bg-white text-secondary shadow-sm" : "text-secondary/60 hover:text-secondary hover:bg-white/50"
             )}
           >
-            {t('guests' as any) || (dir === 'ltr' ? 'Guests' : 'الضيوف')}
+            {t('guests')}
           </button>
         </div>
 
@@ -449,20 +434,20 @@ export function InvitationDetails({ invitation, onBack, onEdit }: InvitationDeta
                   <div className="glass-panel p-6 rounded-3xl">
                     <h3 className="font-semibold text-secondary mb-4 flex items-center gap-2">
                       <Ticket className="w-5 h-5 text-primary" />
-                      {t('details' as any) || (dir === 'ltr' ? 'Details' : 'التفاصيل')}
+                      {t('details')}
                     </h3>
                     <div className="space-y-4">
                       <div className="p-4 bg-white/40 rounded-2xl flex items-center justify-between border border-secondary/5">
                         <div className="flex items-center gap-3 text-secondary/60">
                           <Calendar className="w-5 h-5" />
-                          <span className="text-sm">{t('deadline' as any) || (dir === 'ltr' ? 'Deadline' : 'الموعد النهائي')}</span>
+                          <span className="text-sm">{t('deadline')}</span>
                         </div>
                         <span className="font-medium text-secondary">{detail?.details.deadline_date || invitation.deadlineDate}</span>
                       </div>
                       <div className="p-4 bg-white/40 rounded-2xl flex items-center justify-between border border-secondary/5">
                         <div className="flex items-center gap-3 text-secondary/60">
                           <Users className="w-5 h-5" />
-                          <span className="text-sm">{t('numOfGuests' as any) || (dir === 'ltr' ? 'Num of Guests' : 'عدد الضيوف')}</span>
+                          <span className="text-sm">{t('numOfGuests')}</span>
                         </div>
                         <span className="font-medium text-secondary">
                           {detail?.details.guest_count || invitation.guestsNumber}
@@ -483,9 +468,9 @@ export function InvitationDetails({ invitation, onBack, onEdit }: InvitationDeta
                       <div className="p-4 bg-white/40 rounded-2xl flex items-center justify-between border border-secondary/5">
                         <div className="flex items-center gap-3 text-secondary/60">
                           <Settings className="w-5 h-5" />
-                          <span className="text-sm">{t('logic' as any) || (dir === 'ltr' ? 'Logic' : 'المنطق')}</span>
+                          <span className="text-sm">{t('logic')}</span>
                         </div>
-                        <span className="font-medium text-secondary">{detail?.details.logic_type_label || t('strictAction' as any) || (dir === 'ltr' ? 'Strict Action' : 'إجراء صارم')}</span>
+                        <span className="font-medium text-secondary">{detail?.details.logic_type_label || t('strictAction')}</span>
                       </div>
                     </div>
 
@@ -496,12 +481,10 @@ export function InvitationDetails({ invitation, onBack, onEdit }: InvitationDeta
                           <ShieldOff className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
                           <div>
                             <p className="text-sm font-bold text-rose-700">
-                              {dir === 'ltr' ? 'Barcode suspended' : 'الباركود موقوف'}
+                              {t('barcodeSuspended')}
                             </p>
                             <p className="text-xs text-rose-600/80 mt-0.5">
-                              {dir === 'ltr'
-                                ? 'This invitation cannot be sent until the order is reinstated.'
-                                : 'لا يمكن إرسال هذه الدعوة حتى يتم استعادة الطلب.'}
+                              {t('barcodeSuspendedHint')}
                             </p>
                           </div>
                         </div>
@@ -519,16 +502,28 @@ export function InvitationDetails({ invitation, onBack, onEdit }: InvitationDeta
                             ) : (
                               <Send className="w-5 h-5" />
                             )}
-                            {t('sendInvitation' as any) || (dir === 'ltr' ? 'Send Invitation' : 'إرسال الدعوة')}
+                            {t('sendInvitation')}
                           </button> : null
                       }
                     </div>
                   </div>
 
+                  {/* Venue welcome screen — only offered once the backend
+                      exposes the block (barcode invitations). */}
+                  {detail?.check_in_display && (
+                    <CheckInWelcomeCard
+                      invitationId={Number(invitation.id)}
+                      display={detail.check_in_display}
+                      invitationName={detail.name || invitation.serviceOrderReference}
+                      token={token}
+                      onSaved={setDetail}
+                    />
+                  )}
+
                   <div className="glass-panel p-6 rounded-3xl hidden lg:block">
                     <h3 className="font-semibold text-secondary mb-4 flex items-center gap-2">
                       <ImageIcon className="w-5 h-5 text-primary" />
-                      {t('designImage' as any) || (dir === 'ltr' ? 'Design Image' : 'صورة التصميم')}
+                      {t('designImage')}
                     </h3>
                     <div
                       className="relative aspect-[3/4] rounded-2xl overflow-hidden shadow-inner group border-4 border-white/40"
@@ -548,7 +543,7 @@ export function InvitationDetails({ invitation, onBack, onEdit }: InvitationDeta
                             <Ticket className="w-8 h-8 text-stone-400" />
                           </div>
                           <h4 className="text-2xl font-serif text-stone-800 mb-2">{invitation.serviceOrderReference}</h4>
-                          <p className="text-stone-500 text-sm mb-8 font-medium">{t('youAreCordiallyInvited' as any) || (dir === 'ltr' ? 'You are cordially invited' : 'أنتم مدعوون بكل مودة')}</p>
+                          <p className="text-stone-500 text-sm mb-8 font-medium">{t('youAreCordiallyInvited')}</p>
                           <div className="mt-auto bg-white p-3 rounded-xl shadow-sm border border-stone-200">
                             <QrCode className="w-24 h-24 text-stone-800" />
                           </div>
@@ -565,7 +560,7 @@ export function InvitationDetails({ invitation, onBack, onEdit }: InvitationDeta
                           >
                             <button className="px-5 py-2.5 bg-white text-secondary rounded-xl font-medium shadow-lg hover:scale-105 active:scale-95 transition-all flex items-center gap-2">
                               <UploadCloud className="w-4 h-4" />
-                              {t('replaceDesign' as any) || (dir === 'ltr' ? 'Replace Design' : 'تغيير التصميم')}
+                              {t('replaceDesign')}
                             </button>
                           </motion.div>
                         )}
@@ -576,10 +571,10 @@ export function InvitationDetails({ invitation, onBack, onEdit }: InvitationDeta
 
                 <div className="lg:col-span-2 space-y-6">
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                    <StatCard title={t('totalSent' as any) || (dir === 'ltr' ? 'Total Sent' : 'إجمالي المرسل')} value={detail?.response_stats.total_sent.count || 0} icon={Send} colorClass="bg-blue-100 text-blue-600" />
-                    <StatCard title={t('accepted' as any) || (dir === 'ltr' ? 'Accepted' : 'مقبول')} value={detail?.response_stats.accepted.count || 0} icon={CheckCircle2} colorClass="bg-emerald-100 text-emerald-600" subtitle={detail ? `${detail.response_stats.accepted.percentage}%` : ''} />
-                    <StatCard title={t('declined' as any) || (dir === 'ltr' ? 'Declined' : 'مرفوض')} value={detail?.response_stats.rejected.count || 0} icon={XCircle} colorClass="bg-red-100 text-red-600" subtitle={detail ? `${detail.response_stats.rejected.percentage}%` : ''} />
-                    <StatCard title={t('pending' as any) || (dir === 'ltr' ? 'Pending' : 'قيد الانتظار')} value={detail?.response_stats.pending.count || 0} icon={Clock} colorClass="bg-amber-100 text-amber-600" subtitle={detail ? `${detail.response_stats.pending.percentage}%` : ''} />
+                    <StatCard title={t('totalSent')} value={detail?.response_stats.total_sent.count || 0} icon={Send} colorClass="bg-blue-100 text-blue-600" />
+                    <StatCard title={t('accepted')} value={detail?.response_stats.accepted.count || 0} icon={CheckCircle2} colorClass="bg-emerald-100 text-emerald-600" subtitle={detail ? `${detail.response_stats.accepted.percentage}%` : ''} />
+                    <StatCard title={t('declined')} value={detail?.response_stats.rejected.count || 0} icon={XCircle} colorClass="bg-red-100 text-red-600" subtitle={detail ? `${detail.response_stats.rejected.percentage}%` : ''} />
+                    <StatCard title={t('pending')} value={detail?.response_stats.pending.count || 0} icon={Clock} colorClass="bg-amber-100 text-amber-600" subtitle={detail ? `${detail.response_stats.pending.percentage}%` : ''} />
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -588,7 +583,7 @@ export function InvitationDetails({ invitation, onBack, onEdit }: InvitationDeta
                       <div className="flex justify-between items-center mb-2">
                         <h3 className="font-semibold text-secondary flex items-center gap-2">
                           <BarChart3 className="w-5 h-5 text-primary" />
-                          {t('eventAttendance' as any) || (dir === 'ltr' ? 'Event Attendance' : 'حضور الحفل')}
+                          {t('eventAttendance')}
                         </h3>
                         {isPastEvent && (
                           <button
@@ -596,7 +591,7 @@ export function InvitationDetails({ invitation, onBack, onEdit }: InvitationDeta
                             className="flex items-center gap-1.5 px-3 py-1.5 bg-white/40 hover:bg-white/60 transition-colors rounded-lg text-xs font-medium text-secondary shadow-sm ring-1 ring-secondary/5 cursor-pointer"
                           >
                             <QrCode className="w-3.5 h-3.5" />
-                            {t('qrCheckIns' as any) || (dir === 'ltr' ? 'QR Check-ins' : 'تسجيلات الحضور عبر مسح الرمز')}
+                            {t('qrCheckIns')}
                           </button>
                         )}
                       </div>
@@ -612,15 +607,15 @@ export function InvitationDetails({ invitation, onBack, onEdit }: InvitationDeta
                                 contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
                               />
                               <Legend verticalAlign="bottom" height={36} iconType="circle" />
-                              <Bar dataKey="Attended" fill="#10b981" radius={[4, 4, 0, 0]} barSize={80} name={t('attended' as any) || (dir === 'ltr' ? 'Attended' : 'حضر')} />
-                              <Bar dataKey="NotAttended" fill="#94a3b8" radius={[4, 4, 0, 0]} barSize={80} name={t('didntAttend' as any) || (dir === 'ltr' ? "Didn't Attend" : "لم يحضر")} />
+                              <Bar dataKey="Attended" fill="#10b981" radius={[4, 4, 0, 0]} barSize={80} name={t('attended')} />
+                              <Bar dataKey="NotAttended" fill="#94a3b8" radius={[4, 4, 0, 0]} barSize={80} name={t('didntAttend')} />
                             </BarChart>
                           </ResponsiveContainer>
                         </div>
                       ) : (
                         <div className="flex-1 flex flex-col items-center justify-center text-center p-6 border-2 border-dashed border-secondary/10 rounded-2xl bg-white/30">
                           <Calendar className="w-12 h-12 text-secondary/30 mb-3" />
-                          <p className="text-secondary/60 font-medium">{t('statsAvailableAfterEvent' as any) || (dir === 'ltr' ? 'Stats will be available after the event' : 'ستتوفر الإحصائيات بعد الحفل')}</p>
+                          <p className="text-secondary/60 font-medium">{t('statsAvailableAfterEvent')}</p>
                         </div>
                       )}
                     </div>
@@ -642,11 +637,9 @@ export function InvitationDetails({ invitation, onBack, onEdit }: InvitationDeta
                   <div className="w-20 h-20 rounded-full bg-amber-50 text-amber-500 mb-6 flex items-center justify-center shadow-inner">
                     <AlertCircle className="w-10 h-10" />
                   </div>
-                  <h3 className="text-xl font-bold text-secondary mb-3">{t('noGuestsFound' as any) || (dir === 'ltr' ? 'No Guests Found' : 'لم يتم العثور على ضيوف')}</h3>
+                  <h3 className="text-xl font-bold text-secondary mb-3">{t('noGuestsFound')}</h3>
                   <p className="text-secondary/60 max-w-sm mb-8">
-                    {dir === 'ltr'
-                      ? 'No guests have been added for this service order yet.'
-                      : 'لم تتم إضافة أي ضيوف لطلب الخدمة هذا بعد.'}
+                    {t('noGuestsAddedYet')}
                   </p>
                   <div className="flex flex-wrap items-center justify-center gap-3">
                     <button
@@ -695,7 +688,7 @@ export function InvitationDetails({ invitation, onBack, onEdit }: InvitationDeta
                       <Search className={cn("absolute top-1/2 -translate-y-1/2 w-4 h-4 text-secondary/40", dir === 'ltr' ? 'left-4' : 'right-4')} />
                       <input
                         type="text"
-                        placeholder={t('searchByGuestNamePhone' as any) || (dir === 'ltr' ? "Search by name or phone..." : "البحث بالاسم أو رقم الهاتف...")}
+                        placeholder={t('searchByGuestNamePhone')}
                         value={guestSearch}
                         onChange={(e) => setGuestSearch(e.target.value)}
                         className={cn(
@@ -714,10 +707,10 @@ export function InvitationDetails({ invitation, onBack, onEdit }: InvitationDeta
                             dir === 'ltr' ? 'pl-4 pr-10' : 'pr-4 pl-10'
                           )}
                         >
-                          <option value="all">{t('allStatuses' as any) || (dir === 'ltr' ? 'All Statuses' : 'جميع الحالات')}</option>
-                          <option value="accepted">{t('accepted' as any) || (dir === 'ltr' ? 'Accepted' : 'مقبول')}</option>
-                          <option value="declined">{t('declined' as any) || (dir === 'ltr' ? 'Declined' : 'مرفوض')}</option>
-                          <option value="pending">{t('pending' as any) || (dir === 'ltr' ? 'Pending' : 'قيد الانتظار')}</option>
+                          <option value="all">{t('allStatuses')}</option>
+                          <option value="accepted">{t('accepted')}</option>
+                          <option value="declined">{t('declined')}</option>
+                          <option value="pending">{t('pending')}</option>
                         </select>
                         <div className={cn("absolute top-1/2 -translate-y-1/2 pointer-events-none text-secondary/40", dir === 'ltr' ? 'right-4' : 'left-4')}>
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
@@ -757,7 +750,7 @@ export function InvitationDetails({ invitation, onBack, onEdit }: InvitationDeta
                                 <span className="text-xs font-semibold">{StatusInfo.label}</span>
                               </div>
                               <button
-                                title={dir === 'ltr' ? "Contact via WhatsApp" : "تواصل عبر الواتساب"}
+                                title={t('contactViaWhatsapp')}
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   if (guest.phone) {
@@ -804,7 +797,7 @@ export function InvitationDetails({ invitation, onBack, onEdit }: InvitationDeta
                     ) : (
                       !guestLoading && (
                         <div className="py-12 text-center text-secondary/40">
-                          {t('noGuestsMatch' as any) || (dir === 'ltr' ? 'No guests match your search criteria' : 'لا يوجد ضيوف يطابقون معايير البحث المستعملة')}
+                          {t('noGuestsMatch')}
                         </div>
                       )
                     )}
@@ -870,9 +863,9 @@ export function InvitationDetails({ invitation, onBack, onEdit }: InvitationDeta
         isOpen={showSendConfirm}
         onClose={() => setShowSendConfirm(false)}
         onConfirm={() => handleSendInvitation(false)}
-        title={t('confirmSendInvitation' as any) || (dir === 'ltr' ? 'Send Invitation' : 'إرسال الدعوة')}
-        message={t('confirmSendInvitationMessage' as any) || (dir === 'ltr' ? 'Are you sure you want to send this invitation to all guests?' : 'هل أنت متأكد من رغبتك في إرسال هذه الدعوة لجميع الضيوف؟')}
-        confirmLabel={t('sendInvitation' as any) || (dir === 'ltr' ? 'Send Invitation' : 'إرسال الدعوة')}
+        title={t('confirmSendInvitation')}
+        message={t('confirmSendInvitationMessage')}
+        confirmLabel={t('sendInvitation')}
         confirmColor="bg-primary hover:bg-primary-dark"
       />
 
@@ -881,13 +874,11 @@ export function InvitationDetails({ invitation, onBack, onEdit }: InvitationDeta
         isOpen={!!overageInfo}
         onClose={() => setOverageInfo(null)}
         onConfirm={() => handleSendInvitation(true)}
-        title={dir === 'ltr' ? 'Guest limit exceeded' : 'تجاوز عدد المدعوين'}
-        message={
-          dir === 'ltr'
-            ? `This invitation has ${overageInfo?.guest_count} guests but the package includes only ${overageInfo?.guests_included}. Send anyway?`
-            : `تحتوي هذه الدعوة على ${overageInfo?.guest_count} مدعو بينما الباقة تشمل ${overageInfo?.guests_included} فقط. هل تريد الإرسال على أي حال؟`
-        }
-        confirmLabel={dir === 'ltr' ? 'Send anyway' : 'إرسال على أي حال'}
+        title={t('guestLimitExceeded')}
+        message={t('guestLimitExceededMessage')
+          .replace('{count}', String(overageInfo?.guest_count ?? ''))
+          .replace('{included}', String(overageInfo?.guests_included ?? ''))}
+        confirmLabel={t('sendAnyway')}
         confirmColor="bg-amber-500 hover:bg-amber-600"
       />
 
@@ -906,35 +897,35 @@ export function InvitationDetails({ invitation, onBack, onEdit }: InvitationDeta
                   <CheckCircle2 className="w-6 h-6 text-emerald-600 animate-bounce" />
                 </div>
                 <h3 className="text-xl font-bold text-secondary">
-                  {dir === 'ltr' ? 'Invitation Sent Successfully!' : 'تم إرسال الدعوة بنجاح!'}
+                  {t('invitationSentSuccess')}
                 </h3>
                 <p className="text-sm text-secondary/60">
-                  {dir === 'ltr' ? 'Here are the details of the sent invitation:' : 'إليك تفاصيل الدعوة المرسلة:'}
+                  {t('sentInvitationDetailsHint')}
                 </p>
               </div>
 
               <div className="space-y-4 border-t border-secondary/15 pt-4">
                 <div className="flex justify-between items-center py-2 border-b border-secondary/5 text-sm">
-                  <span className="text-secondary/60 font-medium">{dir === 'ltr' ? 'Reference Code' : 'رمز الدعوة'}</span>
+                  <span className="text-secondary/60 font-medium">{t('referenceCode')}</span>
                   <span className="font-mono font-bold text-secondary">{sentInvitationData.reference_code}</span>
                 </div>
                 <div className="flex justify-between items-start gap-4 py-2 border-b border-secondary/5 text-sm">
-                  <span className="text-secondary/60 font-medium shrink-0">{dir === 'ltr' ? 'Event Name' : 'اسم الحفل'}</span>
+                  <span className="text-secondary/60 font-medium shrink-0">{t('eventName')}</span>
                   <span className="font-bold text-secondary text-end">{sentInvitationData.name || (sentInvitationData.event && sentInvitationData.event.name)}</span>
                 </div>
                 <div className="flex justify-between items-center py-2 border-b border-secondary/5 text-sm">
-                  <span className="text-secondary/60 font-medium">{dir === 'ltr' ? 'Status' : 'حالة الدعوة'}</span>
+                  <span className="text-secondary/60 font-medium">{t('invitationStatus')}</span>
                   <span className="font-bold text-secondary bg-emerald-100 text-emerald-700 px-2.5 py-0.5 rounded-full text-xs">
-                    {sentInvitationData.status_label || (dir === 'ltr' ? 'Sent' : 'مرسلة')}
+                    {sentInvitationData.status_label || t('invitationSentStatus')}
                   </span>
                 </div>
                 <div className="flex justify-between items-center py-2 border-b border-secondary/5 text-sm">
-                  <span className="text-secondary/60 font-medium">{dir === 'ltr' ? 'Guests Count' : 'عدد المدعوين'}</span>
+                  <span className="text-secondary/60 font-medium">{t('guestsCount')}</span>
                   <span className="font-mono font-bold text-secondary">{sentInvitationData.guest_count}</span>
                 </div>
                 {sentInvitationData.sent_at && (
                   <div className="flex justify-between items-center py-2 border-b border-secondary/5 text-sm">
-                    <span className="text-secondary/60 font-medium">{dir === 'ltr' ? 'Sent At' : 'تاريخ الإرسال'}</span>
+                    <span className="text-secondary/60 font-medium">{t('sentAt')}</span>
                     <span className="font-mono font-bold text-secondary">
                       {new Date(sentInvitationData.sent_at).toLocaleString(dir === 'rtl' ? 'ar-SA' : 'en-US', { dateStyle: 'medium', timeStyle: 'short' })}
                     </span>
@@ -942,7 +933,7 @@ export function InvitationDetails({ invitation, onBack, onEdit }: InvitationDeta
                 )}
                 {sentInvitationData.design_url && (
                   <div className="flex flex-col gap-2 py-2">
-                    <span className="text-secondary/60 font-medium text-sm">{dir === 'ltr' ? 'Design' : 'تصميم الدعوة'}</span>
+                    <span className="text-secondary/60 font-medium text-sm">{t('design')}</span>
                     <div className="w-full h-40 relative rounded-2xl overflow-hidden border border-secondary/10 bg-secondary/5 flex items-center justify-center">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
@@ -959,7 +950,7 @@ export function InvitationDetails({ invitation, onBack, onEdit }: InvitationDeta
                 onClick={() => setSentInvitationData(null)}
                 className="w-full bg-primary hover:bg-primary-dark text-white py-3.5 rounded-xl font-medium transition-all shadow-md hover:shadow-lg flex items-center justify-center cursor-pointer"
               >
-                {dir === 'ltr' ? 'Dismiss' : 'إغلاق'}
+                {t('dismiss')}
               </button>
             </motion.div>
           </div>

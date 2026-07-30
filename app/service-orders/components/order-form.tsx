@@ -5,7 +5,6 @@ import { ChevronLeft, ChevronRight, Plus, Send, Loader2, Calculator, Users, Mess
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { getServices, getEmployees, getServiceById, calculateServiceOrderTotal, parseAmount, BARCODE_INVITATIONS_KEY } from '@/lib/api';
-import { getMockDataForService } from '@/lib/mockServicesStore';
 import {
   type FormState,
   type FormServiceItem,
@@ -117,16 +116,12 @@ export function OrderForm({
     }
   };
 
-  const getServicePackagesAndAddons = (serviceId: number, apiData: any) => {
-    if (apiData?.packages && apiData.packages.length > 0) {
-      return {
-        packages: apiData.packages as ServicePackage[],
-        addons: apiData.addons as ServiceAddon[]
-      };
-    }
-    // Fetch from shared mock store
-    return getMockDataForService(serviceId);
-  };
+  // A service with no packages on the API genuinely has none — the row renders
+  // its empty state rather than falling back to invented packages.
+  const getServicePackagesAndAddons = (apiData: any) => ({
+    packages: (apiData?.packages ?? []) as ServicePackage[],
+    addons: (apiData?.addons ?? []) as ServiceAddon[],
+  });
 
   const recalculateServicePrice = (item: FormServiceItem): string => {
     const selectedPackage = item.packages?.find(p => p.id === item.selectedPackageId);
@@ -193,7 +188,7 @@ export function OrderForm({
       const res = await getServiceById(service.id, token);
       const optionsData = res.data.options || [];
 
-      const { packages, addons } = getServicePackagesAndAddons(Number(service.id), res.data);
+      const { packages, addons } = getServicePackagesAndAddons(res.data);
       const defaultPackage = packages[0];
       const defaultPrice = defaultPackage ? String(defaultPackage.price) : '0';
 

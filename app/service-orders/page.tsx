@@ -1,5 +1,5 @@
 import React from 'react';
-import { getServerToken } from '@/lib/server-auth';
+import { getServerToken, handlePrefetchError } from '@/lib/server-auth';
 import {
   getAdminServiceOrders,
   type ApiServiceOrderItem,
@@ -23,7 +23,7 @@ export default async function Page() {
       initialPaymentStatuses = res.data.payment_statuses || [];
       initialPagination = res.data.pagination;
     } catch (e) {
-      console.error('Failed to prefetch service orders server-side:', e);
+      handlePrefetchError(e, 'service orders');
     }
   }
 
