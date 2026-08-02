@@ -293,6 +293,8 @@ export default function SocialLinksSection({ token }: { token: string }) {
                   valueAr={form.label_ar}
                   onChangeEn={v => setForm(f => ({ ...f, label_en: v }))}
                   onChangeAr={v => setForm(f => ({ ...f, label_ar: v }))}
+                  placeholderEn={t('lpSocialLabelEnPlaceholder')}
+                  placeholderAr={t('lpSocialLabelArPlaceholder')}
                 />
               </div>
               <div className="flex gap-3 px-6 py-4 border-t border-secondary/10">

@@ -119,6 +119,8 @@ export default function ContactSection({ token }: { token: string }) {
         valueAr={contact.office_address_ar || ''}
         onChangeEn={v => setContact(c => c ? { ...c, office_address_en: v } : c)}
         onChangeAr={v => setContact(c => c ? { ...c, office_address_ar: v } : c)}
+        placeholderEn={t('lpOfficeAddressEnPlaceholder')}
+        placeholderAr={t('lpOfficeAddressArPlaceholder')}
       />
 
       <div>

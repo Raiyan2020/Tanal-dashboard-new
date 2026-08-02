@@ -269,6 +269,8 @@ export default function PortfolioSection({ token }: { token: string }) {
                   valueAr={form.name_ar}
                   onChangeEn={v => setForm(f => ({ ...f, name_en: v }))}
                   onChangeAr={v => setForm(f => ({ ...f, name_ar: v }))}
+                  placeholderEn={t('lpPortfolioNameEnPlaceholder')}
+                  placeholderAr={t('lpPortfolioNameArPlaceholder')}
                 />
               </div>
               <div className="flex gap-3 px-6 py-4 border-t border-secondary/10">

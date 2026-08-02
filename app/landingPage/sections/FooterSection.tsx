@@ -108,6 +108,8 @@ export default function FooterSection({ token }: { token: string }) {
         valueAr={footer.brand_name_ar}
         onChangeEn={v => setFooter(f => f ? { ...f, brand_name_en: v } : f)}
         onChangeAr={v => setFooter(f => f ? { ...f, brand_name_ar: v } : f)}
+        placeholderEn={t('lpBrandNameEnPlaceholder')}
+        placeholderAr={t('lpBrandNameArPlaceholder')}
       />
 
       <BilingualField
@@ -117,6 +119,8 @@ export default function FooterSection({ token }: { token: string }) {
         valueAr={footer.tagline_ar}
         onChangeEn={v => setFooter(f => f ? { ...f, tagline_en: v } : f)}
         onChangeAr={v => setFooter(f => f ? { ...f, tagline_ar: v } : f)}
+        placeholderEn={t('lpTaglineEnPlaceholder')}
+        placeholderAr={t('lpTaglineArPlaceholder')}
       />
 
       <BilingualField
@@ -127,6 +131,8 @@ export default function FooterSection({ token }: { token: string }) {
         onChangeEn={v => setFooter(f => f ? { ...f, description_en: v } : f)}
         onChangeAr={v => setFooter(f => f ? { ...f, description_ar: v } : f)}
         multiline
+        placeholderEn={t('lpFooterDescEnPlaceholder')}
+        placeholderAr={t('lpFooterDescArPlaceholder')}
       />
 
       <div>

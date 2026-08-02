@@ -152,6 +152,8 @@ export default function HeroSection({ token }: { token: string }) {
         valueEn={hero.title.en} valueAr={hero.title.ar}
         onChangeEn={v => setHero(h => h ? { ...h, title: { ...h.title, en: v } } : h)}
         onChangeAr={v => setHero(h => h ? { ...h, title: { ...h.title, ar: v } } : h)}
+        placeholderEn={t('lpHeroTitleEnPlaceholder')}
+        placeholderAr={t('lpHeroTitleArPlaceholder')}
       />
 
       <BilingualField
@@ -160,6 +162,8 @@ export default function HeroSection({ token }: { token: string }) {
         onChangeEn={v => setHero(h => h ? { ...h, subtitle: { ...h.subtitle, en: v } } : h)}
         onChangeAr={v => setHero(h => h ? { ...h, subtitle: { ...h.subtitle, ar: v } } : h)}
         multiline rows={3}
+        placeholderEn={t('lpHeroSubtitleEnPlaceholder')}
+        placeholderAr={t('lpHeroSubtitleArPlaceholder')}
       />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -169,6 +173,8 @@ export default function HeroSection({ token }: { token: string }) {
             valueEn={hero.primary_cta_label.en} valueAr={hero.primary_cta_label.ar}
             onChangeEn={v => setHero(h => h ? { ...h, primary_cta_label: { ...h.primary_cta_label, en: v } } : h)}
             onChangeAr={v => setHero(h => h ? { ...h, primary_cta_label: { ...h.primary_cta_label, ar: v } } : h)}
+            placeholderEn={t('lpPrimaryCtaEnPlaceholder')}
+            placeholderAr={t('lpPrimaryCtaArPlaceholder')}
           />
           <label className={cn(labelClass, 'mt-3')}>{t('lpPrimaryCtaUrl')}</label>
           <input
@@ -183,6 +189,8 @@ export default function HeroSection({ token }: { token: string }) {
             valueEn={hero.secondary_cta_label.en} valueAr={hero.secondary_cta_label.ar}
             onChangeEn={v => setHero(h => h ? { ...h, secondary_cta_label: { ...h.secondary_cta_label, en: v } } : h)}
             onChangeAr={v => setHero(h => h ? { ...h, secondary_cta_label: { ...h.secondary_cta_label, ar: v } } : h)}
+            placeholderEn={t('lpSecondaryCtaEnPlaceholder')}
+            placeholderAr={t('lpSecondaryCtaArPlaceholder')}
           />
           <label className={cn(labelClass, 'mt-3')}>{t('lpSecondaryCtaUrl')}</label>
           <input

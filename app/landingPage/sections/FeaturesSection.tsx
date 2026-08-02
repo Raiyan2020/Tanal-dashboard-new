@@ -301,6 +301,8 @@ export default function FeaturesSection({ token }: { token: string }) {
                   valueAr={form.title_ar}
                   onChangeEn={v => setForm(f => ({ ...f, title_en: v }))}
                   onChangeAr={v => setForm(f => ({ ...f, title_ar: v }))}
+                  placeholderEn={t('lpFeatureTitleEnPlaceholder')}
+                  placeholderAr={t('lpFeatureTitleArPlaceholder')}
                 />
                 <BilingualField
                   labelEn={`${t('lpDescription')} (EN)`}
@@ -310,6 +312,8 @@ export default function FeaturesSection({ token }: { token: string }) {
                   onChangeEn={v => setForm(f => ({ ...f, description_en: v }))}
                   onChangeAr={v => setForm(f => ({ ...f, description_ar: v }))}
                   multiline
+                  placeholderEn={t('lpFeatureDescEnPlaceholder')}
+                  placeholderAr={t('lpFeatureDescArPlaceholder')}
                 />
               </div>
               <div className="flex gap-3 px-6 py-4 border-t border-secondary/10">
