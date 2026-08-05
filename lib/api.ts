@@ -2427,11 +2427,19 @@ export async function updateLandingContact(fields: {
 export async function getLandingEventTypes(token: string): Promise<ApiResponse<{ items: LandingEventType[] }>> {
   return apiRequest('/admin/landing-page/event-types', { token });
 }
+/** Body shape both create and update post: `{ name_ar, name_en, sort }` as flat JSON. */
+function eventTypeBody(fields: { name_ar: string; name_en: string; sort?: number }) {
+  return {
+    name_ar: fields.name_ar,
+    name_en: fields.name_en,
+    sort: fields.sort ?? 0,
+  };
+}
 export async function createEventType(fields: { name_ar: string; name_en: string; sort?: number }, token: string): Promise<ApiResponse<LandingEventType>> {
-  return apiRequest('/admin/landing-page/event-types', { method: 'POST', body: { 'name[ar]': fields.name_ar, 'name[en]': fields.name_en, sort: fields.sort ?? 0 } as any, token });
+  return apiRequest('/admin/landing-page/event-types', { method: 'POST', body: eventTypeBody(fields), token });
 }
 export async function updateEventType(id: number, fields: { name_ar: string; name_en: string; sort?: number }, token: string): Promise<ApiResponse<LandingEventType>> {
-  return apiRequest(`/admin/landing-page/event-types/${id}?_method=put`, { method: 'POST', body: { 'name[ar]': fields.name_ar, 'name[en]': fields.name_en, sort: fields.sort ?? 0 } as any, token });
+  return apiRequest(`/admin/landing-page/event-types/${id}?_method=put`, { method: 'POST', body: eventTypeBody(fields), token });
 }
 export async function deleteEventType(id: number, token: string): Promise<ApiResponse<any>> {
   return apiRequest(`/admin/landing-page/event-types/${id}`, { method: 'DELETE', token });

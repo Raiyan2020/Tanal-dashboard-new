@@ -91,7 +91,9 @@ export default function EventTypesSection({ token }: { token: string }) {
       if (modal?.mode === 'add') {
         await createEventType(form, token);
       } else if (modal?.mode === 'edit') {
-        await updateEventType(modal.et.id, form, token);
+        // Carry the current sort through — omitting it defaults to 0 and would
+        // drop the type to the top of the list on every rename.
+        await updateEventType(modal.et.id, { ...form, sort: modal.et.sort }, token);
       }
       toast.success(t('lpSavedOk'));
       setModal(null);
