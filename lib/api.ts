@@ -2195,7 +2195,8 @@ export interface LandingPortfolioItem {
   image: string | null;
   /** Absolute URL for the stored image; this is what `next/image` needs. */
   image_url: string | null;
-  name: string;
+  /** Legacy single-locale name resolved from `Accept-Language`; absent now that the API returns both locales. */
+  name?: string;
   sort: number;
   name_ar: string;
   name_en: string;

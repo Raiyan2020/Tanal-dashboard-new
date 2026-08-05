@@ -37,30 +37,28 @@ export default function PortfolioSection({ token }: { token: string }) {
   const [formSaving, setFormSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
+  // The endpoint returns both locales on every item, so a single request is enough.
+  // `name` is only used as a fallback for responses that still resolve one locale.
   const load = useCallback(() => {
     setLoading(true);
-    Promise.all([
-      getLandingPortfolio(token, 'ar'),
-      getLandingPortfolio(token, 'en')
-    ])
-      .then(([resAr, resEn]) => {
-        const arItems = resAr.data?.items || [];
-        const enItems = resEn.data?.items || [];
-        const enMap = new Map(enItems.map(item => [item.id, item]));
-
-        const merged: LandingPortfolioItem[] = arItems.map(arItem => {
-          const enItem = enMap.get(arItem.id);
-          return {
-            ...arItem,
-            name_ar: arItem.name || '',
-            name_en: enItem?.name || '',
-          };
-        });
-        setItems(merged);
+    getLandingPortfolio(token)
+      .then(res => {
+        const normalized: LandingPortfolioItem[] = (res.data?.items || []).map(item => ({
+          ...item,
+          name_ar: item.name_ar || item.name || '',
+          name_en: item.name_en || item.name || '',
+        }));
+        setItems(normalized);
       })
       .catch(() => toast.error(t('lpErrorPortfolio')))
       .finally(() => setLoading(false));
   }, [token, t]);
+
+  const itemName = useCallback(
+    (item: LandingPortfolioItem) =>
+      (language === 'ar' ? item.name_ar : item.name_en) || item.name_en || item.name_ar || '',
+    [language]
+  );
 
   useEffect(() => {
     load();
@@ -178,7 +176,7 @@ export default function PortfolioSection({ token }: { token: string }) {
             >
               <div className="aspect-video relative bg-secondary/5">
                 {item.image_url ? (
-                  <Image src={item.image_url} alt={item.name} fill className="object-cover" />
+                  <Image src={item.image_url} alt={itemName(item)} fill className="object-cover" />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center">
                     <LayoutGrid className="w-8 h-8 text-secondary/20" />
@@ -203,7 +201,13 @@ export default function PortfolioSection({ token }: { token: string }) {
                 </div>
               </div>
               <div className="p-3 flex items-center justify-between">
-                <p className="font-semibold text-secondary text-sm truncate">{item.name}</p>
+                <p
+                  className="font-semibold text-secondary text-sm truncate"
+                  dir={language === 'ar' ? 'rtl' : 'ltr'}
+                  title={itemName(item)}
+                >
+                  {itemName(item)}
+                </p>
                 <div className="flex gap-0.5 shrink-0">
                   <button
                     onClick={() => moveItem(idx, 'up')}
@@ -294,7 +298,7 @@ export default function PortfolioSection({ token }: { token: string }) {
         )}
         {modal?.mode === 'delete' && (
           <DeleteConfirm
-            label={modal.item.name}
+            label={itemName(modal.item)}
             onConfirm={doDelete}
             onCancel={() => setModal(null)}
             loading={deleting}

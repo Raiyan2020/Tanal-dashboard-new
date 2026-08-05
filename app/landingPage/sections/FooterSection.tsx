@@ -36,11 +36,11 @@ export default function FooterSection({ token }: { token: string }) {
       taglineEn: z.string().min(1, { message: language === 'ar' ? 'الشعار اللفظي بالإنجليزية مطلوب' : 'Tagline in English is required' })
         .max(40, { message: language === 'ar' ? 'الشعار لا يمكن أن يتجاوز 40 حرفاً' : 'Tagline must not exceed 40 characters' }),
       descriptionAr: z.string().min(1, { message: language === 'ar' ? 'الوصف بالعربية مطلوب' : 'Description in Arabic is required' })
-        .max(200, { message: language === 'ar' ? 'الوصف لا يمكن أن يتجاوز 40 حرفاً' : 'Description must not exceed 40 characters' }),
+        .max(100, { message: language === 'ar' ? 'الوصف لا يمكن أن يتجاوز 100 حرف' : 'Description must not exceed 100 characters' }),
       descriptionEn: z.string().min(1, { message: language === 'ar' ? 'الوصف بالإنجليزية مطلوب' : 'Description in English is required' })
-        .max(200, { message: language === 'ar' ? 'الوصف لا يمكن أن يتجاوز 40 حرفاً' : 'Description must not exceed 40 characters' }),
+        .max(100, { message: language === 'ar' ? 'الوصف لا يمكن أن يتجاوز 100 حرف' : 'Description must not exceed 100 characters' }),
       copyright: z.string().min(1, { message: language === 'ar' ? 'حقوق النشر مطلوبة' : 'Copyright info is required' })
-        .max(200, { message: language === 'ar' ? 'حقوق النشر لا يمكن أن تتجاوز 40 حرفاً' : 'Copyright must not exceed 40 characters' }),
+        .max(200, { message: language === 'ar' ? 'حقوق النشر لا يمكن أن تتجاوز 200 حرف' : 'Copyright must not exceed 200 characters' }),
       logo: z.any().refine(val => val !== null && val !== undefined, { message: language === 'ar' ? 'شعار الموقع مطلوب' : 'Logo image is required' }),
     });
 

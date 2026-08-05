@@ -32,28 +32,36 @@ export const getSocialIcon = (platform: string) => {
 
 // ── BilingualField ────────────────────────────────────────────────────────────
 
+export const errorInputClass = 'border-red-400 focus:border-red-400 focus:ring-red-300/40';
+
+export const FieldError = ({ message }: { message?: string }) =>
+  message ? <p className="mt-1.5 text-xs font-medium text-red-500">{message}</p> : null;
+
 export const BilingualField = ({
   labelEn, labelAr, valueEn, valueAr, onChangeEn, onChangeAr, multiline, rows = 3,
-  placeholderEn, placeholderAr,
+  placeholderEn, placeholderAr, errorEn, errorAr,
 }: {
   labelEn: string; labelAr: string;
   valueEn: string; valueAr: string;
   onChangeEn: (v: string) => void; onChangeAr: (v: string) => void;
   multiline?: boolean; rows?: number;
   placeholderEn?: string; placeholderAr?: string;
+  errorEn?: string; errorAr?: string;
 }) => (
   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
     <div>
       <label className={labelClass}>{labelEn}</label>
       {multiline
-        ? <textarea placeholder={placeholderEn} value={valueEn} onChange={e => onChangeEn(e.target.value)} dir="ltr" rows={rows} className={cn(inputClass, 'resize-none text-left')} />
-        : <input type="text" placeholder={placeholderEn} value={valueEn} onChange={e => onChangeEn(e.target.value)} dir="ltr" className={cn(inputClass, 'text-left')} />}
+        ? <textarea placeholder={placeholderEn} value={valueEn} onChange={e => onChangeEn(e.target.value)} dir="ltr" rows={rows} aria-invalid={!!errorEn} className={cn(inputClass, 'resize-none text-left', errorEn && errorInputClass)} />
+        : <input type="text" placeholder={placeholderEn} value={valueEn} onChange={e => onChangeEn(e.target.value)} dir="ltr" aria-invalid={!!errorEn} className={cn(inputClass, 'text-left', errorEn && errorInputClass)} />}
+      <FieldError message={errorEn} />
     </div>
     <div>
       <label className={labelClass}>{labelAr}</label>
       {multiline
-        ? <textarea placeholder={placeholderAr} value={valueAr} onChange={e => onChangeAr(e.target.value)} dir="rtl" rows={rows} className={cn(inputClass, 'resize-none text-right font-arabic')} />
-        : <input type="text" placeholder={placeholderAr} value={valueAr} onChange={e => onChangeAr(e.target.value)} dir="rtl" className={cn(inputClass, 'text-right font-arabic')} />}
+        ? <textarea placeholder={placeholderAr} value={valueAr} onChange={e => onChangeAr(e.target.value)} dir="rtl" rows={rows} aria-invalid={!!errorAr} className={cn(inputClass, 'resize-none text-right font-arabic', errorAr && errorInputClass)} />
+        : <input type="text" placeholder={placeholderAr} value={valueAr} onChange={e => onChangeAr(e.target.value)} dir="rtl" aria-invalid={!!errorAr} className={cn(inputClass, 'text-right font-arabic', errorAr && errorInputClass)} />}
+      <FieldError message={errorAr} />
     </div>
   </div>
 );
@@ -61,10 +69,10 @@ export const BilingualField = ({
 // ── ImageUploadBox ────────────────────────────────────────────────────────────
 
 export const ImageUploadBox = ({
-  url, onFile, onClear, aspect = 'aspect-video', label,
+  url, onFile, onClear, aspect = 'aspect-video', label, error,
 }: {
   url: string | null; onFile: (f: File) => void; onClear: () => void;
-  aspect?: string; label?: string;
+  aspect?: string; label?: string; error?: string;
 }) => {
   const ref = useRef<HTMLInputElement>(null);
   const { t } = useLanguage();
@@ -87,11 +95,12 @@ export const ImageUploadBox = ({
         </div>
       ) : (
         <div onClick={() => ref.current?.click()}
-          className={cn('rounded-2xl border-2 border-dashed border-secondary/20 flex flex-col items-center justify-center bg-white/30 text-secondary/50 hover:bg-primary/5 hover:border-primary/30 transition-colors cursor-pointer group', aspect)}>
+          className={cn('rounded-2xl border-2 border-dashed border-secondary/20 flex flex-col items-center justify-center bg-white/30 text-secondary/50 hover:bg-primary/5 hover:border-primary/30 transition-colors cursor-pointer group', aspect, error && 'border-red-400 text-red-400')}>
           <Upload className="w-6 h-6 mb-2 group-hover:text-primary transition-colors" />
           <span className="text-sm font-medium group-hover:text-primary transition-colors">{t('lpUploadImage')}</span>
         </div>
       )}
+      <FieldError message={error} />
       <input ref={ref} type="file" accept="image/*" className="hidden"
         onChange={e => { const f = e.target.files?.[0]; if (f) onFile(f); e.target.value = ''; }} />
     </div>

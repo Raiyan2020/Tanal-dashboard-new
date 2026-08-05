@@ -24,6 +24,9 @@ interface StepForm {
   iconPreview?: string;
 }
 
+type StepFieldName = 'title_ar' | 'title_en' | 'description_ar' | 'description_en' | 'icon';
+type StepErrors = Partial<Record<StepFieldName, string>>;
+
 const emptyStepForm = (): StepForm => ({
   title_ar: '',
   title_en: '',
@@ -38,8 +41,26 @@ export default function HowItWorksSection({ token }: { token: string }) {
   const [saving, setSaving] = useState(false);
   const [modal, setModal] = useState<null | { mode: 'add' } | { mode: 'edit'; step: LandingHowItWorksStep } | { mode: 'delete'; step: LandingHowItWorksStep }>(null);
   const [form, setForm] = useState<StepForm>(emptyStepForm());
+  const [errors, setErrors] = useState<StepErrors>({});
   const [formSaving, setFormSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+
+  // Patch a single field and clear its error as soon as the user edits it
+  const setField = <K extends keyof StepForm>(key: K, value: StepForm[K], errorKey: StepFieldName) => {
+    setForm(f => ({ ...f, [key]: value }));
+    setErrors(e => (e[errorKey] ? { ...e, [errorKey]: undefined } : e));
+  };
+
+  const openModal = (next: NonNullable<typeof modal>, nextForm: StepForm) => {
+    setForm(nextForm);
+    setErrors({});
+    setModal(next);
+  };
+
+  const closeModal = () => {
+    setModal(null);
+    setErrors({});
+  };
 
   const load = useCallback(() => {
     setLoading(true);
@@ -94,32 +115,40 @@ export default function HowItWorksSection({ token }: { token: string }) {
     }
   };
 
-  const submitForm = async () => {
-    const schema = z.object({
-      titleAr: z.string().min(1, { message: language === 'ar' ? 'العنوان بالعربية مطلوب' : 'Title in Arabic is required' })
-        .max(40, { message: language === 'ar' ? 'العنوان لا يمكن أن يتجاوز 40 حرفاً' : 'Title must not exceed 40 characters' }),
-      titleEn: z.string().min(1, { message: language === 'ar' ? 'العنوان بالإنجليزية مطلوب' : 'Title in English is required' })
-        .max(40, { message: language === 'ar' ? 'العنوان لا يمكن أن يتجاوز 40 حرفاً' : 'Title must not exceed 40 characters' }),
-      descriptionAr: z.string().min(1, { message: language === 'ar' ? 'الوصف بالعربية مطلوب' : 'Description in Arabic is required' })
-        .max(40, { message: language === 'ar' ? 'الوصف لا يمكن أن يتجاوز 40 حرفاً' : 'Description must not exceed 40 characters' }),
-      descriptionEn: z.string().min(1, { message: language === 'ar' ? 'الوصف بالإنجليزية مطلوب' : 'Description in English is required' })
-        .max(40, { message: language === 'ar' ? 'الوصف لا يمكن أن يتجاوز 40 حرفاً' : 'Description must not exceed 40 characters' }),
-      icon: z.any().refine(val => val !== null && val !== undefined, { message: language === 'ar' ? 'أيقونة الخطوة مطلوبة' : 'Step icon is required' }),
-    });
+  const schema = React.useMemo(() => z.object({
+    title_ar: z.string().trim().min(1, { message: language === 'ar' ? 'العنوان بالعربية مطلوب' : 'Title in Arabic is required' })
+      .max(40, { message: language === 'ar' ? 'العنوان لا يمكن أن يتجاوز 40 حرفاً' : 'Title must not exceed 40 characters' }),
+    title_en: z.string().trim().min(1, { message: language === 'ar' ? 'العنوان بالإنجليزية مطلوب' : 'Title in English is required' })
+      .max(40, { message: language === 'ar' ? 'العنوان لا يمكن أن يتجاوز 40 حرفاً' : 'Title must not exceed 40 characters' }),
+    description_ar: z.string().trim().min(1, { message: language === 'ar' ? 'الوصف بالعربية مطلوب' : 'Description in Arabic is required' })
+      .max(150, { message: language === 'ar' ? 'الوصف لا يمكن أن يتجاوز 150 حرف' : 'Description must not exceed 150 characters' }),
+    description_en: z.string().trim().min(1, { message: language === 'ar' ? 'الوصف بالإنجليزية مطلوب' : 'Description in English is required' })
+      .max(150, { message: language === 'ar' ? 'الوصف لا يمكن أن يتجاوز 150 حرف' : 'Description must not exceed 100 characters' }),
+    icon: z.any().refine(val => val !== null && val !== undefined && val !== '', { message: language === 'ar' ? 'أيقونة الخطوة مطلوبة' : 'Step icon is required' }),
+  }), [language]);
+
+  const submitForm = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
 
     const result = schema.safeParse({
-      titleAr: form.title_ar,
-      titleEn: form.title_en,
-      descriptionAr: form.description_ar,
-      descriptionEn: form.description_en,
+      title_ar: form.title_ar,
+      title_en: form.title_en,
+      description_ar: form.description_ar,
+      description_en: form.description_en,
       icon: form.iconFile || (modal?.mode === 'edit' ? modal.step.icon_url : null),
     });
 
     if (!result.success) {
-      toast.error(result.error.issues[0].message);
+      const fieldErrors: StepErrors = {};
+      for (const issue of result.error.issues) {
+        const key = issue.path[0] as StepFieldName | undefined;
+        if (key && !fieldErrors[key]) fieldErrors[key] = issue.message;
+      }
+      setErrors(fieldErrors);
       return;
     }
 
+    setErrors({});
     setFormSaving(true);
     try {
       if (modal?.mode === 'add') {
@@ -128,7 +157,7 @@ export default function HowItWorksSection({ token }: { token: string }) {
         await updateHowItWorksStep(modal.step.id, { ...form, icon: form.iconFile }, token);
       }
       toast.success(t('lpSavedOk'));
-      setModal(null);
+      closeModal();
       load();
     } catch (e) {
       const msg = (e as Error).message;
@@ -148,7 +177,7 @@ export default function HowItWorksSection({ token }: { token: string }) {
     try {
       await deleteHowItWorksStep(modal.step.id, token);
       toast.success(t('lpDeleted'));
-      setModal(null);
+      closeModal();
       load();
     } catch (e) {
       toast.error((e as Error).message);
@@ -174,10 +203,7 @@ export default function HowItWorksSection({ token }: { token: string }) {
             {t('lpSaveOrder')}
           </button>
           <button
-            onClick={() => {
-              setForm(emptyStepForm());
-              setModal({ mode: 'add' });
-            }}
+            onClick={() => openModal({ mode: 'add' }, emptyStepForm())}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-white rounded-xl text-sm font-medium cursor-pointer hover:bg-primary-dark transition-colors shadow-sm"
           >
             <Plus className="w-4 h-4" /> {t('lpAddStep')}
@@ -233,15 +259,12 @@ export default function HowItWorksSection({ token }: { token: string }) {
               </div>
               <div className="flex items-center gap-1.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
                 <button
-                  onClick={() => {
-                    setForm({
-                      title_ar: step.title_ar,
-                      title_en: step.title_en,
-                      description_ar: step.description_ar,
-                      description_en: step.description_en,
-                    });
-                    setModal({ mode: 'edit', step });
-                  }}
+                  onClick={() => openModal({ mode: 'edit', step }, {
+                    title_ar: step.title_ar,
+                    title_en: step.title_en,
+                    description_ar: step.description_ar,
+                    description_en: step.description_en,
+                  })}
                   className="flex items-center gap-1 px-2.5 py-1.5 bg-primary/10 text-primary rounded-lg text-xs font-medium cursor-pointer hover:bg-primary/20 transition-colors"
                 >
                   <Pencil className="w-3.5 h-3.5" /> {t('lpEditStep')}
@@ -269,7 +292,7 @@ export default function HowItWorksSection({ token }: { token: string }) {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30 backdrop-blur-sm"
-            onClick={() => setModal(null)}
+            onClick={closeModal}
           >
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
@@ -279,65 +302,75 @@ export default function HowItWorksSection({ token }: { token: string }) {
               onClick={e => e.stopPropagation()}
               className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden"
             >
-              <div className="flex items-center justify-between px-6 py-4 border-b border-secondary/10">
-                <h3 className="font-bold text-secondary">
-                  {modal?.mode === 'add' ? t('lpAddStepTitle') : t('lpEditStepTitle')}
-                </h3>
-                <button
-                  onClick={() => setModal(null)}
-                  className="p-2 hover:bg-secondary/10 rounded-xl cursor-pointer transition-colors"
-                >
-                  <X className="w-5 h-5 text-secondary/60" />
-                </button>
-              </div>
-              <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
-                <ImageUploadBox
-                  url={form.iconPreview ?? (modal?.mode === 'edit' ? modal.step.icon_url : null)}
-                  label={t('lpIconImage')}
-                  aspect="aspect-square max-w-[120px]"
-                  onFile={f => {
-                    setForm(v => ({ ...v, iconFile: f, iconPreview: URL.createObjectURL(f) }));
-                  }}
-                  onClear={() => setForm(v => ({ ...v, iconFile: undefined, iconPreview: undefined }))}
-                />
-                <BilingualField
-                  labelEn={`${t('lpTitle')} (EN)`}
-                  labelAr={`${t('lpTitle')} (AR)`}
-                  valueEn={form.title_en}
-                  valueAr={form.title_ar}
-                  onChangeEn={v => setForm(f => ({ ...f, title_en: v }))}
-                  onChangeAr={v => setForm(f => ({ ...f, title_ar: v }))}
-                  placeholderEn={t('lpStepTitleEnPlaceholder')}
-                  placeholderAr={t('lpStepTitleArPlaceholder')}
-                />
-                <BilingualField
-                  labelEn={`${t('lpDescription')} (EN)`}
-                  labelAr={`${t('lpDescription')} (AR)`}
-                  valueEn={form.description_en}
-                  valueAr={form.description_ar}
-                  onChangeEn={v => setForm(f => ({ ...f, description_en: v }))}
-                  onChangeAr={v => setForm(f => ({ ...f, description_ar: v }))}
-                  multiline
-                  placeholderEn={t('lpStepDescEnPlaceholder')}
-                  placeholderAr={t('lpStepDescArPlaceholder')}
-                />
-              </div>
-              <div className="flex gap-3 px-6 py-4 border-t border-secondary/10">
-                <button
-                  onClick={() => setModal(null)}
-                  className="flex-1 py-2.5 rounded-xl bg-secondary/8 text-secondary font-semibold text-sm cursor-pointer hover:bg-secondary/15 transition-colors"
-                >
-                  {t('cancel')}
-                </button>
-                <button
-                  onClick={submitForm}
-                  disabled={formSaving}
-                  className="flex-1 py-2.5 rounded-xl bg-primary text-white font-semibold text-sm cursor-pointer hover:bg-primary-dark transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
-                >
-                  {formSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}{' '}
-                  {t('save')}
-                </button>
-              </div>
+              <form onSubmit={submitForm} noValidate>
+                <div className="flex items-center justify-between px-6 py-4 border-b border-secondary/10">
+                  <h3 className="font-bold text-secondary">
+                    {modal?.mode === 'add' ? t('lpAddStepTitle') : t('lpEditStepTitle')}
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={closeModal}
+                    className="p-2 hover:bg-secondary/10 rounded-xl cursor-pointer transition-colors"
+                  >
+                    <X className="w-5 h-5 text-secondary/60" />
+                  </button>
+                </div>
+                <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+                  <ImageUploadBox
+                    url={form.iconPreview ?? (modal?.mode === 'edit' ? modal.step.icon_url : null)}
+                    label={t('lpIconImage')}
+                    aspect="aspect-square max-w-[120px]"
+                    error={errors.icon}
+                    onFile={f => {
+                      setForm(v => ({ ...v, iconFile: f, iconPreview: URL.createObjectURL(f) }));
+                      setErrors(e => (e.icon ? { ...e, icon: undefined } : e));
+                    }}
+                    onClear={() => setForm(v => ({ ...v, iconFile: undefined, iconPreview: undefined }))}
+                  />
+                  <BilingualField
+                    labelEn={`${t('lpTitle')} (EN)`}
+                    labelAr={`${t('lpTitle')} (AR)`}
+                    valueEn={form.title_en}
+                    valueAr={form.title_ar}
+                    onChangeEn={v => setField('title_en', v, 'title_en')}
+                    onChangeAr={v => setField('title_ar', v, 'title_ar')}
+                    placeholderEn={t('lpStepTitleEnPlaceholder')}
+                    placeholderAr={t('lpStepTitleArPlaceholder')}
+                    errorEn={errors.title_en}
+                    errorAr={errors.title_ar}
+                  />
+                  <BilingualField
+                    labelEn={`${t('lpDescription')} (EN)`}
+                    labelAr={`${t('lpDescription')} (AR)`}
+                    valueEn={form.description_en}
+                    valueAr={form.description_ar}
+                    onChangeEn={v => setField('description_en', v, 'description_en')}
+                    onChangeAr={v => setField('description_ar', v, 'description_ar')}
+                    multiline
+                    placeholderEn={t('lpStepDescEnPlaceholder')}
+                    placeholderAr={t('lpStepDescArPlaceholder')}
+                    errorEn={errors.description_en}
+                    errorAr={errors.description_ar}
+                  />
+                </div>
+                <div className="flex gap-3 px-6 py-4 border-t border-secondary/10">
+                  <button
+                    type="button"
+                    onClick={closeModal}
+                    className="flex-1 py-2.5 rounded-xl bg-secondary/8 text-secondary font-semibold text-sm cursor-pointer hover:bg-secondary/15 transition-colors"
+                  >
+                    {t('cancel')}
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={formSaving}
+                    className="flex-1 py-2.5 rounded-xl bg-primary text-white font-semibold text-sm cursor-pointer hover:bg-primary-dark transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
+                  >
+                    {formSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}{' '}
+                    {t('save')}
+                  </button>
+                </div>
+              </form>
             </motion.div>
           </motion.div>
         )}
@@ -345,7 +378,7 @@ export default function HowItWorksSection({ token }: { token: string }) {
           <DeleteConfirm
             label={dir === 'rtl' ? modal.step.title_ar : modal.step.title_en}
             onConfirm={doDelete}
-            onCancel={() => setModal(null)}
+            onCancel={closeModal}
             loading={deleting}
           />
         )}

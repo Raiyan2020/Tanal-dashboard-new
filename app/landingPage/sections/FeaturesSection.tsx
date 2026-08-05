@@ -103,9 +103,9 @@ export default function FeaturesSection({ token }: { token: string }) {
       titleEn: z.string().min(1, { message: language === 'ar' ? 'العنوان بالإنجليزية مطلوب' : 'Title in English is required' })
         .max(40, { message: language === 'ar' ? 'العنوان لا يمكن أن يتجاوز 40 حرفاً' : 'Title must not exceed 40 characters' }),
       descriptionAr: z.string().min(1, { message: language === 'ar' ? 'الوصف بالعربية مطلوب' : 'Description in Arabic is required' })
-        .max(40, { message: language === 'ar' ? 'الوصف لا يمكن أن يتجاوز 40 حرفاً' : 'Description must not exceed 40 characters' }),
+        .max(100, { message: language === 'ar' ? 'الوصف لا يمكن أن يتجاوز 100 حرف' : 'Description must not exceed 100 characters' }),
       descriptionEn: z.string().min(1, { message: language === 'ar' ? 'الوصف بالإنجليزية مطلوب' : 'Description in English is required' })
-        .max(40, { message: language === 'ar' ? 'الوصف لا يمكن أن يتجاوز 40 حرفاً' : 'Description must not exceed 40 characters' }),
+        .max(100, { message: language === 'ar' ? 'الوصف لا يمكن أن يتجاوز 100 حرف' : 'Description must not exceed 100 characters' }),
       icon: z.any().refine(val => val !== null && val !== undefined, { message: language === 'ar' ? 'أيقونة الميزة مطلوبة' : 'Feature icon is required' }),
     });
 
