@@ -95,6 +95,7 @@ export function EditOrderClient({ token: serverToken, order }: EditOrderClientPr
       if (err instanceof ApiError) {
         setErrors({
           client: err.fieldError('client.phone') ?? err.fieldError('client_id'),
+          client_alt_phone: err.fieldError('client.alt_phone'),
           event_date: err.fieldError('event_date'),
           event_time: err.fieldError('event_time'),
           event_end_time: err.fieldError('event_end_time'),

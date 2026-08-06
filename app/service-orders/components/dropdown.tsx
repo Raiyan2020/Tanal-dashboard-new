@@ -12,10 +12,15 @@ interface DropdownProps<T> {
   items: T[];
   filterFn: (item: T, q: string) => boolean;
   onSelect: (item: T) => void;
+  /** Items that are still listed but cannot be picked — e.g. already used elsewhere. */
+  isDisabled?: (item: T) => boolean;
+  /** Reason shown beside a disabled item. */
+  disabledHint?: string;
 }
 
 export function Dropdown<T extends { id: string | number }>({
   value, placeholder, label, sublabel, items, filterFn, onSelect,
+  isDisabled, disabledHint,
 }: DropdownProps<T>) {
   const { t, dir } = useLanguage();
   const [open, setOpen] = useState(false);
@@ -40,16 +45,27 @@ export function Dropdown<T extends { id: string | number }>({
                   className="w-full px-3 py-2 text-sm rounded-lg bg-secondary/5 outline-none" />
               </div>
               <div className="max-h-52 overflow-y-auto py-1">
-                {filtered.map(item => (
-                  <button key={item.id} type="button"
-                    onClick={() => { onSelect(item); setOpen(false); setQ(''); }}
-                    className={cn("w-full px-3 py-2.5 text-sm flex items-center gap-3 hover:bg-secondary/5 transition-colors cursor-pointer", dir === 'rtl' ? 'text-right' : 'text-left')}>
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium text-secondary truncate">{label(item)}</div>
-                      <div className="text-xs text-secondary/50 truncate">{sublabel(item)}</div>
-                    </div>
-                  </button>
-                ))}
+                {filtered.map(item => {
+                  const disabled = isDisabled?.(item) ?? false;
+                  return (
+                    <button key={item.id} type="button"
+                      disabled={disabled}
+                      title={disabled ? disabledHint : undefined}
+                      onClick={() => { onSelect(item); setOpen(false); setQ(''); }}
+                      className={cn("w-full px-3 py-2.5 text-sm flex items-center gap-3 transition-colors",
+                        dir === 'rtl' ? 'text-right' : 'text-left',
+                        disabled
+                          ? 'opacity-40 cursor-not-allowed'
+                          : 'hover:bg-secondary/5 cursor-pointer')}>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-secondary truncate">{label(item)}</div>
+                        <div className="text-xs text-secondary/50 truncate">
+                          {disabled && disabledHint ? disabledHint : sublabel(item)}
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
                 {filtered.length === 0 && <p className="text-center text-secondary/40 text-xs py-4">{t('noResults') || 'No results'}</p>}
               </div>
             </motion.div>

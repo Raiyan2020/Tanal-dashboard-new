@@ -31,6 +31,7 @@ import {
 import { ItemAttachments } from './item-attachments';
 import { LeafletMap } from '@/components/leaflet-map';
 import { buildMapsUrl, toCoord } from '@/lib/map-location';
+import { formatDate, formatDateParts } from '@/lib/format-date';
 
 interface OrderDetailModalProps {
   order: ApiServiceOrderDetail | null;
@@ -295,7 +296,7 @@ export function OrderDetailModal({
                             {effectiveOrder.second_installment_due_date && (
                               <p className="text-xs text-amber-600/80 mt-0.5">
                                 {isAr ? 'تاريخ الاستحقاق: ' : 'Due: '}
-                                {effectiveOrder.second_installment_due_date}
+                                {formatDate(effectiveOrder.second_installment_due_date, isAr ? 'ar' : 'en')}
                               </p>
                             )}
                           </div>
@@ -371,7 +372,7 @@ export function OrderDetailModal({
                       {isAr ? 'تفاصيل الفعالية' : 'Event Details'}
                     </h3>
                     <div className="bg-secondary/3 rounded-2xl px-4 py-1">
-                      <InfoRow icon={Calendar} label={isAr ? 'التاريخ' : 'Date'} value={effectiveOrder.event_date} />
+                      <InfoRow icon={Calendar} label={isAr ? 'التاريخ' : 'Date'} value={formatDate(effectiveOrder.event_date, isAr ? 'ar' : 'en')} />
                       <InfoRow icon={Clock} label={isAr ? 'الوقت' : 'Time'} value={
                         [effectiveOrder.event_time?.slice(0, 5), effectiveOrder.event_end_time?.slice(0, 5)]
                           .filter(Boolean)
@@ -508,17 +509,27 @@ export function OrderDetailModal({
                             {isAr ? 'د.ك' : 'KD'}
                             {effectiveOrder.second_installment_due_date && (
                               <span className="text-secondary/45 text-xs font-normal">
-                                {' '}({effectiveOrder.second_installment_due_date})
+                                {' '}({formatDate(effectiveOrder.second_installment_due_date, isAr ? 'ar' : 'en')})
                               </span>
                             )}
                           </span>
                         } />
                       )}
-                      {effectiveOrder.cancelled_at && (
-                        <InfoRow icon={Ban} label={isAr ? 'تاريخ الإلغاء' : 'Cancelled At'} value={
-                          <span className="text-rose-600">{effectiveOrder.cancelled_at}</span>
-                        } />
-                      )}
+                      {effectiveOrder.cancelled_at && (() => {
+                        // The API returns this pre-formatted in English, which
+                        // reads as untranslated UI in Arabic — reformat it.
+                        const parts = formatDateParts(effectiveOrder.cancelled_at, isAr ? 'ar' : 'en');
+                        return (
+                          <InfoRow icon={Ban} label={isAr ? 'تاريخ الإلغاء' : 'Cancelled At'} value={
+                            <span className="text-rose-600 flex flex-wrap items-baseline gap-x-2">
+                              <span>{parts?.date}</span>
+                              {parts?.time && (
+                                <span className="text-rose-600/70 text-xs font-normal">{parts.time}</span>
+                              )}
+                            </span>
+                          } />
+                        );
+                      })()}
                     </div>
                   </section>
 

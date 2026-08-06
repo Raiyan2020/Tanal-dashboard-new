@@ -16,6 +16,7 @@ import {
 import { getToken } from '@/lib/auth';
 import { usePermissions } from '@/hooks/use-permissions';
 import { toast } from 'sonner';
+import { InstallmentAmountModal } from './installment-amount-modal';
 
 interface OrderListProps {
   orders: ApiServiceOrderItem[];
@@ -131,6 +132,31 @@ export function OrderList({
   const [updatingPayment, setUpdatingPayment] = useState<Record<number, boolean>>({});
   // Local payment status overrides keyed by order id
   const [paymentOverrides, setPaymentOverrides] = useState<Record<number, string>>({});
+  /**
+   * `installments` also needs the first instalment amount, which a dropdown
+   * cannot carry — the order waits here while the modal collects it.
+   */
+  const [installmentTarget, setInstallmentTarget] = useState<ApiServiceOrderItem | null>(null);
+
+  /** Returns true when the status was accepted, so callers can close on success only. */
+  const applyPaymentStatus = async (
+    order: ApiServiceOrderItem,
+    nextStatus: 'paid' | 'unpaid' | 'installments' | 'rejected',
+    firstInstallmentAmount?: number,
+  ): Promise<boolean> => {
+    setUpdatingPayment(prev => ({ ...prev, [order.id]: true }));
+    try {
+      await updateServiceOrderPaymentStatus(order.id, nextStatus, token, firstInstallmentAmount);
+      toast.success(language === 'ar' ? 'تم تحديث حالة الدفع بنجاح' : 'Payment status updated successfully');
+      setPaymentOverrides(prev => ({ ...prev, [order.id]: nextStatus }));
+      return true;
+    } catch (err) {
+      toast.error((err as Error).message || (language === 'ar' ? 'فشل في تحديث حالة الدفع' : 'Failed to update payment status'));
+      return false;
+    } finally {
+      setUpdatingPayment(prev => ({ ...prev, [order.id]: false }));
+    }
+  };
 
   const tabs = [
     { id: 'all', label: language === 'ar' ? 'الكل' : 'All' },
@@ -317,19 +343,17 @@ export function OrderList({
                               disabled={isUpdating || !canEditPayment}
                               value={currentPaymentStatus}
                               onClick={e => e.stopPropagation()}
-                              onChange={async (e) => {
+                              onChange={(e) => {
                                 e.stopPropagation();
                                 const nextStatus = e.target.value as 'paid' | 'unpaid' | 'installments' | "rejected";
-                                setUpdatingPayment(prev => ({ ...prev, [order.id]: true }));
-                                try {
-                                  await updateServiceOrderPaymentStatus(order.id, nextStatus, token);
-                                  toast.success(language === 'ar' ? 'تم تحديث حالة الدفع بنجاح' : 'Payment status updated successfully');
-                                  setPaymentOverrides(prev => ({ ...prev, [order.id]: nextStatus }));
-                                } catch (err) {
-                                  toast.error((err as Error).message || (language === 'ar' ? 'فشل في تحديث حالة الدفع' : 'Failed to update payment status'));
-                                } finally {
-                                  setUpdatingPayment(prev => ({ ...prev, [order.id]: false }));
+                                // The select stays on its old value until the
+                                // request lands, so cancelling the modal needs
+                                // no revert.
+                                if (nextStatus === 'installments') {
+                                  setInstallmentTarget(order);
+                                  return;
                                 }
+                                void applyPaymentStatus(order, nextStatus);
                               }}
                               className={cn(
                                 'appearance-none cursor-pointer py-0.5 outline-none rounded-full text-[10px] font-bold ring-1 ring-inset whitespace-nowrap transition-opacity shrink-0',
@@ -439,6 +463,22 @@ export function OrderList({
           </div>
         )}
       </div>
+
+      <AnimatePresence>
+        {installmentTarget && (
+          <InstallmentAmountModal
+            order={installmentTarget}
+            total={parseAmount(installmentTarget.total_amount)}
+            currency={installmentTarget.currency || (language === 'ar' ? 'د.ك' : 'KD')}
+            onClose={() => setInstallmentTarget(null)}
+            onConfirm={async amount => {
+              const ok = await applyPaymentStatus(installmentTarget, 'installments', amount);
+              // A rejected amount keeps the modal open with the value intact.
+              if (ok) setInstallmentTarget(null);
+            }}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

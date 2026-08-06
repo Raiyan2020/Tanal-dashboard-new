@@ -8,6 +8,7 @@
 
 import { getServiceById } from '@/lib/api';
 import { parseLatLng, toCoord } from '@/lib/map-location';
+import { validatePhone } from '@/lib/phone-validation';
 import type {
   ApiServiceOrderDetail,
   ApiServiceOrderDetailItem,
@@ -202,8 +203,8 @@ export function needsInvitationDesignUpload(form: FormState): boolean {
 }
 
 export type OrderFormErrors = Partial<Record<
-  'client' | 'event_date' | 'event_time' | 'event_end_time' | 'hall_name' | 'items'
-  | 'invitation_design',
+  'client' | 'client_alt_phone' | 'event_date' | 'event_time' | 'event_end_time'
+  | 'hall_name' | 'items' | 'invitation_design',
   string
 >>;
 
@@ -219,6 +220,22 @@ export function validateOrderForm(form: FormState, language: 'ar' | 'en'): Order
   // Either a legacy client id, or an embedded client with at least a phone.
   if (!form.clientId && !form.clientPhone.trim()) {
     errors.client = ar ? 'رقم هاتف العميل مطلوب' : 'Client phone is required';
+  } else if (form.clientPhone.trim()) {
+    // Length/prefix rules per dialling code — Kuwait is 8 digits, Egypt 10
+    // starting with 1, and so on.
+    const phoneError = validatePhone(form.clientCountryCode, form.clientPhone, language);
+    if (phoneError) errors.client = phoneError;
+  }
+
+  if (form.clientAltPhone.trim()) {
+    if (!form.clientAltCountryCode) {
+      errors.client_alt_phone = ar
+        ? 'اختر مفتاح الدولة للرقم البديل'
+        : 'Select a country code for the alternate number';
+    } else {
+      const altError = validatePhone(form.clientAltCountryCode, form.clientAltPhone, language);
+      if (altError) errors.client_alt_phone = altError;
+    }
   }
   if (!form.date) {
     errors.event_date = ar ? 'تاريخ التنفيذ مطلوب' : 'Event date is required';
@@ -246,6 +263,15 @@ export function validateOrderForm(form: FormState, language: 'ar' | 'en'): Order
 
   if (form.services.length === 0 || form.services.some(s => !s.serviceId)) {
     errors.items = ar ? 'يجب اختيار خدمة واحدة على الأقل' : 'At least one service is required';
+  } else {
+    // A service may appear only once per order — the rows would otherwise post
+    // two items for the same service.
+    const chosen = form.services.map(s => s.serviceId);
+    if (new Set(chosen).size !== chosen.length) {
+      errors.items = ar
+        ? 'لا يمكن إضافة نفس الخدمة أكثر من مرة'
+        : 'The same service cannot be added more than once';
+    }
   }
 
   // The QR service cannot be ordered without a design uploaded up front —

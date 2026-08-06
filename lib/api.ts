@@ -1765,14 +1765,24 @@ export async function cancelAdminServiceOrder(
   });
 }
 
-/** POST /admin/service-orders/:id/payment-status?_method=patch */
+/**
+ * POST /admin/service-orders/:id/payment-status?_method=patch
+ *
+ * `firstInstallmentAmount` is required by `installments` and meaningless for
+ * every other status — the amount already paid, with the remainder owed as the
+ * second instalment.
+ */
 export async function updateServiceOrderPaymentStatus(
   id: number,
   status: 'paid' | 'unpaid' | 'installments' | "rejected",
-  token: string
+  token: string,
+  firstInstallmentAmount?: number
 ): Promise<ApiResponse<unknown>> {
   const formData = new FormData();
   formData.append('status', status);
+  if (status === 'installments' && firstInstallmentAmount != null) {
+    formData.append('first_installment_amount', String(firstInstallmentAmount));
+  }
   return apiRequest(`/admin/service-orders/${id}/payment-status?_method=patch`, {
     method: 'POST',
     body: formData,

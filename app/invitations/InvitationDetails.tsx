@@ -745,10 +745,7 @@ export function InvitationDetails({ invitation, onBack, onEdit }: InvitationDeta
                             </div>
 
                             <div className="flex items-center justify-end gap-3 shrink-0">
-                              <div className={cn("px-3 py-1.5 rounded-full flex items-center gap-1.5 w-fit", StatusInfo.color)}>
-                                <StatusIcon className="w-3.5 h-3.5" />
-                                <span className="text-xs font-semibold">{StatusInfo.label}</span>
-                              </div>
+                            
                               <button
                                 title={t('contactViaWhatsapp')}
                                 onClick={(e) => {

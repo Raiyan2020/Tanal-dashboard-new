@@ -2,12 +2,21 @@ import React from 'react';
 import { User, Phone } from 'lucide-react';
 import { useLanguage } from '@/lib/i18n';
 import { COUNTRIES } from '@/lib/countries';
+import {
+  normalisePhone,
+  phoneExample,
+  phoneMaxLength,
+  phoneRuleText,
+  validatePhone,
+} from '@/lib/phone-validation';
 import { type FormState } from '@/lib/service-order-form';
 
 interface ClientSectionProps {
   form: FormState;
   setForm: React.Dispatch<React.SetStateAction<FormState>>;
   error?: string;
+  /** Server-side or submit-time error for the alternate phone. */
+  altError?: string;
   /** Quick mode collects the phone only — the client fills the rest themselves. */
   quick?: boolean;
 }
@@ -23,9 +32,19 @@ const codeSelectClass =
  * module any more. A legacy `client_id` may still be present on older orders,
  * in which case these fields are shown read-only for reference.
  */
-export function ClientSection({ form, setForm, error, quick = false }: ClientSectionProps) {
-  const { t, dir } = useLanguage();
+export function ClientSection({ form, setForm, error, altError, quick = false }: ClientSectionProps) {
+  const { t, dir, language } = useLanguage();
+  const lang = language as 'ar' | 'en';
   const isLegacyClient = !!form.clientId;
+
+  // Live per-country feedback; the submit-time `error` prop still wins so a
+  // server-side rejection is not hidden by a locally-valid number.
+  const phoneError = error ?? validatePhone(form.clientCountryCode, form.clientPhone, lang);
+  const altPhoneError =
+    altError ??
+    (form.clientAltCountryCode
+      ? validatePhone(form.clientAltCountryCode, form.clientAltPhone, lang)
+      : null);
 
   return (
     <div className="space-y-4">
@@ -79,14 +98,24 @@ export function ClientSection({ form, setForm, error, quick = false }: ClientSec
           </select>
           <input
             type="tel"
+            inputMode="numeric"
             dir="ltr"
             value={form.clientPhone}
-            onChange={e => setForm(prev => ({ ...prev, clientPhone: e.target.value }))}
-            placeholder="50123456"
+            onChange={e =>
+              setForm(prev => ({ ...prev, clientPhone: normalisePhone(e.target.value) }))
+            }
+            maxLength={phoneMaxLength(form.clientCountryCode)}
+            placeholder={phoneExample(form.clientCountryCode)}
             className={`${inputClass} font-mono`}
           />
         </div>
-        {error && <p className="text-xs text-red-500 mt-0.5">{error}</p>}
+        {phoneError ? (
+          <p className="text-xs text-red-500 mt-0.5">{phoneError}</p>
+        ) : (
+          <p className="text-xs text-secondary/45 mt-0.5">
+            {phoneRuleText(form.clientCountryCode, lang)}
+          </p>
+        )}
       </div>
 
       {/* Alternate phone — also part of the client's own form in quick mode */}
@@ -111,13 +140,18 @@ export function ClientSection({ form, setForm, error, quick = false }: ClientSec
           </select>
           <input
             type="tel"
+            inputMode="numeric"
             dir="ltr"
             value={form.clientAltPhone}
-            onChange={e => setForm(prev => ({ ...prev, clientAltPhone: e.target.value }))}
-            placeholder="50123456"
+            onChange={e =>
+              setForm(prev => ({ ...prev, clientAltPhone: normalisePhone(e.target.value) }))
+            }
+            maxLength={phoneMaxLength(form.clientAltCountryCode)}
+            placeholder={phoneExample(form.clientAltCountryCode)}
             className={`${inputClass} font-mono`}
           />
         </div>
+        {altPhoneError && <p className="text-xs text-red-500 mt-0.5">{altPhoneError}</p>}
       </div>
       )}
     </div>

@@ -74,6 +74,7 @@ export function CreateOrderClient({ token: serverToken }: CreateOrderClientProps
         const designError = err.fieldError('invitation_design_token');
         setErrors({
           client: err.fieldError('client.phone') ?? err.fieldError('client_id'),
+          client_alt_phone: err.fieldError('client.alt_phone'),
           event_date: err.fieldError('event_date'),
           event_time: err.fieldError('event_time'),
           event_end_time: err.fieldError('event_end_time'),

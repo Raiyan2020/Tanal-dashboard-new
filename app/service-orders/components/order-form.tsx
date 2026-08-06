@@ -58,12 +58,18 @@ export function OrderForm({
 }: OrderFormProps) {
   const { t, dir, language } = useLanguage();
 
-  // On create the event must be in the future; when editing, an order may
-  // legitimately sit in the past, so the constraint is dropped.
+  // On create the earliest bookable day is tomorrow — same-day orders leave no
+  // time to staff them. When editing, an order may legitimately sit in the past,
+  // so the constraint is dropped.
+  // Built from local date parts rather than `toISOString()`, which would shift
+  // the day either side of midnight for any non-UTC timezone.
   const minDate = useMemo(() => {
     if (editing) return undefined;
     const d = new Date();
-    return d.toISOString().split('T')[0];
+    d.setDate(d.getDate() + 1);
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${d.getFullYear()}-${mm}-${dd}`;
   }, [editing]);
 
   const [dbServices, setDbServices] = useState<any[]>([]);
@@ -173,6 +179,17 @@ export function OrderForm({
 
   // Fetch options for selected service item
   const handleServiceSelect = async (index: number, service: any) => {
+    // The dropdown already greys out taken services; this catches the case where
+    // another row claimed it while this one was open.
+    if (form.services.some((s, i) => i !== index && s.serviceId === String(service.id))) {
+      toast.error(
+        language === 'ar'
+          ? 'هذه الخدمة مضافة بالفعل في هذا الطلب'
+          : 'This service is already added to this order'
+      );
+      return;
+    }
+
     const updatedServices = [...form.services];
     updatedServices[index] = {
       ...updatedServices[index],
@@ -236,6 +253,25 @@ export function OrderForm({
       toast.error((err as Error).message || 'فشل جلب خيارات الخدمة');
     }
   };
+
+  /**
+   * Reachable only from data the dropdown never gated — an order saved before
+   * duplicates were blocked, reopened for editing.
+   */
+  const hasDuplicateServices = useMemo(() => {
+    const chosen = form.services.map(s => s.serviceId).filter(Boolean);
+    return new Set(chosen).size !== chosen.length;
+  }, [form.services]);
+
+  /**
+   * Every catalogue service is already on the order, so another row could only
+   * ever stay empty.
+   */
+  const allServicesUsed = useMemo(() => {
+    if (dbServices.length === 0) return false;
+    const used = new Set(form.services.map(s => s.serviceId).filter(Boolean));
+    return used.size >= dbServices.length;
+  }, [dbServices, form.services]);
 
   const derivedTotalPrice = useMemo(() => {
     return form.services.reduce((sum, s) => sum + (parseFloat(s.price) || 0), 0);
@@ -367,7 +403,13 @@ export function OrderForm({
 
         <form onSubmit={onSubmit} className="space-y-5">
           {/* Client data — embedded in the order, no separate clients module */}
-          <ClientSection form={form} setForm={setForm} error={errors.client} quick={quick} />
+          <ClientSection
+            form={form}
+            setForm={setForm}
+            error={errors.client}
+            altError={errors.client_alt_phone}
+            quick={quick}
+          />
 
           {/* Event Details Section */}
           <EventDetailsSection
@@ -444,12 +486,22 @@ export function OrderForm({
 
             <button
               type="button"
+              disabled={allServicesUsed}
+              title={
+                allServicesUsed
+                  ? language === 'ar'
+                    ? 'تمت إضافة جميع الخدمات المتاحة'
+                    : 'All available services have been added'
+                  : undefined
+              }
               onClick={() => setForm({ ...form, services: [...form.services, createEmptyServiceItem()] })}
-              className="w-full text-xs font-bold text-white bg-primary hover:bg-primary-dark flex items-center gap-1 justify-center py-2 rounded cursor-pointer"
+              className="w-full text-xs font-bold text-white bg-primary hover:bg-primary-dark flex items-center gap-1 justify-center py-2 rounded cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary"
             >
               <Plus className="w-4 h-4" />
               {t('addService') || 'Add Service'}
             </button>
+
+            {errors.items && <p className="text-xs text-red-500">{errors.items}</p>}
 
             {/* The backend creates the invitation itself when this service is
                 present — but it needs the design uploaded up front. */}
@@ -488,7 +540,7 @@ export function OrderForm({
                   ? (language === 'ar' ? 'محسوب من الخادم' : 'Calculated by the server')
                   : (language === 'ar' ? 'تقدير مبدئي' : 'Local estimate')}
               </span>
-              <button
+              {/* <button
                 type="button"
                 onClick={handleCalculateTotal}
                 disabled={calculating}
@@ -496,7 +548,7 @@ export function OrderForm({
               >
                 {calculating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Calculator className="w-3.5 h-3.5" />}
                 {language === 'ar' ? 'حساب الإجمالي' : 'Calculate Total'}
-              </button>
+              </button> */}
             </div>
           </div>
 
@@ -509,7 +561,7 @@ export function OrderForm({
               className="flex-1 py-3 text-sm font-medium text-secondary/70 bg-white/60 hover:bg-white border border-secondary/15 rounded-xl transition-colors cursor-pointer">
               {t('cancel') || 'Cancel'}
             </button>
-            <button type="submit" disabled={loading || form.services.length === 0 || form.services.some(s => !s.serviceId) || missingInvitationDesign}
+            <button type="submit" disabled={loading || form.services.length === 0 || form.services.some(s => !s.serviceId) || hasDuplicateServices || missingInvitationDesign}
               className="flex-1 flex items-center justify-center gap-2 py-3 text-sm font-medium text-white bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-all cursor-pointer shadow-md shadow-primary/20 hover:-translate-y-0.5">
               {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
               {editing ? t('saveChanges') || 'Save Changes' : t('createSendLinks') || 'Create & Send Link'}

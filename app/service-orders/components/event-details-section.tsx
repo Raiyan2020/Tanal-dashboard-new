@@ -23,6 +23,16 @@ interface EventDetailsSectionProps {
 /** Hour options shared by the start and end time selects. */
 const HOURS = Array.from({ length: 24 }, (_, h) => h);
 
+/**
+ * `"2026-08-07"` → local midnight. `new Date(str)` would parse it as *UTC*
+ * midnight, which renders as the previous day anywhere west of Greenwich and
+ * would shift the picker's lower bound by a day.
+ */
+const parseLocalDate = (value: string): Date => {
+  const [y, m, d] = value.split('-').map(Number);
+  return new Date(y, (m ?? 1) - 1, d ?? 1);
+};
+
 export function EventDetailsSection({
   form,
   setForm,
@@ -47,8 +57,8 @@ export function EventDetailsSection({
     return () => document.removeEventListener('mousedown', handleOutsideClick);
   }, []);
 
-  const minDateObj = minDate ? new Date(minDate) : undefined;
-  const selectedDate = form.date ? new Date(form.date) : undefined;
+  const minDateObj = minDate ? parseLocalDate(minDate) : undefined;
+  const selectedDate = form.date ? parseLocalDate(form.date) : undefined;
 
   const hourLabel = (h: number) => {
     const period = h < 12 ? (language === 'ar' ? 'ص' : 'AM') : (language === 'ar' ? 'م' : 'PM');
@@ -57,12 +67,30 @@ export function EventDetailsSection({
   };
   const hourValue = (h: number) => `${String(h).padStart(2, '0')}:00`;
 
+  // End time is picked relative to the start, so it stays locked until a start
+  // hour exists and only offers the hours after it.
+  const startHour = /^(\d{1,2}):/.exec(form.time)
+    ? Number(/^(\d{1,2}):/.exec(form.time)![1])
+    : null;
+  const endDisabled = startHour === null;
+
+  /** Picking a start time drops an end time that is no longer after it. */
+  const onStartChange = (value: string) => {
+    const next = /^(\d{1,2}):/.exec(value);
+    const nextStart = next ? Number(next[1]) : null;
+    const currentEnd = /^(\d{1,2}):/.exec(form.endTime);
+    const stale =
+      nextStart === null ||
+      (currentEnd !== null && Number(currentEnd[1]) <= nextStart);
+    setForm({ ...form, time: value, endTime: stale ? '' : form.endTime });
+  };
+
   const errorText = 'text-xs text-red-500 mt-0.5';
   const inputClass =
     'w-full px-4 py-3 rounded-xl bg-white/50 border border-white/60 focus:border-primary/50 focus:ring-2 focus:ring-primary/20 outline-none text-secondary text-sm';
 
   const displayDate = form.date
-    ? new Date(form.date).toLocaleDateString(language === 'ar' ? 'ar-EG' : 'en-US', {
+    ? parseLocalDate(form.date).toLocaleDateString(language === 'ar' ? 'ar-EG' : 'en-US', {
         year: 'numeric',
         month: 'long',
         day: 'numeric',
@@ -123,7 +151,7 @@ export function EventDetailsSection({
           <select
             required
             value={form.time}
-            onChange={e => setForm({ ...form, time: e.target.value })}
+            onChange={e => onStartChange(e.target.value)}
             className="w-full px-4 py-3 rounded-xl bg-white/50 border border-white/60 focus:border-primary/50 focus:ring-2 focus:ring-primary/20 outline-none text-secondary text-sm cursor-pointer"
           >
             <option value="">{language === 'ar' ? 'اختر الوقت...' : 'Select time...'}</option>
@@ -142,12 +170,25 @@ export function EventDetailsSection({
           </label>
           <select
             required
+            disabled={endDisabled}
+            title={
+              endDisabled
+                ? language === 'ar'
+                  ? 'اختر وقت البدء أولاً'
+                  : 'Select the start time first'
+                : undefined
+            }
             value={form.endTime}
             onChange={e => setForm({ ...form, endTime: e.target.value })}
-            className="w-full px-4 py-3 rounded-xl bg-white/50 border border-white/60 focus:border-primary/50 focus:ring-2 focus:ring-primary/20 outline-none text-secondary text-sm cursor-pointer"
+            className="w-full px-4 py-3 rounded-xl bg-white/50 border border-white/60 focus:border-primary/50 focus:ring-2 focus:ring-primary/20 outline-none text-secondary text-sm cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 disabled:bg-secondary/5"
           >
-            <option value="">{language === 'ar' ? 'اختر الوقت...' : 'Select time...'}</option>
-            {HOURS.map(h => (
+            <option value="">
+              {endDisabled
+                ? language === 'ar' ? 'اختر وقت البدء أولاً' : 'Select the start time first'
+                : language === 'ar' ? 'اختر الوقت...' : 'Select time...'}
+            </option>
+            {/* Only hours after the start are offered — 04:00 PM cannot end a 06:00 PM event. */}
+            {HOURS.filter(h => startHour !== null && h > startHour).map(h => (
               <option key={h} value={hourValue(h)}>{hourLabel(h)}</option>
             ))}
           </select>

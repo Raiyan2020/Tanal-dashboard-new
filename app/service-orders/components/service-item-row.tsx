@@ -33,6 +33,20 @@ export function ServiceItemRow({
 
   const svcDropdownValue = svc.serviceName ? svc.serviceName : '';
 
+  // A service can only appear once per order, so the ones the other rows already
+  // hold are listed but not selectable here.
+  const takenServiceIds = new Set(
+    form.services
+      .filter((_, i) => i !== index)
+      .map(s => s.serviceId)
+      .filter(Boolean)
+  );
+
+  // An order saved before duplicates were blocked still hydrates them in edit
+  // mode, where the dropdown never gated the choice — flag the later row.
+  const isDuplicate =
+    !!svc.serviceId && form.services.some((s, i) => i < index && s.serviceId === svc.serviceId);
+
   return (
     <div className="p-5 bg-secondary/5 rounded-2xl border border-secondary/10 relative space-y-4">
       {/* Delete service item button */}
@@ -64,7 +78,16 @@ export function ServiceItemRow({
             label={s => s.name}
             sublabel={s => <span className="text-xs text-secondary/40">{s.description}</span>}
             onSelect={s => handleServiceSelect(index, s)}
+            isDisabled={s => takenServiceIds.has(String(s.id))}
+            disabledHint={language === 'ar' ? 'مضافة بالفعل في هذا الطلب' : 'Already added to this order'}
           />
+          {isDuplicate && (
+            <p className="text-xs text-red-500">
+              {language === 'ar'
+                ? 'هذه الخدمة مكررة — احذف هذا السطر أو اختر خدمة أخرى'
+                : 'This service is duplicated — remove this row or pick another service'}
+            </p>
+          )}
         </div>
 
         {/* Select Package Dropdown */}
