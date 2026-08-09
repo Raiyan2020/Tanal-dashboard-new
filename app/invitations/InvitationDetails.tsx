@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useLanguage } from '@/lib/i18n';
 import { Invitation } from './InvitationsClient';
 import { motion, AnimatePresence } from 'motion/react';
@@ -20,6 +20,7 @@ import {
   getInvitationGuests,
   deleteInvitationGuest,
   sendInvitation,
+  uploadInvitationDesign,
   isInvitationOverageError,
   type InvitationDetailData,
   type InvitationGuest as ApiInvitationGuest,
@@ -30,6 +31,10 @@ import { getToken } from '@/lib/auth';
 import { toast } from 'sonner';
 
 export type InvitationGuestStatus = 'pending' | 'accepted' | 'declined';
+
+/** Backend limit for the invitation design image. */
+const MAX_DESIGN_BYTES = 10 * 1024 * 1024;
+const DESIGN_ACCEPT = 'image/png,image/jpeg,image/webp';
 
 export interface InvitationGuest {
   id: string;
@@ -202,6 +207,10 @@ export function InvitationDetails({ invitation, onBack, onEdit }: InvitationDeta
   const [detail, setDetail] = useState<InvitationDetailData | null>(null);
   const [detailLoading, setDetailLoading] = useState(true);
 
+  // Design replacement (hover overlay on the design card)
+  const designInputRef = useRef<HTMLInputElement>(null);
+  const [designUploading, setDesignUploading] = useState(false);
+
   // Guest add / edit / import / delete
   const [guestFormOpen, setGuestFormOpen] = useState(false);
   const [guestBeingEdited, setGuestBeingEdited] = useState<GuestFormValues | null>(null);
@@ -258,6 +267,41 @@ export function InvitationDetails({ invitation, onBack, onEdit }: InvitationDeta
       toast.error((err as Error).message || t('invitationSendFailed'));
     } finally {
       setIsSending(false);
+    }
+  };
+
+  /**
+   * Replaces the invitation design through the shared upload endpoint
+   * (`POST /admin/service-orders/invitation-design`, multipart `design`). The
+   * detail payload is refetched afterwards so `design.design_url` — and the
+   * cache-busting query the backend puts on it — comes from the server rather
+   * than from a locally guessed URL.
+   */
+  const handleDesignSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    // Allow re-picking the same file after a failure.
+    e.target.value = '';
+    if (!file || !token) return;
+
+    // Mirrors the backend's `image/*` + 10MB rule so a bad file fails locally.
+    if (!file.type.startsWith('image/')) {
+      toast.error(t('designMustBeImage'));
+      return;
+    }
+    if (file.size > MAX_DESIGN_BYTES) {
+      toast.error(t('designTooLarge'));
+      return;
+    }
+
+    setDesignUploading(true);
+    try {
+      const res = await uploadInvitationDesign(file, token);
+      toast.success(res.msg || t('designUploaded'));
+      await refreshDetails(false);
+    } catch (err) {
+      toast.error((err as Error).message || t('designUploadFailed'));
+    } finally {
+      setDesignUploading(false);
     }
   };
 
@@ -525,6 +569,13 @@ export function InvitationDetails({ invitation, onBack, onEdit }: InvitationDeta
                       <ImageIcon className="w-5 h-5 text-primary" />
                       {t('designImage')}
                     </h3>
+                    <input
+                      ref={designInputRef}
+                      type="file"
+                      accept={DESIGN_ACCEPT}
+                      onChange={handleDesignSelected}
+                      className="hidden"
+                    />
                     <div
                       className="relative aspect-[3/4] rounded-2xl overflow-hidden shadow-inner group border-4 border-white/40"
                       onMouseEnter={() => setIsDesignHovered(true)}
@@ -551,16 +602,27 @@ export function InvitationDetails({ invitation, onBack, onEdit }: InvitationDeta
                       )}
 
                       <AnimatePresence>
-                        {isDesignHovered && detail?.design.can_be_changed && (
+                        {/* Kept mounted while uploading so the spinner stays
+                            visible even after the pointer leaves the card. */}
+                        {(isDesignHovered || designUploading) && detail?.design.can_be_changed && (
                           <motion.div
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
                             className="absolute inset-0 bg-black/40 backdrop-blur-[2px] flex items-center justify-center"
                           >
-                            <button className="px-5 py-2.5 bg-white text-secondary rounded-xl font-medium shadow-lg hover:scale-105 active:scale-95 transition-all flex items-center gap-2">
-                              <UploadCloud className="w-4 h-4" />
-                              {t('replaceDesign')}
+                            <button
+                              type="button"
+                              onClick={() => designInputRef.current?.click()}
+                              disabled={designUploading}
+                              className="px-5 py-2.5 bg-white text-secondary rounded-xl font-medium shadow-lg hover:scale-105 active:scale-95 transition-all flex items-center gap-2 cursor-pointer disabled:opacity-70 disabled:cursor-wait disabled:hover:scale-100"
+                            >
+                              {designUploading ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <UploadCloud className="w-4 h-4" />
+                              )}
+                              {designUploading ? t('designUploading') : t('replaceDesign')}
                             </button>
                           </motion.div>
                         )}

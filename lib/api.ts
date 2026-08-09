@@ -1954,6 +1954,10 @@ export interface InvitationDesignUploadResponse {
  * The design must be uploaded *before* the order is created; the returned token
  * is then sent as `invitation_design_token`. Required whenever `items[]`
  * contains the `barcode_invitations` system service.
+ *
+ * The same endpoint also backs "replace design" on an existing invitation — the
+ * backend persists the replacement itself, so callers there ignore the token and
+ * just refetch the invitation detail.
  */
 export async function uploadInvitationDesign(
   design: File,
