@@ -24,6 +24,17 @@ interface CheckInWelcomeCardProps {
 }
 
 /**
+ * Readable label per placeholder token. The token itself is what gets inserted
+ * and saved — the backend substitutes it — so only the chip text is localised.
+ * Tokens the backend adds later fall through to their raw form.
+ */
+const PLACEHOLDER_LABELS: Record<string, string> = {
+  '{guest_name}': 'placeholderGuestName',
+  '{event_name}': 'placeholderEventName',
+  '{invitation_name}': 'placeholderInvitationName',
+};
+
+/**
  * Welcome message + venue screen link for the check-in display.
  *
  * Editing is gated on `edit-invitation` rather than the invitation's own
@@ -143,16 +154,23 @@ export function CheckInWelcomeCard({
             <span className="text-[11px] text-secondary/40 font-medium">
               {t('checkInPlaceholdersLabel')}
             </span>
-            {display.placeholders.map((placeholder) => (
-              <button
-                key={placeholder}
-                type="button"
-                onClick={() => insertPlaceholder(placeholder)}
-                className="px-2.5 py-1 rounded-lg bg-primary/8 hover:bg-primary/15 text-primary text-[11px] font-mono transition-colors cursor-pointer"
-              >
-                {placeholder}
-              </button>
-            ))}
+            {display.placeholders.map((placeholder) => {
+              const labelKey = PLACEHOLDER_LABELS[placeholder];
+              return (
+                <button
+                  key={placeholder}
+                  type="button"
+                  onClick={() => insertPlaceholder(placeholder)}
+                  title={placeholder}
+                  className={cn(
+                    'px-2.5 py-1 rounded-lg bg-primary/8 hover:bg-primary/15 text-primary text-[11px] transition-colors cursor-pointer',
+                    labelKey ? 'font-medium' : 'font-mono'
+                  )}
+                >
+                  {labelKey ? t(labelKey) : placeholder}
+                </button>
+              );
+            })}
           </div>
         )}
 

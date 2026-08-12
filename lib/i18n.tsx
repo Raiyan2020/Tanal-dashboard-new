@@ -644,6 +644,11 @@ const translations: Record<Language, Record<string, string>> = {
     checkInWelcomeHint: 'Shown on the venue screen the moment a guest QR is scanned.',
     checkInWelcomePlaceholder: 'Welcome {guest_name} to {invitation_name}',
     checkInPlaceholdersLabel: 'Tap to insert:',
+    // Readable names for the raw tokens the backend lists in `placeholders`.
+    // The inserted text stays the literal token — only the chip is translated.
+    placeholderGuestName: 'Guest name',
+    placeholderEventName: 'Event name',
+    placeholderInvitationName: 'Invitation name',
     checkInPreview: 'Preview',
     checkInNotConfigured: 'No welcome message yet — the venue screen stays idle until you save one.',
     checkInDisplayUrl: 'Venue screen link',
@@ -1313,6 +1318,9 @@ const translations: Record<Language, Record<string, string>> = {
     checkInWelcomeHint: 'تظهر على شاشة القاعة فور مسح باركود الضيف.',
     checkInWelcomePlaceholder: 'مرحباً {guest_name} في {invitation_name}',
     checkInPlaceholdersLabel: 'اضغط للإدراج:',
+    placeholderGuestName: 'اسم الضيف',
+    placeholderEventName: 'اسم المناسبة',
+    placeholderInvitationName: 'اسم الدعوة',
     checkInPreview: 'معاينة',
     checkInNotConfigured: 'لم يتم ضبط رسالة ترحيب بعد — ستبقى شاشة القاعة فارغة حتى تحفظ رسالة.',
     checkInDisplayUrl: 'رابط شاشة القاعة',

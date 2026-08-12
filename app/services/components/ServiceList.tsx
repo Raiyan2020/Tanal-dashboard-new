@@ -75,12 +75,23 @@ export function ServiceList({
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {services.map((svc, index) => {
             return (
-              <motion.button
+              // Rendered as a div, not a button: the card contains its own edit/delete
+              // buttons, and the HTML parser tears nested buttons out of their parent on
+              // any server-rendered page load.
+              <motion.div
                 key={svc.id}
+                role="button"
+                tabIndex={0}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.06 }}
                 onClick={() => onSelectService(svc.id)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    onSelectService(svc.id);
+                  }
+                }}
                 className="group p-6 rounded-3xl glass-panel text-start hover:bg-white/70 transition-all shadow-sm border border-secondary/5 flex flex-col gap-4 cursor-pointer relative overflow-hidden"
               >
                 <div className="absolute -top-8 -right-8 w-28 h-28 bg-primary/5 rounded-full blur-xl group-hover:bg-primary/10 transition-colors" />
@@ -160,7 +171,7 @@ export function ServiceList({
                   {dir === 'ltr' ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
                   {t('manageService')}
                 </div>
-              </motion.button>
+              </motion.div>
             );
           })}
         </div>

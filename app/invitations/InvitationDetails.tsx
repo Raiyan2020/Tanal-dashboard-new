@@ -20,7 +20,7 @@ import {
   getInvitationGuests,
   deleteInvitationGuest,
   sendInvitation,
-  uploadInvitationDesign,
+  replaceInvitationDesign,
   isInvitationOverageError,
   type InvitationDetailData,
   type InvitationGuest as ApiInvitationGuest,
@@ -271,8 +271,8 @@ export function InvitationDetails({ invitation, onBack, onEdit }: InvitationDeta
   };
 
   /**
-   * Replaces the invitation design through the shared upload endpoint
-   * (`POST /admin/service-orders/invitation-design`, multipart `design`). The
+   * Replaces the invitation design through the invitation-scoped endpoint
+   * (`POST /admin/invitations/:id/upload-design`, multipart `design`). The
    * detail payload is refetched afterwards so `design.design_url` — and the
    * cache-busting query the backend puts on it — comes from the server rather
    * than from a locally guessed URL.
@@ -295,7 +295,7 @@ export function InvitationDetails({ invitation, onBack, onEdit }: InvitationDeta
 
     setDesignUploading(true);
     try {
-      const res = await uploadInvitationDesign(file, token);
+      const res = await replaceInvitationDesign(Number(invitation.id), file, token);
       toast.success(res.msg || t('designUploaded'));
       await refreshDetails(false);
     } catch (err) {

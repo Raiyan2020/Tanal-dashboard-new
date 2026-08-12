@@ -726,6 +726,29 @@ export async function updateInvitation(
 }
 
 /**
+ * POST /admin/invitations/:id/upload-design — multipart `design`
+ *
+ * Replaces the design on an existing invitation. Same payload as the
+ * order-creation upload (`uploadInvitationDesign`), but scoped to the
+ * invitation, so the backend persists it directly instead of handing back a
+ * token. Callers refetch the detail for the cache-busted `design_url` rather
+ * than reading anything out of `data`.
+ */
+export async function replaceInvitationDesign(
+  id: number,
+  design: File,
+  token: string
+): Promise<ApiResponse<unknown>> {
+  const formData = new FormData();
+  formData.append('design', design);
+  return apiRequest(`/admin/invitations/${id}/upload-design`, {
+    method: 'POST',
+    body: formData,
+    token,
+  });
+}
+
+/**
  * PATCH /admin/invitations/:id/check-in-welcome-message
  *
  * Separate from `updateInvitation` on purpose: the invitation is frozen once it
@@ -1955,9 +1978,8 @@ export interface InvitationDesignUploadResponse {
  * is then sent as `invitation_design_token`. Required whenever `items[]`
  * contains the `barcode_invitations` system service.
  *
- * The same endpoint also backs "replace design" on an existing invitation — the
- * backend persists the replacement itself, so callers there ignore the token and
- * just refetch the invitation detail.
+ * Order creation only — replacing the design on an existing invitation goes
+ * through `replaceInvitationDesign`.
  */
 export async function uploadInvitationDesign(
   design: File,

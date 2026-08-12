@@ -209,19 +209,19 @@ export function AddonsTab({ serviceId }: AddonsTabProps) {
             <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
               <div className="space-y-1">
                 <label className="text-xs font-bold text-secondary/50 uppercase tracking-wider">{ar ? 'اسم الإضافة (العربية) *' : 'Add-on Name (Arabic) *'}</label>
-                <input type="text" required {...field('nameAr')} dir="rtl" className="w-full px-4 py-2.5 rounded-xl bg-white/60 border border-secondary/15 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none text-sm text-secondary font-arabic" />
+                <input type="text" required placeholder="ساعة تصوير إضافية" {...field('nameAr')} dir="rtl" className="w-full px-4 py-2.5 rounded-xl bg-white/60 border border-secondary/15 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none text-sm text-secondary font-arabic placeholder:text-secondary/40" />
               </div>
               <div className="space-y-1">
                 <label className="text-xs font-bold text-secondary/50 uppercase tracking-wider">{ar ? 'اسم الإضافة (الإنجليزية) *' : 'Add-on Name (English) *'}</label>
-                <input type="text" required {...field('nameEn')} dir="ltr" className="w-full px-4 py-2.5 rounded-xl bg-white/60 border border-secondary/15 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none text-sm text-secondary" />
+                <input type="text" required placeholder="Extra hour of coverage" {...field('nameEn')} dir="ltr" className="w-full px-4 py-2.5 rounded-xl bg-white/60 border border-secondary/15 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none text-sm text-secondary placeholder:text-secondary/40" />
               </div>
               <div className="space-y-1">
                 <label className="text-xs font-bold text-secondary/50 uppercase tracking-wider">{ar ? 'التكلفة الإضافية (د.ك) *' : 'Additional Cost (KD) *'}</label>
-                <input type="number" required step="0.001" min="0" {...field('price')} dir="ltr" className="w-full px-4 py-2.5 rounded-xl bg-white/60 border border-secondary/15 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none text-sm text-secondary" />
+                <input type="number" required step="0.001" min="0" placeholder="25.000" {...field('price')} dir="ltr" className="w-full px-4 py-2.5 rounded-xl bg-white/60 border border-secondary/15 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none text-sm text-secondary placeholder:text-secondary/40" />
               </div>
               <div className="space-y-1">
                 <label className="text-xs font-bold text-secondary/50 uppercase tracking-wider">{ar ? 'الترتيب' : 'Sort Order'}</label>
-                <input type="number" min="0" {...field('sortOrder')} dir="ltr" className="w-full px-4 py-2.5 rounded-xl bg-white/60 border border-secondary/15 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none text-sm text-secondary" />
+                <input type="number" min="0" placeholder="1" {...field('sortOrder')} dir="ltr" className="w-full px-4 py-2.5 rounded-xl bg-white/60 border border-secondary/15 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none text-sm text-secondary placeholder:text-secondary/40" />
               </div>
             </div>
 

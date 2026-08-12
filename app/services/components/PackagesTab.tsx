@@ -236,23 +236,23 @@ export function PackagesTab({ serviceId, systemKey }: PackagesTabProps) {
             <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
               <div className="space-y-1">
                 <label className="text-xs font-bold text-secondary/50 uppercase tracking-wider">{ar ? 'اسم الباقة (العربية) *' : 'Package Name (Arabic) *'}</label>
-                <input type="text" required {...field('nameAr')} dir="rtl" className="w-full px-4 py-2.5 rounded-xl bg-white/60 border border-secondary/15 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none text-sm text-secondary font-arabic" />
+                <input type="text" required placeholder="الباقة الفضية" {...field('nameAr')} dir="rtl" className="w-full px-4 py-2.5 rounded-xl bg-white/60 border border-secondary/15 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none text-sm text-secondary font-arabic placeholder:text-secondary/40" />
               </div>
               <div className="space-y-1">
                 <label className="text-xs font-bold text-secondary/50 uppercase tracking-wider">{ar ? 'اسم الباقة (الإنجليزية) *' : 'Package Name (English) *'}</label>
-                <input type="text" required {...field('nameEn')} dir="ltr" className="w-full px-4 py-2.5 rounded-xl bg-white/60 border border-secondary/15 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none text-sm text-secondary" />
+                <input type="text" required placeholder="Silver Package" {...field('nameEn')} dir="ltr" className="w-full px-4 py-2.5 rounded-xl bg-white/60 border border-secondary/15 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none text-sm text-secondary placeholder:text-secondary/40" />
               </div>
               <div className="space-y-1">
                 <label className="text-xs font-bold text-secondary/50 uppercase tracking-wider">{ar ? 'السعر (د.ك) *' : 'Price (KD) *'}</label>
-                <input type="number" required step="0.001" min="0" {...field('price')} dir="ltr" className="w-full px-4 py-2.5 rounded-xl bg-white/60 border border-secondary/15 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none text-sm text-secondary" />
+                <input type="number" required step="0.001" min="0" placeholder="150.000" {...field('price')} dir="ltr" className="w-full px-4 py-2.5 rounded-xl bg-white/60 border border-secondary/15 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none text-sm text-secondary placeholder:text-secondary/40" />
               </div>
               <div className="space-y-1">
                 <label className="text-xs font-bold text-secondary/50 uppercase tracking-wider">{ar ? 'الوصف (العربية)' : 'Description (Arabic)'}</label>
-                <textarea rows={2} {...field('descAr')} dir="rtl" className="w-full px-4 py-2.5 rounded-xl bg-white/60 border border-secondary/15 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none text-sm text-secondary font-arabic resize-none" />
+                <textarea rows={2} placeholder="تصوير لمدة 4 ساعات مع ألبوم مطبوع" {...field('descAr')} dir="rtl" className="w-full px-4 py-2.5 rounded-xl bg-white/60 border border-secondary/15 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none text-sm text-secondary font-arabic resize-none placeholder:text-secondary/40" />
               </div>
               <div className="space-y-1">
                 <label className="text-xs font-bold text-secondary/50 uppercase tracking-wider">{ar ? 'الوصف (الإنجليزية)' : 'Description (English)'}</label>
-                <textarea rows={2} {...field('descEn')} dir="ltr" className="w-full px-4 py-2.5 rounded-xl bg-white/60 border border-secondary/15 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none text-sm text-secondary resize-none" />
+                <textarea rows={2} placeholder="4 hours of coverage with a printed album" {...field('descEn')} dir="ltr" className="w-full px-4 py-2.5 rounded-xl bg-white/60 border border-secondary/15 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none text-sm text-secondary resize-none placeholder:text-secondary/40" />
               </div>
               {/* Barcode-invitation packages carry a guest quota */}
               {requiresGuests && (
@@ -264,9 +264,10 @@ export function PackagesTab({ serviceId, systemKey }: PackagesTabProps) {
                     type="number"
                     required
                     min="1"
+                    placeholder="200"
                     {...field('guestsIncluded')}
                     dir="ltr"
-                    className="w-full px-4 py-2.5 rounded-xl bg-white/60 border border-secondary/15 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none text-sm text-secondary"
+                    className="w-full px-4 py-2.5 rounded-xl bg-white/60 border border-secondary/15 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none text-sm text-secondary placeholder:text-secondary/40"
                   />
                   <p className="text-[10px] text-secondary/45">
                     {ar
@@ -277,7 +278,7 @@ export function PackagesTab({ serviceId, systemKey }: PackagesTabProps) {
               )}
               <div className="space-y-1">
                 <label className="text-xs font-bold text-secondary/50 uppercase tracking-wider">{ar ? 'الترتيب' : 'Sort Order'}</label>
-                <input type="number" min="0" {...field('sortOrder')} dir="ltr" className="w-full px-4 py-2.5 rounded-xl bg-white/60 border border-secondary/15 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none text-sm text-secondary" />
+                <input type="number" min="0" placeholder="1" {...field('sortOrder')} dir="ltr" className="w-full px-4 py-2.5 rounded-xl bg-white/60 border border-secondary/15 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none text-sm text-secondary placeholder:text-secondary/40" />
               </div>
             </div>
 

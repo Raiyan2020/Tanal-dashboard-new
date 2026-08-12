@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Calendar, Clock, MapPin } from 'lucide-react';
+import { toast } from 'sonner';
 import { useLanguage } from '@/lib/i18n';
 import { DayPicker } from '@daypicker/react';
 import '@daypicker/react/dist/style.css';
@@ -73,11 +74,29 @@ export function EventDetailsSection({
     ? Number(/^(\d{1,2}):/.exec(form.time)![1])
     : null;
   const endDisabled = startHour === null;
+  // An already-saved order may carry a start with no hour after it (edit mode
+  // skips `onStartChange`), which would render an end dropdown with no options.
+  const noEndSlots = startHour !== null && !HOURS.some(h => h > startHour);
 
   /** Picking a start time drops an end time that is no longer after it. */
   const onStartChange = (value: string) => {
     const next = /^(\d{1,2}):/.exec(value);
     const nextStart = next ? Number(next[1]) : null;
+
+    // The end list only offers hours *after* the start, so the last hour of the
+    // day leaves it empty. Refuse the pick instead of opening a dropdown with
+    // nothing in it — clearing the start keeps the end select disabled.
+    // Quick mode never asks for an end time, so the limit does not apply there.
+    if (!quick && nextStart !== null && !HOURS.some(h => h > nextStart)) {
+      toast.error(
+        language === 'ar'
+          ? 'لا توجد أوقات انتهاء متاحة بعد هذا الوقت، يرجى اختيار وقت بدء أبكر'
+          : 'No end times are available after this start time — pick an earlier start time.'
+      );
+      setForm({ ...form, time: '', endTime: '' });
+      return;
+    }
+
     const currentEnd = /^(\d{1,2}):/.exec(form.endTime);
     const stale =
       nextStart === null ||
@@ -87,7 +106,7 @@ export function EventDetailsSection({
 
   const errorText = 'text-xs text-red-500 mt-0.5';
   const inputClass =
-    'w-full px-4 py-3 rounded-xl bg-white/50 border border-white/60 focus:border-primary/50 focus:ring-2 focus:ring-primary/20 outline-none text-secondary text-sm';
+    'w-full px-4 py-3 rounded-xl bg-white/50 border border-white/60 focus:border-primary/50 focus:ring-2 focus:ring-primary/20 outline-none text-secondary text-sm placeholder:text-secondary/40';
 
   const displayDate = form.date
     ? parseLocalDate(form.date).toLocaleDateString(language === 'ar' ? 'ar-EG' : 'en-US', {
@@ -170,13 +189,17 @@ export function EventDetailsSection({
           </label>
           <select
             required
-            disabled={endDisabled}
+            disabled={endDisabled || noEndSlots}
             title={
               endDisabled
                 ? language === 'ar'
                   ? 'اختر وقت البدء أولاً'
                   : 'Select the start time first'
-                : undefined
+                : noEndSlots
+                  ? language === 'ar'
+                    ? 'لا توجد أوقات متاحة بعد وقت البدء'
+                    : 'No times are available after the start time'
+                  : undefined
             }
             value={form.endTime}
             onChange={e => setForm({ ...form, endTime: e.target.value })}
@@ -185,7 +208,9 @@ export function EventDetailsSection({
             <option value="">
               {endDisabled
                 ? language === 'ar' ? 'اختر وقت البدء أولاً' : 'Select the start time first'
-                : language === 'ar' ? 'اختر الوقت...' : 'Select time...'}
+                : noEndSlots
+                  ? language === 'ar' ? 'لا توجد أوقات متاحة' : 'No times available'
+                  : language === 'ar' ? 'اختر الوقت...' : 'Select time...'}
             </option>
             {/* Only hours after the start are offered — 04:00 PM cannot end a 06:00 PM event. */}
             {HOURS.filter(h => startHour !== null && h > startHour).map(h => (
@@ -253,6 +278,7 @@ export function EventDetailsSection({
             </label>
             <input
               type="text"
+              placeholder={language === 'ar' ? 'حولي' : 'Hawalli'}
               value={form.governorate}
               onChange={e => setForm({ ...form, governorate: e.target.value })}
               className={inputClass}
@@ -264,6 +290,7 @@ export function EventDetailsSection({
             </label>
             <input
               type="text"
+              placeholder={language === 'ar' ? 'قطعة 4' : 'Block 4'}
               value={form.blockNumber}
               onChange={e => setForm({ ...form, blockNumber: e.target.value })}
               className={inputClass}
@@ -275,6 +302,7 @@ export function EventDetailsSection({
             </label>
             <input
               type="text"
+              placeholder={language === 'ar' ? 'شارع 12' : 'Street 12'}
               value={form.streetName}
               onChange={e => setForm({ ...form, streetName: e.target.value })}
               className={inputClass}
@@ -286,6 +314,7 @@ export function EventDetailsSection({
             </label>
             <input
               type="text"
+              placeholder={language === 'ar' ? 'منزل 25' : 'House 25'}
               value={form.houseNumber}
               onChange={e => setForm({ ...form, houseNumber: e.target.value })}
               className={inputClass}
@@ -299,6 +328,11 @@ export function EventDetailsSection({
           </label>
           <textarea
             rows={2}
+            placeholder={
+              language === 'ar'
+                ? 'بجوار مسجد الفهد، المدخل الخلفي للقاعة'
+                : 'Next to Al Fahad Mosque, use the hall’s rear entrance'
+            }
             value={form.addressNotes}
             onChange={e => setForm({ ...form, addressNotes: e.target.value })}
             className={`${inputClass} resize-none`}
@@ -311,6 +345,11 @@ export function EventDetailsSection({
           </label>
           <textarea
             rows={2}
+            placeholder={
+              language === 'ar'
+                ? 'يرجى وصول الفريق قبل ساعة من بدء الحفل'
+                : 'Team should arrive an hour before the event starts'
+            }
             value={form.executionNotes}
             onChange={e => setForm({ ...form, executionNotes: e.target.value })}
             className={`${inputClass} resize-none`}
