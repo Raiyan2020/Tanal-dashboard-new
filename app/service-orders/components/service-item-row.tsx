@@ -4,7 +4,12 @@ import { useLanguage } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { Dropdown } from './dropdown';
 import { ServiceOptionRenderer } from './service-option-renderer';
-import { type FormState, type FormServiceItem } from '@/lib/service-order-form';
+import {
+  isPhotoboothService,
+  type FormState,
+  type FormServiceItem,
+} from '@/lib/service-order-form';
+import { ServiceItemDesignSection } from './service-item-design-section';
 
 interface ServiceItemRowProps {
   svc: FormServiceItem;
@@ -16,6 +21,8 @@ interface ServiceItemRowProps {
   handleServiceSelect: (index: number, service: any) => Promise<void>;
   handlePackageSelect: (index: number, packageId: number) => void;
   handleAddonToggle: (index: number, addonId: number) => void;
+  token: string;
+  designError?: string;
 }
 
 export function ServiceItemRow({
@@ -28,6 +35,8 @@ export function ServiceItemRow({
   handleServiceSelect,
   handlePackageSelect,
   handleAddonToggle,
+  token,
+  designError,
 }: ServiceItemRowProps) {
   const { t, dir, language } = useLanguage();
 
@@ -217,6 +226,15 @@ export function ServiceItemRow({
             ))}
           </div>
         </div>
+      )}
+
+      {isPhotoboothService(svc) && (
+        <ServiceItemDesignSection
+          item={svc}
+          setForm={setForm}
+          token={token}
+          error={designError}
+        />
       )}
 
       {/* Responsible Employee */}

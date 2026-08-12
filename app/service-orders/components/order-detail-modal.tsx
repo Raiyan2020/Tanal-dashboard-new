@@ -6,6 +6,7 @@ import {
   X, User, Calendar, Clock, MapPin, Briefcase, DollarSign,
   Phone, ExternalLink, Loader2, CheckCircle2, XCircle,
   Copy, Check, Link2, AlertTriangle, ShieldOff, Users, Ban, Trash2, Edit2, MailPlus,
+  Image as ImageIcon,
 } from 'lucide-react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
@@ -79,6 +80,56 @@ function InfoRow({ icon: Icon, label, value }: { icon: any; label: string; value
       <div className="min-w-0 flex-1">
         <p className="text-[10px] font-bold text-secondary/40 uppercase tracking-wider">{label}</p>
         <div className="text-sm text-secondary font-medium mt-0.5 break-words">{value || '—'}</div>
+      </div>
+    </div>
+  );
+}
+
+function ServiceItemDesignPreview({ url, isAr }: { url: string; isAr: boolean }) {
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
+  const safeUrl = /^https?:\/\//i.test(url);
+  const failed = !safeUrl || failedUrl === url;
+
+  return (
+    <div className="overflow-hidden rounded-2xl border border-secondary/10 bg-white/60">
+      <div className="aspect-[16/10] max-h-56 bg-secondary/5 flex items-center justify-center overflow-hidden">
+        {failed ? (
+          <div className="flex flex-col items-center gap-2 text-secondary/35">
+            <ImageIcon className="w-7 h-7" />
+            <span className="text-[11px]">
+              {isAr ? 'تعذر عرض صورة التصميم' : 'Design preview unavailable'}
+            </span>
+          </div>
+        ) : (
+          // The API can return storage hosts not configured for Next Image.
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={url}
+            alt={isAr ? 'تصميم الفوتوبوث' : 'Photobooth design'}
+            loading="lazy"
+            decoding="async"
+            referrerPolicy="no-referrer"
+            onError={() => setFailedUrl(url)}
+            className="w-full h-full object-contain"
+          />
+        )}
+      </div>
+      <div className="flex items-center justify-between gap-3 px-3 py-2 border-t border-secondary/8">
+        <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-secondary/60">
+          <ImageIcon className="w-3.5 h-3.5" />
+          {isAr ? 'تصميم الفوتوبوث' : 'Photobooth Design'}
+        </span>
+        {safeUrl && (
+          <a
+            href={url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
+          >
+            {isAr ? 'عرض الصورة' : 'View image'}
+            <ExternalLink className="w-3 h-3" />
+          </a>
+        )}
       </div>
     </div>
   );
@@ -539,8 +590,10 @@ export function OrderDetailModal({
                       {isAr ? 'الخدمات' : 'Services'}
                     </h3>
                     <div className="space-y-3">
-                      {effectiveOrder.items.map((item) => (
-                        <div key={item.id} className="bg-secondary/3 rounded-2xl p-4 space-y-3">
+                      {effectiveOrder.items.map((item) => {
+                        const designUrl = item.image?.trim() || item.design_url?.trim() || '';
+                        return (
+                          <div key={item.id} className="bg-secondary/3 rounded-2xl p-4 space-y-3">
                           {/* Service header */}
                           <div className="flex items-start justify-between gap-2">
                             <div>
@@ -569,6 +622,8 @@ export function OrderDetailModal({
                               )}
                             </div>
                           )}
+
+                          {designUrl && <ServiceItemDesignPreview url={designUrl} isAr={isAr} />}
 
                           {/* Responsible employees — `employees[]` holds them all,
                               `employee` is only the first and is the sole source
@@ -678,10 +733,12 @@ export function OrderDetailModal({
                               orderId={effectiveOrder.id}
                               itemId={item.id}
                               token={token}
+                              primaryDesignUrl={designUrl}
                             />
                           )}
-                        </div>
-                      ))}
+                          </div>
+                        );
+                      })}
                     </div>
                   </section>
 

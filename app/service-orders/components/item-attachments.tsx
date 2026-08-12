@@ -15,6 +15,8 @@ interface ItemAttachmentsProps {
   orderId: number;
   itemId: number;
   token: string;
+  /** The primary design is rendered separately and must not be deletable here. */
+  primaryDesignUrl?: string | null;
 }
 
 /**
@@ -24,7 +26,12 @@ interface ItemAttachmentsProps {
  * fetching every item's attachments up front would fire a request per item on
  * open.
  */
-export function ItemAttachments({ orderId, itemId, token }: ItemAttachmentsProps) {
+export function ItemAttachments({
+  orderId,
+  itemId,
+  token,
+  primaryDesignUrl,
+}: ItemAttachmentsProps) {
   const { language } = useLanguage();
   const isAr = language === 'ar';
 
@@ -35,6 +42,13 @@ export function ItemAttachments({ orderId, itemId, token }: ItemAttachmentsProps
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [attachments, setAttachments] = useState<ApiServiceOrderItemAttachment[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const comparableUrl = (url: string | null | undefined) =>
+    (url ?? '').trim().split(/[?#]/, 1)[0].replace(/\/$/, '');
+  const primaryUrl = comparableUrl(primaryDesignUrl);
+  const visibleAttachments = attachments.filter(
+    attachment => !primaryUrl || comparableUrl(attachment.file_url) !== primaryUrl
+  );
 
   const fetchAttachments = useCallback(async () => {
     if (!token) return;
@@ -94,8 +108,8 @@ export function ItemAttachments({ orderId, itemId, token }: ItemAttachmentsProps
       >
         <Paperclip className="w-3 h-3" />
         {isAr ? 'المرفقات' : 'Attachments'}
-        {loaded && attachments.length > 0 && (
-          <span className="px-1.5 py-0.5 rounded bg-primary/10 text-primary">{attachments.length}</span>
+        {loaded && visibleAttachments.length > 0 && (
+          <span className="px-1.5 py-0.5 rounded bg-primary/10 text-primary">{visibleAttachments.length}</span>
         )}
       </button>
 
@@ -107,13 +121,13 @@ export function ItemAttachments({ orderId, itemId, token }: ItemAttachmentsProps
             </div>
           )}
 
-          {!loading && attachments.length === 0 && (
+          {!loading && visibleAttachments.length === 0 && (
             <p className="text-[11px] text-secondary/40 py-1">
               {isAr ? 'لا توجد مرفقات' : 'No attachments yet'}
             </p>
           )}
 
-          {attachments.map(att => (
+          {visibleAttachments.map(att => (
             <div key={att.id} className="flex items-center gap-2 bg-white/60 rounded-xl px-3 py-2">
               <FileText className="w-3.5 h-3.5 text-secondary/40 shrink-0" />
               <div className="min-w-0 flex-1">

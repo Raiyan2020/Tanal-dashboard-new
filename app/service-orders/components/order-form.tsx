@@ -15,7 +15,10 @@ import {
   createEmptyServiceItem,
   buildItemPayload,
   isInvitationDesignExpired,
+  isPhotoboothService,
+  isServiceItemDesignExpired,
   needsInvitationDesignUpload,
+  needsServiceItemDesignUpload,
 } from '@/lib/service-order-form';
 
 import { ClientSection } from './client-section';
@@ -106,7 +109,8 @@ export function OrderForm({
   }, [form.services]);
 
   const handleCalculateTotal = async () => {
-    const items = form.services.filter(s => s.serviceId).map(buildItemPayload);
+    // Price calculation must not send (or risk consuming) a single-use design token.
+    const items = form.services.filter(s => s.serviceId).map(item => buildItemPayload(item, false));
     if (items.length === 0) {
       toast.error(language === 'ar' ? 'اختر خدمة أولاً' : 'Select a service first');
       return;
@@ -196,8 +200,13 @@ export function OrderForm({
       serviceId: String(service.id),
       serviceName: service.name,
       serviceNameAr: service.name,
+      serviceSystemKey: service.system_key ?? null,
       price: '0',
       options: [],
+      designToken: '',
+      designPreviewUrl: '',
+      designExpiresAt: '',
+      existingDesignUrl: '',
     };
     setForm({ ...form, services: updatedServices });
 
@@ -240,6 +249,7 @@ export function OrderForm({
         const copy = [...prev.services];
         if (copy[index] && copy[index].serviceId === String(service.id)) {
           copy[index].options = optionsState;
+          copy[index].serviceSystemKey = res.data.system_key ?? copy[index].serviceSystemKey;
           copy[index].packages = packages;
           copy[index].addons = addons;
           copy[index].selectedPackageId = defaultPackage?.id;
@@ -287,6 +297,14 @@ export function OrderForm({
   const missingInvitationDesign =
     needsInvitationDesignUpload(form)
     && (!form.invitationDesignToken || isInvitationDesignExpired(form));
+
+  const missingItemDesign = form.services.some(item =>
+    isPhotoboothService(item)
+    && (
+      (needsServiceItemDesignUpload(item) && !item.designToken)
+      || (item.designToken && isServiceItemDesignExpired(item))
+    )
+  );
 
   /**
    * True once the order includes the barcode/QR system service. The backend
@@ -481,6 +499,8 @@ export function OrderForm({
                 handleServiceSelect={handleServiceSelect}
                 handlePackageSelect={handlePackageSelect}
                 handleAddonToggle={handleAddonToggle}
+                token={token}
+                designError={svc.designToken ? undefined : errors.item_designs?.[svc.id]}
               />
             ))}
 
@@ -561,7 +581,7 @@ export function OrderForm({
               className="flex-1 py-3 text-sm font-medium text-secondary/70 bg-white/60 hover:bg-white border border-secondary/15 rounded-xl transition-colors cursor-pointer">
               {t('cancel') || 'Cancel'}
             </button>
-            <button type="submit" disabled={loading || form.services.length === 0 || form.services.some(s => !s.serviceId) || hasDuplicateServices || missingInvitationDesign}
+            <button type="submit" disabled={loading || form.services.length === 0 || form.services.some(s => !s.serviceId) || hasDuplicateServices || missingInvitationDesign || missingItemDesign}
               className="flex-1 flex items-center justify-center gap-2 py-3 text-sm font-medium text-white bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-all cursor-pointer shadow-md shadow-primary/20 hover:-translate-y-0.5">
               {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
               {editing ? t('saveChanges') || 'Save Changes' : t('createSendLinks') || 'Create & Send Link'}

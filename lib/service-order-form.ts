@@ -52,6 +52,8 @@ export interface FormServiceItem {
   serviceId: string;
   serviceName: string;
   serviceNameAr: string;
+  /** Stable backend identifier when supplied by the service catalogue. */
+  serviceSystemKey?: string | null;
   price: string;
   description: string;
   options: FormServiceItemOption[];
@@ -71,6 +73,12 @@ export interface FormServiceItem {
   guestsIncluded?: number | null;
   /** Present only when editing — needed to address item attachments. */
   serverItemId?: number;
+  /** Single-use token returned by the per-item photobooth design upload. */
+  designToken: string;
+  designPreviewUrl: string;
+  designExpiresAt: string;
+  /** Saved design on an existing order; omitting a new token preserves it. */
+  existingDesignUrl: string;
 }
 
 /**
@@ -150,6 +158,10 @@ export const createEmptyServiceItem = (): FormServiceItem => ({
   selectedAddonIds: [],
   packages: [],
   addons: [],
+  designToken: '',
+  designPreviewUrl: '',
+  designExpiresAt: '',
+  existingDesignUrl: '',
 });
 
 export const createEmptyOrderForm = (): FormState => ({
@@ -202,11 +214,50 @@ export function needsInvitationDesignUpload(form: FormState): boolean {
   return form.requiresInvitationDesign && !form.hasExistingInvitationDesign;
 }
 
-export type OrderFormErrors = Partial<Record<
+type OrderFormFieldError =
   'client' | 'client_alt_phone' | 'event_date' | 'event_time' | 'event_end_time'
-  | 'hall_name' | 'items' | 'invitation_design',
-  string
->>;
+  | 'hall_name' | 'items' | 'invitation_design';
+
+export type OrderFormErrors = Partial<Record<OrderFormFieldError, string>> & {
+  /** Indexed by the form row's stable local id. */
+  item_designs?: Record<string, string>;
+};
+
+/** Identifies the photobooth service across system keys and Arabic/English names. */
+export function isPhotoboothService(item: FormServiceItem): boolean {
+  const compact = (value: string | null | undefined) =>
+    (value ?? '').trim().toLocaleLowerCase('en').replace(/[\s_-]+/g, '');
+
+  return [item.serviceSystemKey, item.serviceName, item.serviceNameAr]
+    .map(compact)
+    .some(value => value.includes('photobooth') || value.includes('فوتوبوث'));
+}
+
+/** True when an uploaded per-item design token has expired. */
+export function isServiceItemDesignExpired(item: FormServiceItem): boolean {
+  if (!item.designToken || !item.designExpiresAt) return false;
+  const expiry = new Date(item.designExpiresAt).getTime();
+  return Number.isFinite(expiry) && expiry <= Date.now();
+}
+
+/** New photobooth items need an upload; edited items may retain their saved image. */
+export function needsServiceItemDesignUpload(item: FormServiceItem): boolean {
+  return isPhotoboothService(item) && !item.existingDesignUrl;
+}
+
+/** Maps dotted backend fields (`items.0.design_token`) to stable local row ids. */
+export function serviceItemDesignErrorsFromApi(
+  form: FormState,
+  fieldError: (field: string) => string | undefined,
+): Record<string, string> {
+  const errors: Record<string, string> = {};
+  form.services.forEach((item, index) => {
+    const error = fieldError(`items.${index}.design_token`)
+      ?? fieldError(`items[${index}].design_token`);
+    if (error) errors[item.id] = error;
+  });
+  return errors;
+}
 
 /**
  * Client-side mirror of the backend rules, so obvious mistakes surface before a
@@ -282,6 +333,24 @@ export function validateOrderForm(form: FormState, language: 'ar' | 'en'): Order
       : 'An invitation design must be uploaded first';
   }
 
+  const itemDesignErrors: Record<string, string> = {};
+  for (const item of form.services) {
+    if (!isPhotoboothService(item)) continue;
+
+    if (item.designToken && isServiceItemDesignExpired(item)) {
+      itemDesignErrors[item.id] = ar
+        ? 'انتهت صلاحية تصميم الفوتوبوث، يرجى رفعه مرة أخرى'
+        : 'The photobooth design has expired; upload it again';
+    } else if (needsServiceItemDesignUpload(item) && !item.designToken) {
+      itemDesignErrors[item.id] = ar
+        ? 'يجب رفع تصميم الفوتوبوث أولاً'
+        : 'A photobooth design must be uploaded first';
+    }
+  }
+  if (Object.keys(itemDesignErrors).length > 0) {
+    errors.item_designs = itemDesignErrors;
+  }
+
   return errors;
 }
 
@@ -293,7 +362,10 @@ export function isInvitationDesignExpired(form: FormState): boolean {
 }
 
 /** Maps a single form row to the `items[]` entry the API expects. */
-export function buildItemPayload(s: FormServiceItem): CreateServiceOrderItem {
+export function buildItemPayload(
+  s: FormServiceItem,
+  includeDesignToken = true,
+): CreateServiceOrderItem {
   const optionsPayload: any[] = [];
   for (const opt of s.options) {
     if (opt.type === 'employee') {
@@ -337,9 +409,18 @@ export function buildItemPayload(s: FormServiceItem): CreateServiceOrderItem {
     };
   }
 
+  const designToken =
+    includeDesignToken
+    && isPhotoboothService(s)
+    && s.designToken
+    && !isServiceItemDesignExpired(s)
+      ? s.designToken
+      : undefined;
+
   return {
     service_id: Number(s.serviceId),
     service_package_id: s.selectedPackageId ? Number(s.selectedPackageId) : undefined,
+    design_token: designToken,
     addon_ids: s.selectedAddonIds?.length ? s.selectedAddonIds.map(Number) : undefined,
     // A package carries its own option values — only send options without one.
     options: s.selectedPackageId ? undefined : optionsPayload,
@@ -373,7 +454,7 @@ function buildBasePayload(form: FormState): UpdateServiceOrderPayload {
     address_notes: trimmed(form.addressNotes),
     execution_notes: trimmed(form.executionNotes),
     notes: trimmed(form.description),
-    items: form.services.map(buildItemPayload),
+    items: form.services.map(item => buildItemPayload(item)),
   };
 
   if (form.orderEmployeeIds.length > 0) {
@@ -531,6 +612,7 @@ export async function hydrateOrderFormItems(
 
         return {
           ...row,
+          serviceSystemKey: data.system_key ?? row.serviceSystemKey,
           options,
           packages: (data.packages ?? []) as ServicePackage[],
           addons: (data.addons ?? []) as ServiceAddon[],
@@ -573,6 +655,7 @@ export function formStateFromDetail(detail: ApiServiceOrderDetail): FormState {
       serviceId: String(item.service_id),
       serviceName: item.service?.name ?? '',
       serviceNameAr: item.service?.name ?? '',
+      serviceSystemKey: item.service?.system_key ?? null,
       price: String(item.price ?? '0'),
       description: item.notes ?? '',
       options: [],
@@ -591,6 +674,10 @@ export function formStateFromDetail(detail: ApiServiceOrderDetail): FormState {
       packages: [],
       addons: [],
       guestsIncluded: item.guests_included ?? null,
+      designToken: '',
+      designPreviewUrl: '',
+      designExpiresAt: '',
+      existingDesignUrl: item.image ?? item.design_url ?? '',
     })),
     description: detail.notes ?? '',
     date: detail.event_date ?? '',

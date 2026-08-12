@@ -1672,7 +1672,17 @@ export interface ApiServiceOrderDetailItem {
   id: number;
   service_id: number;
   service_package_id: number | null;
-  service: { id: number; name: string; description: string; image: string | null; sort_order: number };
+  service: {
+    id: number;
+    name: string;
+    description: string;
+    image: string | null;
+    sort_order: number;
+    system_key?: string | null;
+  };
+  /** Primary photobooth design image; both fields currently point to the same URL. */
+  image?: string | null;
+  design_url?: string | null;
   package?: ApiServicePackage | null;
   base_price: ApiAmount;
   addon_total_price: ApiAmount;
@@ -1865,6 +1875,8 @@ export interface CreateServiceOrderItemEmployee {
 export interface CreateServiceOrderItem {
   service_id: number;
   service_package_id?: number;
+  /** Single-use token returned by `uploadServiceOrderItemDesign`. Photobooth only. */
+  design_token?: string;
   addon_ids?: number[];
   /** Optional once a `service_package_id` is chosen — the package carries them. */
   options?: CreateServiceOrderItemOption[];
@@ -1981,6 +1993,28 @@ export interface InvitationDesignUploadResponse {
   preview_url: string;
   /** ISO timestamp — the token is valid for roughly an hour. */
   expires_at: string;
+}
+
+export interface ServiceOrderItemDesignUploadResponse {
+  /** Single-use; pass inside the matching `items[]` entry as `design_token`. */
+  design_token: string;
+  preview_url: string;
+  /** ISO timestamp — the token is valid for roughly an hour. */
+  expires_at: string;
+}
+
+/** POST /admin/service-orders/item-design — upload a photobooth item design. */
+export async function uploadServiceOrderItemDesign(
+  design: File,
+  token: string
+): Promise<ApiResponse<ServiceOrderItemDesignUploadResponse>> {
+  const formData = new FormData();
+  formData.append('design', design);
+  return apiRequest<ServiceOrderItemDesignUploadResponse>('/admin/service-orders/item-design', {
+    method: 'POST',
+    body: formData,
+    token,
+  });
 }
 
 /**

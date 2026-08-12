@@ -14,6 +14,7 @@ import {
   formStateFromDetail,
   hydrateOrderFormItems,
   buildUpdatePayload,
+  serviceItemDesignErrorsFromApi,
   validateOrderForm,
   type FormState,
   type OrderFormErrors,
@@ -93,6 +94,7 @@ export function EditOrderClient({ token: serverToken, order }: EditOrderClientPr
       router.refresh();
     } catch (err) {
       if (err instanceof ApiError) {
+        const itemDesignErrors = serviceItemDesignErrorsFromApi(form, field => err.fieldError(field));
         setErrors({
           client: err.fieldError('client.phone') ?? err.fieldError('client_id'),
           client_alt_phone: err.fieldError('client.alt_phone'),
@@ -102,7 +104,21 @@ export function EditOrderClient({ token: serverToken, order }: EditOrderClientPr
           hall_name: err.fieldError('hall_name'),
           items: err.fieldError('items'),
           invitation_design: err.fieldError('invitation_design_token'),
+          item_designs: Object.keys(itemDesignErrors).length > 0 ? itemDesignErrors : undefined,
         });
+        if (Object.keys(itemDesignErrors).length > 0) {
+          setForm(prev => ({
+            ...prev,
+            services: prev.services.map(item => itemDesignErrors[item.id]
+              ? {
+                  ...item,
+                  designToken: '',
+                  designPreviewUrl: '',
+                  designExpiresAt: '',
+                }
+              : item),
+          }));
+        }
       }
       toast.error((err as Error).message || 'فشل حفظ الطلب');
     } finally {

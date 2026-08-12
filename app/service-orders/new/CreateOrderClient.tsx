@@ -9,6 +9,7 @@ import { createAdminServiceOrder, ApiError } from '@/lib/api';
 import {
   createEmptyOrderForm,
   buildCreatePayload,
+  serviceItemDesignErrorsFromApi,
   validateOrderForm,
   type FormState,
   type OrderFormErrors,
@@ -72,6 +73,7 @@ export function CreateOrderClient({ token: serverToken }: CreateOrderClientProps
       // Map server-side field errors back onto the form where the names line up.
       if (err instanceof ApiError) {
         const designError = err.fieldError('invitation_design_token');
+        const itemDesignErrors = serviceItemDesignErrorsFromApi(form, field => err.fieldError(field));
         setErrors({
           client: err.fieldError('client.phone') ?? err.fieldError('client_id'),
           client_alt_phone: err.fieldError('client.alt_phone'),
@@ -81,6 +83,7 @@ export function CreateOrderClient({ token: serverToken }: CreateOrderClientProps
           hall_name: err.fieldError('hall_name'),
           items: err.fieldError('items'),
           invitation_design: designError,
+          item_designs: Object.keys(itemDesignErrors).length > 0 ? itemDesignErrors : undefined,
         });
 
         // The token is single-use and short-lived, so any rejection of it means
@@ -91,6 +94,19 @@ export function CreateOrderClient({ token: serverToken }: CreateOrderClientProps
             invitationDesignToken: '',
             invitationDesignPreviewUrl: '',
             invitationDesignExpiresAt: '',
+          }));
+        }
+        if (Object.keys(itemDesignErrors).length > 0) {
+          setForm(prev => ({
+            ...prev,
+            services: prev.services.map(item => itemDesignErrors[item.id]
+              ? {
+                  ...item,
+                  designToken: '',
+                  designPreviewUrl: '',
+                  designExpiresAt: '',
+                }
+              : item),
           }));
         }
       }
