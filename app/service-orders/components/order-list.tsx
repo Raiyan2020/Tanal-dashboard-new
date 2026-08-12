@@ -40,6 +40,12 @@ interface OrderListProps {
   onEdit: (order: ApiServiceOrderItem) => void;
   onDelete: (order: ApiServiceOrderItem) => void;
   onCancel: (order: ApiServiceOrderItem) => void;
+  /**
+   * Refetches the list. A payment change also flips server-derived fields the
+   * row renders (`has_pending_second_payment`, `is_barcode_suspended`,
+   * `paid_amount`), so the row is stale until this resolves.
+   */
+  onRefresh: () => Promise<void> | void;
 }
 
 /** Status values that represent payment state rather than lifecycle state. */
@@ -124,6 +130,7 @@ export function OrderList({
   onEdit,
   onDelete,
   onCancel,
+  onRefresh,
 }: OrderListProps) {
   const { dir, t, language } = useLanguage();
   const { can } = usePermissions();
@@ -148,7 +155,22 @@ export function OrderList({
     try {
       await updateServiceOrderPaymentStatus(order.id, nextStatus, token, firstInstallmentAmount);
       toast.success(language === 'ar' ? 'تم تحديث حالة الدفع بنجاح' : 'Payment status updated successfully');
+      // Holds the select on the new value while the list refetches.
       setPaymentOverrides(prev => ({ ...prev, [order.id]: nextStatus }));
+      try {
+        await onRefresh();
+        // The refetched row is authoritative — the backend may resolve the
+        // status differently (e.g. a settled instalment lands as `paid`). A
+        // failed refetch keeps the override so the select does not snap back.
+        setPaymentOverrides(prev => {
+          if (!(order.id in prev)) return prev;
+          const next = { ...prev };
+          delete next[order.id];
+          return next;
+        });
+      } catch {
+        // The update itself succeeded; the refetch reports its own failure.
+      }
       return true;
     } catch (err) {
       toast.error((err as Error).message || (language === 'ar' ? 'فشل في تحديث حالة الدفع' : 'Failed to update payment status'));

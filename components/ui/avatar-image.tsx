@@ -31,16 +31,18 @@ export function AvatarImage({
   /** Rendered when `src` is empty or the image fails to load. */
   fallback: React.ReactNode;
 }) {
-  const [failed, setFailed] = useState(false);
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
 
-  if (!src || failed) return <>{fallback}</>;
+  // Track the URL that failed rather than a permanent boolean. A newly selected
+  // local preview must still render even if the previous remote avatar failed.
+  if (!src || failedSrc === src) return <>{fallback}</>;
 
   return (
     // eslint-disable-next-line @next/next/no-img-element
     <img
       src={src}
       alt={alt}
-      onError={() => setFailed(true)}
+      onError={() => setFailedSrc(src)}
       referrerPolicy="no-referrer"
       className={cn('object-cover', className)}
     />

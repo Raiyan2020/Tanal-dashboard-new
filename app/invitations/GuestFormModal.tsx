@@ -18,7 +18,6 @@ export interface GuestFormValues {
   name: string;
   countryCode: string;
   phone: string;
-  haveWhatsapp: boolean;
 }
 
 interface GuestFormModalProps {
@@ -67,7 +66,6 @@ export function GuestFormModal({
   const [name, setName] = useState(guest?.name ?? '');
   const [countryCode, setCountryCode] = useState(initialPhone.countryCode);
   const [phone, setPhone] = useState(initialPhone.phone);
-  const [haveWhatsapp, setHaveWhatsapp] = useState(guest?.haveWhatsapp ?? true);
 
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string | undefined>>({});
@@ -100,7 +98,7 @@ export function GuestFormModal({
         name: name.trim(),
         country_code: countryCode,
         phone: phone.trim(),
-        have_whatsapp: haveWhatsapp,
+        have_whatsapp: true,
       };
       const res = editing
         ? await updateInvitationGuest(invitationId, guest!.id!, payload, token)
@@ -185,16 +183,6 @@ export function GuestFormModal({
             </div>
             {errors.phone && <p className="text-xs text-red-500">{errors.phone}</p>}
           </div>
-
-          <label className="flex items-center gap-2.5 cursor-pointer select-none pt-1">
-            <input
-              type="checkbox"
-              checked={haveWhatsapp}
-              onChange={e => setHaveWhatsapp(e.target.checked)}
-              className="w-4 h-4 accent-primary cursor-pointer"
-            />
-            <span className="text-sm text-secondary/80">{t('hasWhatsapp')}</span>
-          </label>
 
           <div className="flex gap-3 pt-3">
             <button

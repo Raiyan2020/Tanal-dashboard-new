@@ -196,6 +196,7 @@ export default function ServiceOrdersClient({
         onEdit={order => router.push(`/service-orders/${order.id}/edit`)}
         onDelete={setDeleteTarget}
         onCancel={setCancelTarget}
+        onRefresh={fetchOrders}
       />
     </>
   );

@@ -570,24 +570,43 @@ export function OrderDetailModal({
                             </div>
                           )}
 
-                          {/* Responsible employee */}
-                          {item.employee && (
-                            <div className="flex items-center gap-2 text-xs bg-white/60 rounded-xl px-3 py-2">
-                              <User className="w-3.5 h-3.5 text-secondary/50 shrink-0" />
-                              <span className="text-secondary/60">{isAr ? 'المسؤول:' : 'Assigned:'}</span>
-                              <span className="font-semibold text-secondary">
-                                {item.employee.name || item.employee.username}
-                              </span>
-                              {item.employee.type === 'freelancer' && (
-                                <span className="px-1.5 py-0.5 rounded bg-violet-100 text-violet-700 text-[9px] font-bold">
-                                  {isAr ? 'مستقل' : 'Freelancer'}
+                          {/* Responsible employees — `employees[]` holds them all,
+                              `employee` is only the first and is the sole source
+                              on payloads predating multi-assignment. */}
+                          {(() => {
+                            const assignees = item.employees?.length
+                              ? item.employees
+                              : item.employee ? [item.employee] : [];
+                            if (assignees.length === 0) return null;
+                            return (
+                              <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 text-xs bg-white/60 rounded-xl px-3 py-2">
+                                <User className="w-3.5 h-3.5 text-secondary/50 shrink-0" />
+                                <span className="text-secondary/60">
+                                  {assignees.length > 1
+                                    ? (isAr ? 'المسؤولون:' : 'Assigned:')
+                                    : (isAr ? 'المسؤول:' : 'Assigned:')}
                                 </span>
-                              )}
-                              {item.employee.reference_label && (
-                                <span className="text-secondary/40 font-mono text-[10px]">{item.employee.reference_label}</span>
-                              )}
-                            </div>
-                          )}
+                                {assignees.map((emp, i) => (
+                                  <span
+                                    key={`${emp.type}-${emp.employee_id ?? emp.id ?? emp.username ?? i}`}
+                                    className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-secondary/5"
+                                  >
+                                    <span className="font-semibold text-secondary">
+                                      {emp.name || emp.username}
+                                    </span>
+                                    {emp.type === 'freelancer' && (
+                                      <span className="px-1.5 py-0.5 rounded bg-violet-100 text-violet-700 text-[9px] font-bold">
+                                        {isAr ? 'مستقل' : 'Freelancer'}
+                                      </span>
+                                    )}
+                                    {emp.reference_label && (
+                                      <span className="text-secondary/40 font-mono text-[10px]">{emp.reference_label}</span>
+                                    )}
+                                  </span>
+                                ))}
+                              </div>
+                            );
+                          })()}
 
                           {/* Options */}
                           {item.options.length > 0 && (

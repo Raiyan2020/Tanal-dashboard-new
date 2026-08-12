@@ -14,8 +14,8 @@ interface DropdownProps<T> {
   onSelect: (item: T) => void;
   /** Items that are still listed but cannot be picked — e.g. already used elsewhere. */
   isDisabled?: (item: T) => boolean;
-  /** Reason shown beside a disabled item. */
-  disabledHint?: string;
+  /** Reason shown beside a disabled item — one string, or resolved per item. */
+  disabledHint?: string | ((item: T) => string);
 }
 
 export function Dropdown<T extends { id: string | number }>({
@@ -47,10 +47,13 @@ export function Dropdown<T extends { id: string | number }>({
               <div className="max-h-52 overflow-y-auto py-1">
                 {filtered.map(item => {
                   const disabled = isDisabled?.(item) ?? false;
+                  const hint = disabled
+                    ? (typeof disabledHint === 'function' ? disabledHint(item) : disabledHint)
+                    : undefined;
                   return (
                     <button key={item.id} type="button"
                       disabled={disabled}
-                      title={disabled ? disabledHint : undefined}
+                      title={hint}
                       onClick={() => { onSelect(item); setOpen(false); setQ(''); }}
                       className={cn("w-full px-3 py-2.5 text-sm flex items-center gap-3 transition-colors",
                         dir === 'rtl' ? 'text-right' : 'text-left',
@@ -60,7 +63,7 @@ export function Dropdown<T extends { id: string | number }>({
                       <div className="flex-1 min-w-0">
                         <div className="font-medium text-secondary truncate">{label(item)}</div>
                         <div className="text-xs text-secondary/50 truncate">
-                          {disabled && disabledHint ? disabledHint : sublabel(item)}
+                          {hint ?? sublabel(item)}
                         </div>
                       </div>
                     </button>

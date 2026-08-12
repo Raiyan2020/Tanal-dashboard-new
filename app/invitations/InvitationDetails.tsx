@@ -834,7 +834,6 @@ export function InvitationDetails({ invitation, onBack, onEdit }: InvitationDeta
                                     // the modal splits it on the dial code.
                                     countryCode: '',
                                     phone: guest.phone ?? '',
-                                    haveWhatsapp: guest.have_whatsapp ?? true,
                                   });
                                   setGuestFormOpen(true);
                                 }}

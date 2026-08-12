@@ -17,7 +17,7 @@ import {
 import { AvatarImage } from '@/components/ui/avatar-image';
 import { cn } from '@/lib/utils';
 import { updateProfile } from '@/lib/api';
-import { getToken, saveAdmin } from '@/lib/auth';
+import { getAdmin, getToken, saveAdmin } from '@/lib/auth';
 import type { Admin } from '@/lib/api';
 
 // Shadcn UI components
@@ -73,6 +73,7 @@ export function ProfileEditDialog({
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const imagePreviewUrlRef = useRef<string | null>(null);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -83,26 +84,24 @@ export function ProfileEditDialog({
     },
   });
 
-  /* Reset form whenever dialog opens with fresh admin data */
-  useEffect(() => {
-    if (open) {
-      form.reset({
-        name: admin?.name ?? '',
-        email: admin?.email ?? '',
-        password: '',
-      });
-      setImageFile(null);
-      setImagePreview(null);
-      setStatus('idle');
-      setErrorMsg(null);
+  useEffect(() => () => {
+    if (imagePreviewUrlRef.current) {
+      URL.revokeObjectURL(imagePreviewUrlRef.current);
+      imagePreviewUrlRef.current = null;
     }
-  }, [open, admin, form]);
+  }, []);
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    if (imagePreviewUrlRef.current) {
+      URL.revokeObjectURL(imagePreviewUrlRef.current);
+    }
+    const previewUrl = URL.createObjectURL(file);
+    imagePreviewUrlRef.current = previewUrl;
     setImageFile(file);
-    setImagePreview(URL.createObjectURL(file));
+    setImagePreview(previewUrl);
   };
 
   const onSubmit = useCallback(async (values: FormValues) => {
@@ -120,15 +119,20 @@ export function ProfileEditDialog({
         },
         token
       );
-      saveAdmin(res.data);
-      onSuccess(res.data);
+
+      // Keep the existing cached admin data and replace only its image with the
+      // URL returned by the update endpoint.
+      const cachedAdmin = getAdmin<Admin>() ?? admin ?? res.data;
+      const updatedAdmin = { ...cachedAdmin, image: res.data.image };
+      saveAdmin(updatedAdmin);
+      onSuccess(updatedAdmin);
       setStatus('success');
       setTimeout(onClose, 1200);
     } catch (err: unknown) {
       setStatus('error');
       setErrorMsg(err instanceof Error ? err.message : 'حدث خطأ غير متوقع');
     }
-  }, [imageFile, onClose, onSuccess]);
+  }, [admin, imageFile, onClose, onSuccess]);
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) onClose(); }}>

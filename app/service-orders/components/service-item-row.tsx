@@ -47,6 +47,12 @@ export function ServiceItemRow({
   const isDuplicate =
     !!svc.serviceId && form.services.some((s, i) => i < index && s.serviceId === svc.serviceId);
 
+  // The package drives the price, so a service with no packages cannot be
+  // ordered. `packages_count` is absent on payloads that predate it — only gate
+  // on it when the API actually reports the count.
+  const hasNoPackages = (s: { packages_count?: number }) =>
+    typeof s.packages_count === 'number' && s.packages_count === 0;
+
   return (
     <div className="p-5 bg-secondary/5 rounded-2xl border border-secondary/10 relative space-y-4">
       {/* Delete service item button */}
@@ -78,8 +84,10 @@ export function ServiceItemRow({
             label={s => s.name}
             sublabel={s => <span className="text-xs text-secondary/40">{s.description}</span>}
             onSelect={s => handleServiceSelect(index, s)}
-            isDisabled={s => takenServiceIds.has(String(s.id))}
-            disabledHint={language === 'ar' ? 'مضافة بالفعل في هذا الطلب' : 'Already added to this order'}
+            isDisabled={s => takenServiceIds.has(String(s.id)) || hasNoPackages(s)}
+            disabledHint={s => takenServiceIds.has(String(s.id))
+              ? (language === 'ar' ? 'مضافة بالفعل في هذا الطلب' : 'Already added to this order')
+              : (language === 'ar' ? 'لا توجد باقات لهذه الخدمة' : 'This service has no packages')}
           />
           {isDuplicate && (
             <p className="text-xs text-red-500">

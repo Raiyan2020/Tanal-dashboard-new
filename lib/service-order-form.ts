@@ -436,6 +436,26 @@ export function savedAddonIds(item: ApiServiceOrderDetailItem): number[] {
 }
 
 /**
+ * Every internal employee assigned to a saved item. `employee_ids`/`employees[]`
+ * carry the full set; the singular `employee` is only the first of them and is
+ * the sole source on payloads predating multi-assignment.
+ */
+export function itemEmployeeIds(item: ApiServiceOrderDetailItem): number[] {
+  if (item.employee_ids?.length) return item.employee_ids;
+
+  const fromList = (item.employees ?? [])
+    .filter(e => e.type === 'employee')
+    .map(e => e.employee_id ?? e.id)
+    .filter((id): id is number => typeof id === 'number');
+  if (fromList.length) return fromList;
+
+  const single = item.employee?.type === 'employee'
+    ? (item.employee.employee_id ?? item.employee.id)
+    : undefined;
+  return typeof single === 'number' ? [single] : [];
+}
+
+/**
  * Rebuilds the form value for one option from its saved rows. Employee options
  * can have several rows (one per assignee); every other type has at most one.
  */
@@ -559,10 +579,7 @@ export function formStateFromDetail(detail: ApiServiceOrderDetail): FormState {
       // An item with no employee hydrates as `employee` with nothing selected,
       // which builds the same payload as the old `none` did.
       employeeType: item.employee?.type === 'freelancer' ? 'freelancer' : 'employee',
-      employeeIds:
-        item.employee?.type === 'employee' && (item.employee.employee_id ?? item.employee.id)
-          ? [(item.employee.employee_id ?? item.employee.id) as number]
-          : [],
+      employeeIds: itemEmployeeIds(item),
       freelancerUsername: item.employee?.username ?? '',
       freelancerName: item.employee?.name ?? '',
       freelancerCountryCode: item.employee?.country_code ?? '',

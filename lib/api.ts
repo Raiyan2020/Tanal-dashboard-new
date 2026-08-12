@@ -949,6 +949,11 @@ export interface ApiService {
   image: string | null;
   sort_order: number;
   options_count: number;
+  /**
+   * Packages attached to the service. A service with none cannot be ordered —
+   * the package sets the price. Absent on payloads predating the field.
+   */
+  packages_count?: number;
   /** System services are created by the backend and cannot be deleted. */
   is_system: boolean;
   /** e.g. "barcode_invitations" — identifies special-cased services. */
@@ -1627,7 +1632,10 @@ export interface ApiServiceOrderEmployee {
   full_phone?: string;
 }
 
-/** Employee attached to a single item — only the first is returned by the API. */
+/**
+ * Employee attached to a single item. The detail endpoint returns the full set
+ * in `employees[]`; the singular `employee` is the first of them.
+ */
 export interface ApiServiceOrderItemEmployee {
   type: 'employee' | 'freelancer';
   id?: number;
@@ -1673,6 +1681,10 @@ export interface ApiServiceOrderDetailItem {
   notes: string | null;
   sort: number;
   employee: ApiServiceOrderItemEmployee | null;
+  /** Every employee assigned to the item. Absent on older payloads. */
+  employees?: ApiServiceOrderItemEmployee[];
+  /** Ids mirroring `employees[]`. Absent on older payloads. */
+  employee_ids?: number[];
   addons?: ApiServiceOrderDetailAddon[];
   options: ApiServiceOrderDetailOption[];
 }
