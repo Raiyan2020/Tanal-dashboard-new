@@ -728,14 +728,14 @@ export function OrderDetailModal({
                           )}
 
                           {/* Attachments — only for users who can edit the order */}
-                          {can('edit-service-order') && (
+                          {/* {can('edit-service-order') && (
                             <ItemAttachments
                               orderId={effectiveOrder.id}
                               itemId={item.id}
                               token={token}
                               primaryDesignUrl={designUrl}
                             />
-                          )}
+                          )} */}
                           </div>
                         );
                       })}

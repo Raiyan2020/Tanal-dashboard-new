@@ -242,7 +242,7 @@ export default function CalendarClient({
                         <div className="w-9 h-9 rounded-xl bg-primary/10 group-hover:bg-primary/20 flex items-center justify-center shrink-0 transition-colors">
                           <Briefcase className="w-4 h-4 text-primary" />
                         </div>
-                        <h4 className="font-semibold text-secondary text-sm truncate group-hover:text-primary transition-colors">
+                        <h4 className="font-semibold text-secondary text-sm  group-hover:text-primary transition-colors text-wrap ">
                           {order.service_name || '—'}
                         </h4>
                       </div>

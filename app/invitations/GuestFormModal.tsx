@@ -98,6 +98,8 @@ export function GuestFormModal({
         name: name.trim(),
         country_code: countryCode,
         phone: phone.trim(),
+        // Every guest is treated as reachable on WhatsApp — the field is no
+        // longer exposed in the form, but the API still requires it.
         have_whatsapp: true,
       };
       const res = editing
