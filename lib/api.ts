@@ -607,6 +607,13 @@ export interface InvitationDetailData {
     accepted: { count: number; percentage: number };
     rejected: { count: number; percentage: number };
     pending: { count: number; percentage: number };
+    /**
+     * Replacement sends still on credit — one is granted per rejection, so an
+     * admin can re-send the freed seat to somebody else. Same value as
+     * `actions.available_resends`; optional because it is absent on API builds
+     * that predate the replacement-send migration.
+     */
+    available_resends?: number;
   };
   details: {
     deadline_date: string;
@@ -630,7 +637,14 @@ export interface InvitationDetailData {
     is_sent: boolean;
     status: 'upcoming' | 'previous';
     status_label: string;
+    /**
+     * Once `is_sent`, this is true only while `available_resends > 0` *and*
+     * eligible guests remain — so it gates the replacement flow as well as the
+     * first send. Never recompute the credit locally; trust this pair.
+     */
     can_be_sent: boolean;
+    /** Remaining replacement sends — see `response_stats.available_resends`. */
+    available_resends?: number;
     can_be_edited: boolean;
     can_be_deleted: boolean;
     sent_at: string | null;
@@ -646,6 +660,13 @@ export interface InvitationGuest {
   have_whatsapp: boolean;
   status: 'pending' | 'accepted' | 'rejected' | 'all';
   status_label: string;
+  invitation_id?: number;
+  /**
+   * Null while the guest has never been messaged. Absent on API builds that do
+   * not expose it — callers must treat `undefined` as "unknown", not as "never
+   * sent", since a `pending` guest who was already sent to cannot be replaced.
+   */
+  invitation_sent_at?: string | null;
 }
 
 export interface GetInvitationsParams {
@@ -923,21 +944,63 @@ export function isInvitationOverageError(err: unknown): err is ApiError & { data
 }
 
 /**
+ * Result of a send. Extends the invitation payload with the per-call counters;
+ * all of them are optional because the replacement fields only exist on API
+ * builds carrying the resend migration.
+ */
+export interface SendInvitationResult extends CreateInvitationResponse {
+  /** Messages handed to the WhatsApp queue by this call. */
+  whatsapp_queued?: number;
+  /** Guests skipped because they were already messaged (accepted/pending). */
+  whatsapp_skipped?: number;
+  /** True when the call consumed replacement credit rather than being the first send. */
+  is_replacement_send?: boolean;
+  /** Credit left *after* this call. */
+  available_resends?: number;
+  live_attendance_url?: string;
+}
+
+export interface SendInvitationOptions {
+  /**
+   * Required for a replacement send — the API only re-sends to these guests and
+   * charges one credit each. Omit entirely for the first send, which fans out to
+   * every not-yet-messaged guest.
+   */
+  guestIds?: number[];
+  forceOverage?: boolean;
+}
+
+/**
  * PATCH /admin/invitations/:id/send
+ *
+ * Handles both the first send (no `guestIds`) and a replacement send, where each
+ * selected guest consumes one of the credits granted by earlier rejections.
  *
  * Rejected with a 422 carrying `requires_confirmation` when the guest count
  * exceeds the package allowance — retry with `forceOverage` after the user
- * confirms. Also blocked when the barcode is suspended, payment is incomplete,
- * or the event has already started.
+ * confirms. Replacement sends add their own 422s (no credit left, more guests
+ * than credit, ineligible ids); those come back as plain `ApiError.message`.
+ * Also blocked when the barcode is suspended, payment is incomplete, or the
+ * event has already started.
  */
 export async function sendInvitation(
   id: number,
   token: string,
-  forceOverage = false
-): Promise<ApiResponse<CreateInvitationResponse>> {
+  options: SendInvitationOptions = {}
+): Promise<ApiResponse<SendInvitationResult>> {
+  const { guestIds, forceOverage = false } = options;
+  // `force_overage` goes in the query string as well as the body: the original
+  // endpoint read it from there, and older deploys still do.
   const qs = forceOverage ? '?force_overage=1' : '';
-  return apiRequest<CreateInvitationResponse>(`/admin/invitations/${id}/send${qs}`, {
+  const body: Record<string, unknown> = {};
+  if (guestIds?.length) body.guest_ids = guestIds;
+  if (forceOverage) body.force_overage = true;
+
+  return apiRequest<SendInvitationResult>(`/admin/invitations/${id}/send${qs}`, {
     method: 'PATCH',
+    // A bodyless PATCH is what the first send used to be — keep it that way so
+    // the backward-compatible path is byte-for-byte unchanged.
+    body: Object.keys(body).length > 0 ? body : undefined,
     token,
   });
 }

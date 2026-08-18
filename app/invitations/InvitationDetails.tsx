@@ -7,7 +7,8 @@ import {
   MoreHorizontal, ArrowLeft, ArrowRight, Edit2, Ticket, Users,
   Settings, ImageIcon, QrCode, UploadCloud, PieChart as PieChartIcon,
   BarChart3, Calendar, AlertCircle, Search, SortDesc, User, Loader2,
-  ChevronLeft, ChevronRight, ShieldOff, UserPlus, FileSpreadsheet, Trash2
+  ChevronLeft, ChevronRight, ShieldOff, UserPlus, FileSpreadsheet, Trash2,
+  RefreshCw
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ResponsiveContainer, Tooltip, Legend, BarChart, CartesianGrid, XAxis, YAxis, Bar } from 'recharts';
@@ -15,6 +16,7 @@ import { ConfirmModal } from './ConfirmModal';
 import { GuestFormModal, type GuestFormValues } from './GuestFormModal';
 import { GuestImportModal } from './GuestImportModal';
 import { CheckInWelcomeCard } from './CheckInWelcomeCard';
+import { ReplacementSendModal } from './ReplacementSendModal';
 import {
   getInvitationById,
   getInvitationGuests,
@@ -24,7 +26,7 @@ import {
   isInvitationOverageError,
   type InvitationDetailData,
   type InvitationGuest as ApiInvitationGuest,
-  type CreateInvitationResponse,
+  type SendInvitationResult,
   type InvitationOverageError,
 } from '@/lib/api';
 import { getToken } from '@/lib/auth';
@@ -200,9 +202,16 @@ export function InvitationDetails({ invitation, onBack, onEdit }: InvitationDeta
   const [showAttendanceDetails, setShowAttendanceDetails] = useState(false);
   const [showSendConfirm, setShowSendConfirm] = useState(false);
   const [isSending, setIsSending] = useState(false);
-  const [sentInvitationData, setSentInvitationData] = useState<CreateInvitationResponse | null>(null);
+  const [sentInvitationData, setSentInvitationData] = useState<SendInvitationResult | null>(null);
   // Set when the API rejects the send because guests exceed the package allowance.
   const [overageInfo, setOverageInfo] = useState<InvitationOverageError | null>(null);
+  // Replacement send — spends the credit earned from rejections on new guests.
+  const [replacementOpen, setReplacementOpen] = useState(false);
+  /**
+   * The selection that hit an overage 422, kept so the "send anyway" retry stays
+   * a replacement send instead of silently falling back to a full fan-out.
+   */
+  const [pendingGuestIds, setPendingGuestIds] = useState<number[] | null>(null);
 
   const [detail, setDetail] = useState<InvitationDetailData | null>(null);
   const [detailLoading, setDetailLoading] = useState(true);
@@ -241,30 +250,46 @@ export function InvitationDetails({ invitation, onBack, onEdit }: InvitationDeta
   }, [refreshDetails]);
 
   /**
-   * Sends the invitation. When the guest count exceeds the package allowance the
-   * API replies 422 with `requires_confirmation`; that is surfaced as a second
-   * confirmation which retries with `force_overage=1`.
+   * Sends the invitation. Without `guestIds` this is the first send and the API
+   * fans out to every not-yet-messaged guest; with them it is a replacement send
+   * that spends one credit per guest.
+   *
+   * When the guest count exceeds the package allowance the API replies 422 with
+   * `requires_confirmation`; that is surfaced as a second confirmation which
+   * retries with `force_overage=1` — carrying the same selection.
+   *
+   * Resolves `false` only for failures the caller should react to; the overage
+   * case resolves `true` because the flow continues in its own confirmation.
    */
-  const handleSendInvitation = async (forceOverage = false) => {
-    if (!token || !invitation.id) return;
+  const handleSendInvitation = async (
+    { forceOverage = false, guestIds }: { forceOverage?: boolean; guestIds?: number[] } = {}
+  ): Promise<boolean> => {
+    if (!token || !invitation.id) return false;
     setShowSendConfirm(false);
     if (forceOverage) setOverageInfo(null);
 
     const sendToast = toast.loading(t('sendingInvitation'));
     setIsSending(true);
     try {
-      const res = await sendInvitation(Number(invitation.id), token, forceOverage);
+      const res = await sendInvitation(Number(invitation.id), token, { forceOverage, guestIds });
       toast.dismiss(sendToast);
       toast.success(res.msg || t('invitationSentSuccess'));
       setSentInvitationData(res.data);
+      setPendingGuestIds(null);
       await refreshDetails(false);
+      return true;
     } catch (err) {
       toast.dismiss(sendToast);
       if (isInvitationOverageError(err)) {
+        setPendingGuestIds(guestIds ?? null);
         setOverageInfo(err.data);
-        return;
+        return true;
       }
+      // Replacement rejections (no credit left, too many guests, ineligible ids)
+      // arrive as plain 422s — the API's own Arabic `msg` is the message.
       toast.error((err as Error).message || t('invitationSendFailed'));
+      await refreshDetails(false);
+      return false;
     } finally {
       setIsSending(false);
     }
@@ -372,6 +397,22 @@ export function InvitationDetails({ invitation, onBack, onEdit }: InvitationDeta
 
   const isPastEvent = detail ? detail.actions.status === 'previous' : invitation.status === 'past';
   const hasGuests = guests.length > 0 || debouncedGuestSearch !== '' || guestStatusFilter !== 'all' || guestLoading;
+
+  /*
+   * Replacement sends: the backend grants one credit per rejection and reports it
+   * on both blocks of the detail payload, so read either — never recompute it
+   * from the response counts. The fields are absent on API builds that predate
+   * the feature, and the whole block stays hidden in that case.
+   */
+  const availableResends =
+    detail?.actions.available_resends ?? detail?.response_stats.available_resends;
+  const supportsReplacementSend = availableResends !== undefined;
+  const resendCredit = availableResends ?? 0;
+  const isSent = detail?.actions.is_sent ?? false;
+  const isBarcodeSuspended = detail?.is_barcode_suspended ?? invitation.isBarcodeSuspended;
+  // `can_be_sent` already folds in the credit and whether eligible guests remain.
+  const canSendReplacement =
+    isSent && resendCredit > 0 && (detail?.actions.can_be_sent ?? false) && !isBarcodeSuspended;
 
   if (detailLoading) {
     return (
@@ -520,7 +561,7 @@ export function InvitationDetails({ invitation, onBack, onEdit }: InvitationDeta
 
                     <div className="mt-6 flex flex-col gap-3">
                       {/* Sending is blocked while the barcode is suspended */}
-                      {(detail?.is_barcode_suspended ?? invitation.isBarcodeSuspended) && (
+                      {isBarcodeSuspended && (
                         <div className="flex items-start gap-2.5 p-3 rounded-2xl bg-rose-50 border border-rose-200">
                           <ShieldOff className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
                           <div>
@@ -533,22 +574,87 @@ export function InvitationDetails({ invitation, onBack, onEdit }: InvitationDeta
                           </div>
                         </div>
                       )}
-                      {
-                        detail?.actions.can_be_sent ?
+                      {/* Replacement credit — one per rejection, shown only once
+                          the invitation has actually been sent. */}
+                      {isSent && supportsReplacementSend && (
+                        <div className={cn(
+                          'flex items-center gap-2.5 p-3 rounded-2xl border',
+                          resendCredit > 0
+                            ? 'bg-primary/5 border-primary/20'
+                            : 'bg-secondary/5 border-secondary/10'
+                        )}>
+                          <RefreshCw className={cn('w-4 h-4 shrink-0', resendCredit > 0 ? 'text-primary' : 'text-secondary/40')} />
+                          <span className="text-sm text-secondary/70">{t('availableResends')}</span>
+                          <span className={cn(
+                            'ms-auto text-base font-bold',
+                            resendCredit > 0 ? 'text-primary' : 'text-secondary/40'
+                          )}>
+                            {resendCredit}
+                          </span>
+                        </div>
+                      )}
 
+                      {/* First send keeps its single-button flow untouched; the
+                          replacement flow only ever appears after `is_sent`. */}
+                      {!isSent && detail?.actions.can_be_sent && (
+                        <button
+                          onClick={() => setShowSendConfirm(true)}
+                          disabled={isSending || isBarcodeSuspended}
+                          className="w-full py-4 rounded-2xl bg-gradient-to-r from-primary to-primary-light text-white font-medium shadow-xl shadow-primary/30 flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {isSending ? (
+                            <Loader2 className="w-5 h-5 animate-spin" />
+                          ) : (
+                            <Send className="w-5 h-5" />
+                          )}
+                          {t('sendInvitation')}
+                        </button>
+                      )}
+
+                      {isSent && supportsReplacementSend && (
+                        <>
                           <button
-                            onClick={() => setShowSendConfirm(true)}
-                            disabled={isSending || (detail?.is_barcode_suspended ?? invitation.isBarcodeSuspended)}
-                            className="w-full py-4 rounded-2xl bg-gradient-to-r from-primary to-primary-light text-white font-medium shadow-xl shadow-primary/30 flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                            onClick={() => setReplacementOpen(true)}
+                            disabled={isSending || !canSendReplacement}
+                            className="w-full py-4 rounded-2xl bg-gradient-to-r from-primary to-primary-light text-white font-medium shadow-xl shadow-primary/30 flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
                           >
                             {isSending ? (
                               <Loader2 className="w-5 h-5 animate-spin" />
                             ) : (
-                              <Send className="w-5 h-5" />
+                              <RefreshCw className="w-5 h-5" />
                             )}
-                            {t('sendInvitation')}
-                          </button> : null
-                      }
+                            {t('sendReplacementInvitations')}
+                          </button>
+                          {/* Say why the button is dead — credit spent, or credit
+                              left but nobody eligible to spend it on. */}
+                          {resendCredit === 0 ? (
+                            <p className="text-xs text-secondary/50 text-center">
+                              {t('noReplacementsAvailable')}
+                            </p>
+                          ) : !canSendReplacement && !isBarcodeSuspended ? (
+                            <p className="text-xs text-secondary/50 text-center">
+                              {t('noEligibleGuests')}
+                            </p>
+                          ) : null}
+                        </>
+                      )}
+
+                      {/* Legacy path: an API build without the resend fields still
+                          reports `can_be_sent` after a send. */}
+                      {isSent && !supportsReplacementSend && detail?.actions.can_be_sent && (
+                        <button
+                          onClick={() => setShowSendConfirm(true)}
+                          disabled={isSending || isBarcodeSuspended}
+                          className="w-full py-4 rounded-2xl bg-gradient-to-r from-primary to-primary-light text-white font-medium shadow-xl shadow-primary/30 flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {isSending ? (
+                            <Loader2 className="w-5 h-5 animate-spin" />
+                          ) : (
+                            <Send className="w-5 h-5" />
+                          )}
+                          {t('sendInvitation')}
+                        </button>
+                      )}
                     </div>
                   </div>
 
@@ -917,21 +1023,32 @@ export function InvitationDetails({ invitation, onBack, onEdit }: InvitationDeta
         message={t('deleteGuestMessage')}
       />
 
+      {replacementOpen && (
+        <ReplacementSendModal
+          invitationId={Number(invitation.id)}
+          token={token}
+          availableResends={resendCredit}
+          onClose={() => setReplacementOpen(false)}
+          onSubmit={(guestIds) => handleSendInvitation({ guestIds })}
+        />
+      )}
+
       <ConfirmModal
         isOpen={showSendConfirm}
         onClose={() => setShowSendConfirm(false)}
-        onConfirm={() => handleSendInvitation(false)}
+        onConfirm={() => handleSendInvitation()}
         title={t('confirmSendInvitation')}
         message={t('confirmSendInvitationMessage')}
         confirmLabel={t('sendInvitation')}
         confirmColor="bg-primary hover:bg-primary-dark"
       />
 
-      {/* Guest overage — the API asked for explicit confirmation before sending */}
+      {/* Guest overage — the API asked for explicit confirmation before sending.
+          The retry replays the same selection so a replacement send stays one. */}
       <ConfirmModal
         isOpen={!!overageInfo}
-        onClose={() => setOverageInfo(null)}
-        onConfirm={() => handleSendInvitation(true)}
+        onClose={() => { setOverageInfo(null); setPendingGuestIds(null); }}
+        onConfirm={() => handleSendInvitation({ forceOverage: true, guestIds: pendingGuestIds ?? undefined })}
         title={t('guestLimitExceeded')}
         message={t('guestLimitExceededMessage')
           .replace('{count}', String(overageInfo?.guest_count ?? ''))
@@ -955,7 +1072,9 @@ export function InvitationDetails({ invitation, onBack, onEdit }: InvitationDeta
                   <CheckCircle2 className="w-6 h-6 text-emerald-600 animate-bounce" />
                 </div>
                 <h3 className="text-xl font-bold text-secondary">
-                  {t('invitationSentSuccess')}
+                  {sentInvitationData.is_replacement_send
+                    ? t('replacementSentSuccess')
+                    : t('invitationSentSuccess')}
                 </h3>
                 <p className="text-sm text-secondary/60">
                   {t('sentInvitationDetailsHint')}
@@ -981,6 +1100,25 @@ export function InvitationDetails({ invitation, onBack, onEdit }: InvitationDeta
                   <span className="text-secondary/60 font-medium">{t('guestsCount')}</span>
                   <span className="font-mono font-bold text-secondary">{sentInvitationData.guest_count}</span>
                 </div>
+                {/* Per-call counters — only reported by API builds with the resend feature */}
+                {sentInvitationData.whatsapp_queued != null && (
+                  <div className="flex justify-between items-center py-2 border-b border-secondary/5 text-sm">
+                    <span className="text-secondary/60 font-medium">{t('whatsappQueued')}</span>
+                    <span className="font-mono font-bold text-secondary">{sentInvitationData.whatsapp_queued}</span>
+                  </div>
+                )}
+                {sentInvitationData.whatsapp_skipped != null && (
+                  <div className="flex justify-between items-center py-2 border-b border-secondary/5 text-sm">
+                    <span className="text-secondary/60 font-medium">{t('whatsappSkipped')}</span>
+                    <span className="font-mono font-bold text-secondary/70">{sentInvitationData.whatsapp_skipped}</span>
+                  </div>
+                )}
+                {sentInvitationData.available_resends != null && (
+                  <div className="flex justify-between items-center py-2 border-b border-secondary/5 text-sm">
+                    <span className="text-secondary/60 font-medium">{t('availableResends')}</span>
+                    <span className="font-mono font-bold text-primary">{sentInvitationData.available_resends}</span>
+                  </div>
+                )}
                 {sentInvitationData.sent_at && (
                   <div className="flex justify-between items-center py-2 border-b border-secondary/5 text-sm">
                     <span className="text-secondary/60 font-medium">{t('sentAt')}</span>
