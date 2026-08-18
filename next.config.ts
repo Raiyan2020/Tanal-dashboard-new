@@ -3,7 +3,7 @@ import type { NextConfig } from 'next';
 const isDevelopment = process.env.NODE_ENV === 'development';
 const isProduction = process.env.NODE_ENV === 'production';
 
-const API_ORIGIN = 'https://portal.tanal.raiyan.cc';
+const API_ORIGIN = 'https://portal.tanalevents.com';
 const NOMINATIM_ORIGIN = 'https://nominatim.openstreetmap.org';
 
 /**
@@ -188,10 +188,17 @@ const nextConfig: NextConfig = {
       },
       {
         protocol: 'https',
-        hostname: 'portal.tanal.raiyan.cc',
+        hostname: 'portal.tanalevents.com',
         port: '',
         pathname: '/storage/images/**',
       },
+      {
+        protocol: 'https',
+        hostname: 'portal.tanalevents.com',
+        port: '',
+        pathname: '/api/**',
+      }
+
     ],
   },
 

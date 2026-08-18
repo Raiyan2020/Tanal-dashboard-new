@@ -1,7 +1,7 @@
 /**
  * Central API client.
  * Base URL is read from NEXT_PUBLIC_API_BASE_URL in .env.local
- * e.g. https://portal.tanal.raiyan.cc/api/v1
+ * e.g. https://portal.tanalevents.com/api/v1
  */
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? '';

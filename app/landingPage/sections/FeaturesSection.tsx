@@ -57,7 +57,7 @@ export default function FeaturesSection({ token }: { token: string }) {
           const iconName = arItem.icon || '';
           return {
             ...arItem,
-            icon_url: iconName ? (iconName.startsWith('http') ? iconName : `https://portal.tanal.raiyan.cc/storage/images/landing/features/${iconName}`) : '',
+            icon_url: iconName ? (iconName.startsWith('http') ? iconName : `https://portal.tanalevents.com/storage/images/landing/features/${iconName}`) : '',
             title_ar: arItem.title || '',
             title_en: enItem?.title || '',
             description_ar: arItem.description || '',
