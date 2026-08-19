@@ -161,7 +161,9 @@ export function InvitationEditForm({ invitation, onBack, onSave }: InvitationEdi
         const details = res.data.details;
         setCanEdit(res.data.actions?.can_be_edited !== false);
         form.reset({
-          logic: details.logic_type === 'strict_action' ? 'strict' : details.logic_type,
+          // `logic_type` is null on invitations whose order never set one — leave
+          // the field untouched then so the form keeps its own default.
+          logic: details.logic_type === 'strict_action' ? 'strict' : details.logic_type ?? undefined,
           deadlineDate: parseApiDate(details.deadline_date),
           deadlineTime: details.deadline_time || '',
         });

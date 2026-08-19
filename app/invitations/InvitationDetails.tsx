@@ -1,4 +1,7 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 import { useLanguage } from '@/lib/i18n';
 import { Invitation } from './InvitationsClient';
 import { motion, AnimatePresence } from 'motion/react';
@@ -8,7 +11,7 @@ import {
   Settings, ImageIcon, QrCode, UploadCloud, PieChart as PieChartIcon,
   BarChart3, Calendar, AlertCircle, Search, SortDesc, User, Loader2,
   ChevronLeft, ChevronRight, ShieldOff, UserPlus, FileSpreadsheet, Trash2,
-  RefreshCw
+  RefreshCw, Upload, X as XIcon, Check
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ResponsiveContainer, Tooltip, Legend, BarChart, CartesianGrid, XAxis, YAxis, Bar } from 'recharts';
@@ -23,14 +26,42 @@ import {
   deleteInvitationGuest,
   sendInvitation,
   replaceInvitationDesign,
+  updateInvitation,
+  getAdminServiceOrderById,
   isInvitationOverageError,
   type InvitationDetailData,
   type InvitationGuest as ApiInvitationGuest,
   type SendInvitationResult,
   type InvitationOverageError,
+  type ApiServiceOrderDetail,
 } from '@/lib/api';
 import { getToken } from '@/lib/auth';
 import { toast } from 'sonner';
+
+import { DayPicker } from '@daypicker/react';
+import '@daypicker/react/dist/style.css';
+import { ar } from 'date-fns/locale';
+
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/form';
+
+/** `"18:00"` → minutes since midnight, or null when unparseable. */
+function toMinutes(time: string): number | null {
+  const m = /^(\d{1,2}):(\d{2})/.exec(time);
+  return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+}
+
+interface InlineEditFormValues {
+  logic: 'strict' | 'default_accept' | 'view_only';
+  deadlineDate: string;
+  deadlineTime: string;
+}
 
 export type InvitationGuestStatus = 'pending' | 'accepted' | 'declined';
 
@@ -231,6 +262,51 @@ export function InvitationDetails({ invitation, onBack, onEdit }: InvitationDeta
   const [guestPage, setGuestPage] = useState(1);
   const [guestTotalPages, setGuestTotalPages] = useState(1);
 
+  // ── Inline edit state ───────────────────────────────────────────────────────
+  const [isEditing, setIsEditing] = useState(false);
+  const [editSubmitting, setEditSubmitting] = useState(false);
+  // Quick logic picker in the read-only panel (no need to open full edit mode)
+  const [quickLogic, setQuickLogic] = useState<'strict' | 'default_accept' | 'view_only'>('strict');
+  const [logicQuickSaving, setLogicQuickSaving] = useState(false);
+
+  const [editOrder, setEditOrder] = useState<ApiServiceOrderDetail | null>(null);
+  // File upload for design inside the inline edit panel
+  const editFileInputRef = useRef<HTMLInputElement>(null);
+  const [editSelectedFile, setEditSelectedFile] = useState<File | null>(null);
+  const [editFileName, setEditFileName] = useState('');
+  const [editFileError, setEditFileError] = useState<string | null>(null);
+  // Date picker
+  const [editShowDatePicker, setEditShowDatePicker] = useState(false);
+  const editDatePickerRef = useRef<HTMLDivElement>(null);
+
+  const editSchema = React.useMemo(() => z.object({
+    logic: z.enum(['strict', 'default_accept', 'view_only']),
+    deadlineDate: z.string().min(1, { message: dir === 'ltr' ? 'Please select a deadline date' : 'يرجى اختيار تاريخ الموعد النهائي' }),
+    deadlineTime: z.string().min(1, { message: dir === 'ltr' ? 'Please select a deadline time' : 'يرجى اختيار وقت الموعد النهائي' }),
+  }), [dir]);
+
+  const editForm = useForm<InlineEditFormValues>({
+    resolver: zodResolver(editSchema),
+    defaultValues: { logic: 'strict', deadlineDate: '', deadlineTime: '' },
+  });
+
+  const editDeadlineDateValue = editForm.watch('deadlineDate');
+  const editEventDate = editOrder?.event_date ?? undefined;
+  const editEventStartMinutes = editOrder?.event_time ? toMinutes(editOrder.event_time) : null;
+  const editSelectedDate = editDeadlineDateValue ? new Date(editDeadlineDateValue) : undefined;
+
+  // Close datepicker on outside click
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (editDatePickerRef.current && !editDatePickerRef.current.contains(e.target as Node)) {
+        setEditShowDatePicker(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, []);
+
+
   const refreshDetails = useCallback(async (showLoader = false) => {
     if (!token || !invitation.id) return;
     if (showLoader) setDetailLoading(true);
@@ -248,6 +324,146 @@ export function InvitationDetails({ invitation, onBack, onEdit }: InvitationDeta
   useEffect(() => {
     refreshDetails(true);
   }, [refreshDetails]);
+
+  /** Populate the inline-edit form whenever detail data arrives / refreshes. */
+  useEffect(() => {
+    if (!detail) return;
+    const parseApiDate = (dateStr: string) => {
+      try {
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return '';
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      } catch { return ''; }
+    };
+    const d = detail.details;
+    const resolvedLogic = (d.logic_type === 'strict_action' ? 'strict' : d.logic_type ?? 'strict') as 'strict' | 'default_accept' | 'view_only';
+    editForm.reset({
+      logic: resolvedLogic,
+      deadlineDate: parseApiDate(d.deadline_date),
+      deadlineTime: d.deadline_time || '',
+    });
+    // Also sync the quick-logic picker so it always reflects server state
+    setQuickLogic(resolvedLogic);
+    // Also fetch the service order for the date ceiling, if not yet loaded.
+    if (detail.service_order_id != null && !editOrder) {
+      getAdminServiceOrderById(detail.service_order_id, token)
+        .then(res => setEditOrder(res.data))
+        .catch(() => {/* non-fatal */ });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detail]);
+
+
+  const editGetMinAllowedDate = () => {
+    const today = new Date(); today.setHours(0, 0, 0, 0); return today;
+  };
+  const editGetMaxAllowedDate = () => {
+    if (!editEventDate) return undefined;
+    const d = new Date(editEventDate);
+    if (isNaN(d.getTime())) return undefined;
+    d.setHours(0, 0, 0, 0); return d;
+  };
+  const editGetDisabledDays = () => {
+    const minDate = editGetMinAllowedDate();
+    const maxDate = editGetMaxAllowedDate();
+    return maxDate ? { before: minDate, after: maxDate } : { before: minDate };
+  };
+
+  const MAX_EDIT_DESIGN_BYTES = 10 * 1024 * 1024;
+  const acceptEditFile = (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      setEditFileError(dir === 'ltr' ? 'The design must be an image' : 'يجب أن يكون التصميم صورة');
+      return;
+    }
+    if (file.size > MAX_EDIT_DESIGN_BYTES) {
+      setEditFileError(dir === 'ltr' ? 'Maximum size is 10MB' : 'أقصى حجم 10 ميجابايت');
+      return;
+    }
+    setEditSelectedFile(file);
+    setEditFileName(file.name);
+    setEditFileError(null);
+  };
+
+  const onSubmitInline = async (values: InlineEditFormValues) => {
+    if (editSubmitting) return;
+    setEditFileError(null);
+
+    // Same-day deadline must be before event start time
+    if (editOrder?.event_date && editEventStartMinutes != null) {
+      const parseApiDate = (ds: string) => {
+        try { const d = new Date(ds); return isNaN(d.getTime()) ? '' : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; } catch { return ''; }
+      };
+      const eventDay = parseApiDate(editOrder.event_date);
+      const deadlineMinutes = toMinutes(values.deadlineTime);
+      if (eventDay && values.deadlineDate === eventDay && deadlineMinutes != null && deadlineMinutes >= editEventStartMinutes) {
+        editForm.setError('deadlineTime', {
+          message: dir === 'ltr' ? 'The deadline must be before the event starts' : 'يجب أن يكون الموعد النهائي قبل بداية المناسبة',
+        });
+        return;
+      }
+    }
+
+    const mappedLogic = values.logic === 'strict' ? 'strict_action' : values.logic;
+    setEditSubmitting(true);
+    const saveToast = toast.loading(dir === 'ltr' ? 'Saving changes...' : 'جاري الحفظ...');
+    try {
+      const res = await updateInvitation(
+        Number(invitation.id),
+        {
+          logic_type: mappedLogic,
+          deadline_date: values.deadlineDate,
+          deadline_time: values.deadlineTime,
+          design: editSelectedFile,
+        },
+        token
+      );
+      toast.dismiss(saveToast);
+      toast.success(res.msg || (dir === 'ltr' ? 'Invitation updated successfully' : 'تم تحديث الدعوة بنجاح'));
+      // Reset file state
+      setEditSelectedFile(null);
+      setEditFileName('');
+      setIsEditing(false);
+      await refreshDetails(false);
+    } catch (err) {
+      toast.dismiss(saveToast);
+      toast.error((err as Error).message || (dir === 'ltr' ? 'An unexpected error occurred' : 'حدث خطأ غير متوقع'));
+    } finally {
+      setEditSubmitting(false);
+    }
+  };
+
+  /**
+   * Quick-save only the logic type from the read-only panel.
+   * Keeps the existing deadline date/time so the user doesn't have to touch them.
+   */
+  const handleQuickLogicSave = async () => {
+    if (logicQuickSaving || !detail) return;
+    const existingLogic = (detail.details.logic_type === 'strict_action' ? 'strict' : detail.details.logic_type ?? 'strict') as 'strict' | 'default_accept' | 'view_only';
+    if (quickLogic === existingLogic) return;
+    setLogicQuickSaving(true);
+    const saveToast = toast.loading(dir === 'ltr' ? 'Saving...' : 'جاري الحفظ...');
+    try {
+      const mappedLogic = quickLogic === 'strict' ? 'strict_action' : quickLogic;
+      const res = await updateInvitation(
+        Number(invitation.id),
+        {
+          logic_type: mappedLogic,
+          deadline_date: detail.details.deadline_date,
+          deadline_time: detail.details.deadline_time || '',
+        },
+        token
+      );
+      toast.dismiss(saveToast);
+      toast.success(res.msg || (dir === 'ltr' ? 'Logic updated' : 'تم تحديث المنطق'));
+      await refreshDetails(false);
+    } catch (err) {
+      toast.dismiss(saveToast);
+      toast.error((err as Error).message || (dir === 'ltr' ? 'Failed to update' : 'فشل التحديث'));
+      setQuickLogic(existingLogic); // revert picker on error
+    } finally {
+      setLogicQuickSaving(false);
+    }
+  };
 
   /**
    * Sends the invitation. Without `guestIds` this is the first send and the API
@@ -399,20 +615,34 @@ export function InvitationDetails({ invitation, onBack, onEdit }: InvitationDeta
   const hasGuests = guests.length > 0 || debouncedGuestSearch !== '' || guestStatusFilter !== 'all' || guestLoading;
 
   /*
-   * Replacement sends: the backend grants one credit per rejection and reports it
-   * on both blocks of the detail payload, so read either — never recompute it
-   * from the response counts. The fields are absent on API builds that predate
-   * the feature, and the whole block stays hidden in that case.
+   * Sending is gated by one flag — `actions.can_be_sent`. It already folds in the
+   * deadline, payment, barcode suspension, remaining credit and whether anyone is
+   * left to message, so it is never recomputed here.
+   *
+   * The two counters below only decide *which* send is offered:
+   *   • `unsent_whatsapp_guests_count` — guests never messaged (usually added
+   *     after the first send). Sending to them is free, so `can_be_sent` can be
+   *     true while the replacement credit is 0.
+   *   • `available_resends` — credit earned from rejections, spent by picking
+   *     replacement guests. Reported on both blocks of the payload; read either.
    */
   const availableResends =
     detail?.actions.available_resends ?? detail?.response_stats.available_resends;
-  const supportsReplacementSend = availableResends !== undefined;
   const resendCredit = availableResends ?? 0;
+  const supportsReplacementSend = availableResends !== undefined;
   const isSent = detail?.actions.is_sent ?? false;
+  const canBeSent = detail?.actions.can_be_sent ?? false;
   const isBarcodeSuspended = detail?.is_barcode_suspended ?? invitation.isBarcodeSuspended;
-  // `can_be_sent` already folds in the credit and whether eligible guests remain.
+
+  const unsentGuestCount = detail?.actions.unsent_whatsapp_guests_count;
+  // `undefined` means the API does not report the counter — then a plain send is
+  // the only thing we can safely offer, so treat it as available.
+  const hasUnsentGuests = unsentGuestCount === undefined ? true : unsentGuestCount > 0;
+  /** Bodyless send — fans out to every not-yet-messaged guest, no credit spent. */
+  const canSendToUnsent = canBeSent && !isBarcodeSuspended && hasUnsentGuests;
+  /** Replacement send — needs credit and the picker. */
   const canSendReplacement =
-    isSent && resendCredit > 0 && (detail?.actions.can_be_sent ?? false) && !isBarcodeSuspended;
+    canBeSent && !isBarcodeSuspended && isSent && supportsReplacementSend && resendCredit > 0;
 
   if (detailLoading) {
     return (
@@ -471,14 +701,18 @@ export function InvitationDetails({ invitation, onBack, onEdit }: InvitationDeta
             </div>
           </div>
 
-          {/* The API freezes an invitation once it is sent, so follow its own
-              capability flag rather than inferring from the event date. */}
+          {/* Toggle inline edit — follows the API's own capability flag. */}
           {(detail ? detail.actions.can_be_edited : !isPastEvent) && (
             <button
-              onClick={() => onEdit?.(invitation)}
-              className="p-2 sm:p-2 bg-white text-yellow-500 border border-transparent hover:bg-yellow-50 hover:border-yellow-200 hover:text-yellow-600 hover:-translate-y-[2px] hover:scale-[1.03] hover:shadow-md active:scale-95 active:translate-y-0 rounded-xl transition-all duration-200 ease-out flex items-center justify-center cursor-pointer w-11 h-11 shrink-0"
+              onClick={() => setIsEditing(v => !v)}
+              className={cn(
+                "p-2 sm:p-2 border border-transparent rounded-xl transition-all duration-200 ease-out flex items-center justify-center cursor-pointer w-11 h-11 shrink-0",
+                isEditing
+                  ? "bg-secondary/10 text-secondary hover:bg-secondary/20"
+                  : "bg-white text-yellow-500 hover:bg-yellow-50 hover:border-yellow-200 hover:text-yellow-600 hover:-translate-y-[2px] hover:scale-[1.03] hover:shadow-md active:scale-95 active:translate-y-0"
+              )}
             >
-              <Edit2 className="w-5 h-5" />
+              {isEditing ? <XIcon className="w-5 h-5" /> : <Edit2 className="w-5 h-5" />}
             </button>
           )}
         </div>
@@ -521,43 +755,267 @@ export function InvitationDetails({ invitation, onBack, onEdit }: InvitationDeta
                       <Ticket className="w-5 h-5 text-primary" />
                       {t('details')}
                     </h3>
-                    <div className="space-y-4">
-                      <div className="p-4 bg-white/40 rounded-2xl flex items-center justify-between border border-secondary/5">
-                        <div className="flex items-center gap-3 text-secondary/60">
-                          <Calendar className="w-5 h-5" />
-                          <span className="text-sm">{t('deadline')}</span>
+
+                    {/* ── Read-only view ── */}
+                    {!isEditing && (
+                      <div className="space-y-4">
+                        <div className="p-4 bg-white/40 rounded-2xl flex items-center justify-between border border-secondary/5">
+                          <div className="flex items-center gap-3 text-secondary/60">
+                            <Calendar className="w-5 h-5" />
+                            <span className="text-sm">{t('deadline')}</span>
+                          </div>
+                          <span className="font-medium text-secondary">{detail?.details.deadline_date || invitation.deadlineDate}</span>
                         </div>
-                        <span className="font-medium text-secondary">{detail?.details.deadline_date || invitation.deadlineDate}</span>
-                      </div>
-                      <div className="p-4 bg-white/40 rounded-2xl flex items-center justify-between border border-secondary/5">
-                        <div className="flex items-center gap-3 text-secondary/60">
-                          <Users className="w-5 h-5" />
-                          <span className="text-sm">{t('numOfGuests')}</span>
+                        <div className="p-4 bg-white/40 rounded-2xl flex items-center justify-between border border-secondary/5">
+                          <div className="flex items-center gap-3 text-secondary/60">
+                            <Users className="w-5 h-5" />
+                            <span className="text-sm">{t('numOfGuests')}</span>
+                          </div>
+                          <span className="font-medium text-secondary">
+                            {detail?.details.guest_count || invitation.guestsNumber}
+                            {/* Show the package allowance so overage is visible before sending */}
+                            {(detail?.guests_included ?? invitation.guestsIncluded) != null && (
+                              <span className={cn(
+                                'ms-1.5 text-xs font-bold',
+                                (detail?.details.guest_count || invitation.guestsNumber) >
+                                  (detail?.guests_included ?? invitation.guestsIncluded ?? Infinity)
+                                  ? 'text-amber-600'
+                                  : 'text-secondary/40'
+                              )}>
+                                / {detail?.guests_included ?? invitation.guestsIncluded}
+                              </span>
+                            )}
+                          </span>
                         </div>
-                        <span className="font-medium text-secondary">
-                          {detail?.details.guest_count || invitation.guestsNumber}
-                          {/* Show the package allowance so overage is visible before sending */}
-                          {(detail?.guests_included ?? invitation.guestsIncluded) != null && (
-                            <span className={cn(
-                              'ms-1.5 text-xs font-bold',
-                              (detail?.details.guest_count || invitation.guestsNumber) >
-                                (detail?.guests_included ?? invitation.guestsIncluded ?? Infinity)
-                                ? 'text-amber-600'
-                                : 'text-secondary/40'
-                            )}>
-                              / {detail?.guests_included ?? invitation.guestsIncluded}
-                            </span>
+                        {/* Logic row — compact inline picker in read-only mode */}
+                        <div className="p-4 bg-white/40 rounded-2xl border border-secondary/5 space-y-3">
+                          <div className="flex items-center gap-3 text-secondary/60">
+                            <Settings className="w-5 h-5" />
+                            <span className="text-sm">{t('logic')}</span>
+                          </div>
+                          {/* 3-segment picker */}
+                          <div className="flex gap-1.5">
+                            {([
+                              { value: 'strict',         label: dir === 'ltr' ? 'Strict'  : 'صارم' },
+                              { value: 'default_accept', label: dir === 'ltr' ? 'Accept'  : 'تلقائي' },
+                              { value: 'view_only',      label: dir === 'ltr' ? 'View'    : 'عرض' },
+                            ] as const).map(opt => (
+                              <button
+                                key={opt.value}
+                                type="button"
+                                disabled={logicQuickSaving || !detail?.actions.can_be_edited}
+                                onClick={() => setQuickLogic(opt.value)}
+                                className={cn(
+                                  'flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all border',
+                                  quickLogic === opt.value
+                                    ? 'bg-primary text-white border-primary shadow-sm shadow-primary/20'
+                                    : 'bg-white/60 text-secondary/60 border-secondary/15 hover:bg-white hover:text-secondary hover:border-secondary/30',
+                                  'disabled:opacity-40 disabled:cursor-not-allowed'
+                                )}
+                              >
+                                {opt.label}
+                              </button>
+                            ))}
+                          </div>
+                          {/* Save button — only shown when the value differs from the server */}
+                          {quickLogic !== ((detail?.details.logic_type === 'strict_action' ? 'strict' : detail?.details.logic_type ?? 'strict') as string) && (
+                            <button
+                              type="button"
+                              onClick={handleQuickLogicSave}
+                              disabled={logicQuickSaving}
+                              className="w-full py-2 rounded-xl bg-primary hover:bg-primary-dark text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition-all shadow-md shadow-primary/20 cursor-pointer disabled:opacity-70 disabled:cursor-not-allowed"
+                            >
+                              {logicQuickSaving
+                                ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />{dir === 'ltr' ? 'Saving...' : 'جاري الحفظ...'}</>
+                                : <><Check className="w-3.5 h-3.5" />{dir === 'ltr' ? 'Save Logic' : 'حفظ المنطق'}</>
+                              }
+                            </button>
                           )}
-                        </span>
-                      </div>
-                      <div className="p-4 bg-white/40 rounded-2xl flex items-center justify-between border border-secondary/5">
-                        <div className="flex items-center gap-3 text-secondary/60">
-                          <Settings className="w-5 h-5" />
-                          <span className="text-sm">{t('logic')}</span>
                         </div>
-                        <span className="font-medium text-secondary">{detail?.details.logic_type_label || t('strictAction')}</span>
                       </div>
-                    </div>
+                    )}
+
+                    {/* ── Inline edit form ── */}
+                    {isEditing && (
+                      <Form {...editForm}>
+                        <form onSubmit={editForm.handleSubmit(onSubmitInline)} className="space-y-5">
+                          {/* Logic type */}
+                          <FormField
+                            control={editForm.control}
+                            name="logic"
+                            render={({ field }) => (
+                              <FormItem className="space-y-2">
+                                <FormLabel className="block text-sm font-medium text-secondary/80">
+                                  {dir === 'ltr' ? 'Invitation Logic' : 'منطق الدعوة'} <span className="text-red-500">*</span>
+                                </FormLabel>
+                                <FormControl>
+                                  <div className="space-y-2">
+                                    {([
+                                      { value: 'strict', label: dir === 'ltr' ? 'Strict Action' : 'إجراء صارم', desc: dir === 'ltr' ? 'If no response, recorded as declined.' : 'إذا لم يتم الرد، تسجل كمرفوضة.' },
+                                      { value: 'default_accept', label: dir === 'ltr' ? 'Default Accept' : 'قبول تلقائي', desc: dir === 'ltr' ? 'If no response, recorded as accepted.' : 'إذا لم يتم الرد، تسجل كمقبولة.' },
+                                      { value: 'view_only', label: dir === 'ltr' ? 'View Only' : 'للعرض فقط', desc: dir === 'ltr' ? 'Accepted right away, for informing only.' : 'تقبل فوراً، للعلم بالخبر فقط.' },
+                                    ] as const).map(opt => (
+                                      <label key={opt.value} className={cn(
+                                        "flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-colors",
+                                        field.value === opt.value ? 'border-primary/50 bg-primary/5' : 'border-secondary/20 bg-white/50 hover:bg-white/80'
+                                      )}>
+                                        <input
+                                          type="radio"
+                                          value={opt.value}
+                                          checked={field.value === opt.value}
+                                          onChange={() => field.onChange(opt.value)}
+                                          className="mt-1 w-4 h-4 text-primary bg-white border-secondary/30 focus:ring-primary/30"
+                                        />
+                                        <div>
+                                          <span className="block text-sm font-medium text-secondary">{opt.label}</span>
+                                          <span className="block text-xs text-secondary/60 mt-0.5">{opt.desc}</span>
+                                        </div>
+                                      </label>
+                                    ))}
+                                  </div>
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+
+                          {/* Deadline date */}
+                          <FormField
+                            control={editForm.control}
+                            name="deadlineDate"
+                            render={({ field }) => (
+                              <FormItem className="space-y-1.5">
+                                <FormLabel className="text-sm font-medium text-secondary/80 flex items-center gap-2">
+                                  <Calendar className="w-4 h-4 text-secondary/50" />
+                                  {dir === 'ltr' ? 'Deadline Date' : 'تاريخ الموعد النهائي'} <span className="text-red-500">*</span>
+                                </FormLabel>
+                                <FormControl>
+                                  <div className="relative" ref={editDatePickerRef}>
+                                    <button
+                                      type="button"
+                                      onClick={() => setEditShowDatePicker(v => !v)}
+                                      className="w-full bg-white/50 border border-secondary/20 rounded-xl px-4 py-2.5 text-start text-secondary focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-all flex justify-between items-center cursor-pointer text-sm"
+                                    >
+                                      <span>{field.value || (dir === 'ltr' ? 'Select date...' : 'اختر التاريخ...')}</span>
+                                      <Calendar className="w-4 h-4 text-secondary/50 shrink-0" />
+                                    </button>
+                                    {editShowDatePicker && (
+                                      <div className="absolute z-[60] mt-2 p-3 bg-white border border-secondary/15 rounded-2xl shadow-xl left-0 rtl:right-0">
+                                        <DayPicker
+                                          mode="single"
+                                          selected={editSelectedDate}
+                                          onSelect={(date) => {
+                                            if (!date) return;
+                                            const yyyy = date.getFullYear();
+                                            const mm = String(date.getMonth() + 1).padStart(2, '0');
+                                            const dd = String(date.getDate()).padStart(2, '0');
+                                            field.onChange(`${yyyy}-${mm}-${dd}`);
+                                            setEditShowDatePicker(false);
+                                          }}
+                                          disabled={editGetDisabledDays()}
+                                          locale={dir === 'rtl' ? ar : undefined}
+                                          dir={dir}
+                                        />
+                                      </div>
+                                    )}
+                                  </div>
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+
+                          {/* Deadline time */}
+                          <FormField
+                            control={editForm.control}
+                            name="deadlineTime"
+                            render={({ field }) => (
+                              <FormItem className="space-y-1.5">
+                                <FormLabel className="text-sm font-medium text-secondary/80 flex items-center gap-2">
+                                  <Clock className="w-4 h-4 text-secondary/50" />
+                                  {dir === 'ltr' ? 'Deadline Time' : 'وقت الموعد النهائي'} <span className="text-red-500">*</span>
+                                </FormLabel>
+                                <FormControl>
+                                  <select
+                                    {...field}
+                                    className="w-full bg-white/50 border border-secondary/20 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/50 transition-all text-secondary cursor-pointer text-sm"
+                                  >
+                                    <option value="">{dir === 'ltr' ? 'Select time...' : 'اختر الوقت...'}</option>
+                                    {Array.from({ length: 24 }, (_, h) => {
+                                      const period = h < 12 ? (dir === 'rtl' ? 'ص' : 'AM') : (dir === 'rtl' ? 'م' : 'PM');
+                                      const hour12 = h % 12 === 0 ? 12 : h % 12;
+                                      const label = `${String(hour12).padStart(2, '0')}:00 ${period}`;
+                                      const value = `${String(h).padStart(2, '0')}:00`;
+                                      return <option key={value} value={value}>{label}</option>;
+                                    })}
+                                  </select>
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+
+                          {/* Design upload */}
+                          <div>
+                            <label className="block text-sm font-medium text-secondary/80 mb-1.5">
+                              {dir === 'ltr' ? 'Upload Design' : 'رفع التصميم'}
+                            </label>
+                            <div
+                              onDragOver={e => e.preventDefault()}
+                              onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files?.[0]; if (f) acceptEditFile(f); }}
+                              onClick={() => editFileInputRef.current?.click()}
+                              className={cn(
+                                "w-full border-2 border-dashed rounded-2xl p-5 flex flex-col items-center justify-center text-center cursor-pointer transition-all bg-white/30",
+                                editFileError
+                                  ? "border-red-500 bg-red-50/20 hover:bg-red-50/30"
+                                  : "border-secondary/20 hover:bg-white/50 hover:border-primary/30"
+                              )}
+                            >
+                              <input
+                                type="file"
+                                ref={editFileInputRef}
+                                className="hidden"
+                                accept=".png,.jpg,.jpeg,.webp"
+                                onChange={e => { const f = e.target.files?.[0]; if (f) acceptEditFile(f); }}
+                              />
+                              <Upload className="w-6 h-6 text-secondary/40 mb-2" />
+                              <p className="text-sm font-medium text-secondary">
+                                {editFileName || (dir === 'ltr' ? 'Upload New Design' : 'رفع تصميم جديد')}
+                              </p>
+                              <p className="text-xs text-secondary/50 mt-0.5">
+                                {dir === 'ltr' ? 'PNG, JPG, WEBP up to 10MB' : 'أقصى حجم 10 ميجابايت (PNG, JPG, WEBP)'}
+                              </p>
+                            </div>
+                            {editFileError && (
+                              <p className="text-xs text-red-500 mt-1.5">{editFileError}</p>
+                            )}
+                          </div>
+
+                          {/* Save / Cancel */}
+                          <div className="flex gap-2 pt-2 border-t border-secondary/10">
+                            <button
+                              type="button"
+                              onClick={() => { setIsEditing(false); setEditSelectedFile(null); setEditFileName(''); setEditFileError(null); }}
+                              disabled={editSubmitting}
+                              className="flex-1 px-4 py-2.5 rounded-xl border border-secondary/20 bg-white/50 text-secondary hover:bg-white/80 text-sm font-medium transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {dir === 'ltr' ? 'Cancel' : 'إلغاء'}
+                            </button>
+                            <button
+                              type="submit"
+                              disabled={editSubmitting}
+                              className="flex-1 bg-primary hover:bg-primary-dark text-white py-2.5 rounded-xl text-sm font-medium transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 cursor-pointer disabled:opacity-75 disabled:cursor-not-allowed"
+                            >
+                              {editSubmitting ? (
+                                <><Loader2 className="w-4 h-4 animate-spin" />{dir === 'ltr' ? 'Saving...' : 'جاري الحفظ...'}</>
+                              ) : (
+                                <><Check className="w-4 h-4" />{dir === 'ltr' ? 'Save Changes' : 'حفظ التغييرات'}</>
+                              )}
+                            </button>
+                          </div>
+                        </form>
+                      </Form>
+                    )}
 
                     <div className="mt-6 flex flex-col gap-3">
                       {/* Sending is blocked while the barcode is suspended */}
@@ -574,32 +1032,34 @@ export function InvitationDetails({ invitation, onBack, onEdit }: InvitationDeta
                           </div>
                         </div>
                       )}
-                      {/* Replacement credit — one per rejection, shown only once
-                          the invitation has actually been sent. */}
-                      {isSent && supportsReplacementSend && (
-                        <div className={cn(
-                          'flex items-center gap-2.5 p-3 rounded-2xl border',
-                          resendCredit > 0
-                            ? 'bg-primary/5 border-primary/20'
-                            : 'bg-secondary/5 border-secondary/10'
-                        )}>
-                          <RefreshCw className={cn('w-4 h-4 shrink-0', resendCredit > 0 ? 'text-primary' : 'text-secondary/40')} />
-                          <span className="text-sm text-secondary/70">{t('availableResends')}</span>
-                          <span className={cn(
-                            'ms-auto text-base font-bold',
-                            resendCredit > 0 ? 'text-primary' : 'text-secondary/40'
-                          )}>
-                            {resendCredit}
-                          </span>
+                      {/* Guests added after the first send — free to message. */}
+                      {isSent && unsentGuestCount != null && unsentGuestCount > 0 && (
+                        <div className="flex items-center gap-2.5 p-3 rounded-2xl border bg-white/40 border-secondary/10">
+                          <UserPlus className="w-4 h-4 shrink-0 text-secondary/50" />
+                          <span className="text-sm text-secondary/70">{t('guestsAwaitingSend')}</span>
+                          <span className="ms-auto text-base font-bold text-secondary">{unsentGuestCount}</span>
                         </div>
                       )}
 
-                      {/* First send keeps its single-button flow untouched; the
-                          replacement flow only ever appears after `is_sent`. */}
-                      {!isSent && detail?.actions.can_be_sent && (
+                      {/* Replacement credit — one per rejection, only ever after a send. */}
+                      {isSent && resendCredit > 0 && (
+                        <div className="flex items-center gap-2.5 p-3 rounded-2xl border bg-primary/5 border-primary/20">
+                          <RefreshCw className="w-4 h-4 shrink-0 text-primary" />
+                          <span className="text-sm text-secondary/70">{t('availableResends')}</span>
+                          <span className="ms-auto text-base font-bold text-primary">{resendCredit}</span>
+                        </div>
+                      )}
+
+                      {/*
+                        Both buttons hang off `can_be_sent`; the counters only pick
+                        which of them is on offer. A bodyless send goes to every
+                        not-yet-messaged guest and spends no credit, so it stays
+                        available after the first send whenever such guests exist.
+                      */}
+                      {canSendToUnsent && (
                         <button
                           onClick={() => setShowSendConfirm(true)}
-                          disabled={isSending || isBarcodeSuspended}
+                          disabled={isSending}
                           className="w-full py-4 rounded-2xl bg-gradient-to-r from-primary to-primary-light text-white font-medium shadow-xl shadow-primary/30 flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           {isSending ? (
@@ -607,53 +1067,42 @@ export function InvitationDetails({ invitation, onBack, onEdit }: InvitationDeta
                           ) : (
                             <Send className="w-5 h-5" />
                           )}
-                          {t('sendInvitation')}
+                          {isSent && unsentGuestCount != null
+                            ? `${t('sendToNewGuests')} (${unsentGuestCount})`
+                            : t('sendInvitation')}
                         </button>
                       )}
 
-                      {isSent && supportsReplacementSend && (
-                        <>
-                          <button
-                            onClick={() => setReplacementOpen(true)}
-                            disabled={isSending || !canSendReplacement}
-                            className="w-full py-4 rounded-2xl bg-gradient-to-r from-primary to-primary-light text-white font-medium shadow-xl shadow-primary/30 flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
-                          >
-                            {isSending ? (
-                              <Loader2 className="w-5 h-5 animate-spin" />
-                            ) : (
-                              <RefreshCw className="w-5 h-5" />
-                            )}
-                            {t('sendReplacementInvitations')}
-                          </button>
-                          {/* Say why the button is dead — credit spent, or credit
-                              left but nobody eligible to spend it on. */}
-                          {resendCredit === 0 ? (
-                            <p className="text-xs text-secondary/50 text-center">
-                              {t('noReplacementsAvailable')}
-                            </p>
-                          ) : !canSendReplacement && !isBarcodeSuspended ? (
-                            <p className="text-xs text-secondary/50 text-center">
-                              {t('noEligibleGuests')}
-                            </p>
-                          ) : null}
-                        </>
-                      )}
-
-                      {/* Legacy path: an API build without the resend fields still
-                          reports `can_be_sent` after a send. */}
-                      {isSent && !supportsReplacementSend && detail?.actions.can_be_sent && (
+                      {canSendReplacement && (
                         <button
-                          onClick={() => setShowSendConfirm(true)}
-                          disabled={isSending || isBarcodeSuspended}
-                          className="w-full py-4 rounded-2xl bg-gradient-to-r from-primary to-primary-light text-white font-medium shadow-xl shadow-primary/30 flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                          onClick={() => setReplacementOpen(true)}
+                          disabled={isSending}
+                          className={cn(
+                            'w-full py-4 rounded-2xl font-medium flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed',
+                            // Demoted to secondary when the free send is also on
+                            // offer, so the cheaper action reads as the primary one.
+                            canSendToUnsent
+                              ? 'bg-white text-primary border border-primary/30 hover:bg-primary/5 shadow-sm'
+                              : 'bg-gradient-to-r from-primary to-primary-light text-white shadow-xl shadow-primary/30'
+                          )}
                         >
                           {isSending ? (
                             <Loader2 className="w-5 h-5 animate-spin" />
                           ) : (
-                            <Send className="w-5 h-5" />
+                            <RefreshCw className="w-5 h-5" />
                           )}
-                          {t('sendInvitation')}
+                          {t('sendReplacementInvitations')}
                         </button>
+                      )}
+
+                      {/* Sent, but the API says no send is possible — name the
+                          reason instead of showing a dead button. */}
+                      {isSent && !canBeSent && !isBarcodeSuspended && (
+                        <p className="text-xs text-secondary/50 text-center">
+                          {supportsReplacementSend && resendCredit === 0
+                            ? t('noReplacementsAvailable')
+                            : t('noEligibleGuests')}
+                        </p>
                       )}
                     </div>
                   </div>
@@ -913,7 +1362,7 @@ export function InvitationDetails({ invitation, onBack, onEdit }: InvitationDeta
                             </div>
 
                             <div className="flex items-center justify-end gap-3 shrink-0">
-                            
+
                               <button
                                 title={t('contactViaWhatsapp')}
                                 onClick={(e) => {
@@ -1037,8 +1486,12 @@ export function InvitationDetails({ invitation, onBack, onEdit }: InvitationDeta
         isOpen={showSendConfirm}
         onClose={() => setShowSendConfirm(false)}
         onConfirm={() => handleSendInvitation()}
-        title={t('confirmSendInvitation')}
-        message={t('confirmSendInvitationMessage')}
+        title={isSent && unsentGuestCount != null ? t('sendToNewGuests') : t('confirmSendInvitation')}
+        message={
+          isSent && unsentGuestCount != null
+            ? t('confirmSendToNewGuestsMessage').replace('{count}', String(unsentGuestCount))
+            : t('confirmSendInvitationMessage')
+        }
         confirmLabel={t('sendInvitation')}
         confirmColor="bg-primary hover:bg-primary-dark"
       />

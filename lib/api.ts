@@ -619,15 +619,18 @@ export interface InvitationDetailData {
     deadline_date: string;
     deadline_time: string;
     guest_count: number;
-    logic_type: 'strict_action' | 'default_accept' | 'view_only';
-    logic_type_label: string;
+    /** Null on invitations whose order never set a response logic. */
+    logic_type: 'strict_action' | 'default_accept' | 'view_only' | null;
+    logic_type_label: string | null;
     is_deadline_passed: boolean;
   };
+  /** The counts only exist once `has_data`; before the event it carries `message`. */
   attendance: {
     has_data: boolean;
-    total_accepted: number;
-    checked_in: { count: number; percentage: number };
-    not_checked_in: { count: number; percentage: number };
+    message?: string;
+    total_accepted?: number;
+    checked_in?: { count: number; percentage: number };
+    not_checked_in?: { count: number; percentage: number };
   };
   design: {
     design_url: string | null;
@@ -635,14 +638,21 @@ export interface InvitationDetailData {
   };
   actions: {
     is_sent: boolean;
-    status: 'upcoming' | 'previous';
+    status: 'upcoming' | 'previous' | 'sent' | 'unsent';
     status_label: string;
     /**
-     * Once `is_sent`, this is true only while `available_resends > 0` *and*
-     * eligible guests remain — so it gates the replacement flow as well as the
-     * first send. Never recompute the credit locally; trust this pair.
+     * The single source of truth for whether a send is allowed at all — it folds
+     * in the deadline, payment, barcode suspension, remaining credit and whether
+     * anyone is left to message. Never recompute it; only read the two counters
+     * below to decide *which* send is on offer.
      */
     can_be_sent: boolean;
+    /**
+     * Guests with WhatsApp who have never been messaged — typically guests added
+     * after the first send. Sending to them costs no replacement credit, which is
+     * why `can_be_sent` can be true while `available_resends` is 0.
+     */
+    unsent_whatsapp_guests_count?: number;
     /** Remaining replacement sends — see `response_stats.available_resends`. */
     available_resends?: number;
     can_be_edited: boolean;
@@ -651,6 +661,12 @@ export interface InvitationDetailData {
   };
   /** Absent on invitations with no barcode service, and on legacy records. */
   check_in_display?: CheckInDisplay | null;
+  /** Public live-attendance screen; same realtime channel as `check_in_display`. */
+  live_attendance?: {
+    url: string;
+    token: string;
+    realtime: { channel: string; event: string };
+  } | null;
 }
 
 export interface InvitationGuest {

@@ -685,6 +685,9 @@ const translations: Record<Language, Record<string, string>> = {
     // ── Replacement sends ───────────────────────────────────────────────────
     availableResends: 'Replacement invitations available',
     availableResendsShort: '{count} available',
+    guestsAwaitingSend: 'Guests not invited yet',
+    sendToNewGuests: 'Send to new guests',
+    confirmSendToNewGuestsMessage: 'The invitation will be sent to {count} guests who have not been invited yet. This does not use any replacement invitations.',
     sendReplacementInvitations: 'Send replacement invitations',
     noReplacementsAvailable: 'No replacement invitations available yet — one is granted for each rejection.',
     replacementSendHint: 'Pick who receives the seats freed by rejections. Only guests who declined or were never invited can be chosen.',
@@ -1373,6 +1376,9 @@ const translations: Record<Language, Record<string, string>> = {
     // ── الدعوات البديلة ──────────────────────────────────────────────────────
     availableResends: 'دعوات بديلة متاحة',
     availableResendsShort: '{count} متاحة',
+    guestsAwaitingSend: 'ضيوف لم تُرسل لهم الدعوة',
+    sendToNewGuests: 'إرسال للضيوف الجدد',
+    confirmSendToNewGuestsMessage: 'سيتم إرسال الدعوة إلى {count} ضيف لم تُرسل لهم دعوة بعد، ولن يُستهلك أي من الدعوات البديلة.',
     sendReplacementInvitations: 'إرسال دعوات بديلة',
     noReplacementsAvailable: 'لا توجد دعوات بديلة متاحة — تُمنح دعوة بديلة مقابل كل رفض.',
     replacementSendHint: 'اختر من يستلم المقاعد التي أُتيحت بسبب الرفض. يمكن اختيار الضيوف الذين رفضوا الدعوة أو الذين لم تُرسل لهم دعوة بعد فقط.',
