@@ -1,10 +1,13 @@
 /**
  * Central API client.
- * Base URL is read from NEXT_PUBLIC_API_BASE_URL in .env.local
- * e.g. https://portal.tanalevents.com/api/v1
+ * The base URL is resolved once in `lib/api-config.ts` (from
+ * NEXT_PUBLIC_API_BASE_URL, defaulting to https://portal.tanalevents.com/api/v1)
+ * and shared with `next.config.ts` so the CSP always allows the host we call.
  */
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? '';
+import { API_BASE_URL as BASE_URL } from '@/lib/api-config';
+
+export { API_BASE_URL, API_ORIGIN } from '@/lib/api-config';
 
 export interface ApiResponse<T = unknown> {
   key: string;
@@ -324,7 +327,8 @@ export interface DashboardUpcomingServiceOrder {
   service_name: string | null;
   event_date: string;
   event_time: string;
-  hall_name: string;
+  /** Optional — not every event has a named venue. */
+  hall_name: string | null;
   total_amount: ApiAmount;
   statuses: ServiceOrderStatus[];
   is_barcode_suspended: boolean;
@@ -592,6 +596,47 @@ export interface CheckInDisplay {
   };
 }
 
+/**
+ * Admin-authored copy the guest sees, in place of the backend's built-in Arabic
+ * defaults. Every field is an *override*: `null` means "keep using the default",
+ * which `defaults` reports so the UI can show what guests get today.
+ *
+ * `whatsapp_message` is the invitation itself — delivered over WhatsApp and
+ * echoed on the guest's Blade page. `reminder_message` is the day-before
+ * WhatsApp nudge sent by the `invitations:remind-guests` cron.
+ * `accept_message` / `reject_message` are shown on that page once the guest has
+ * responded.
+ *
+ * `placeholders` is served by the API rather than hardcoded here, so a token the
+ * backend adds later appears as a chip without a frontend change.
+ */
+export interface InvitationGuestMessages {
+  whatsapp_message: string | null;
+  reminder_message: string | null;
+  accept_message: string | null;
+  reject_message: string | null;
+  /** e.g. ["{guest_name}", "{event_name}", "{invitation_name}"] */
+  placeholders: string[];
+  /** The built-in copy used for whichever fields are null. */
+  defaults: {
+    whatsapp_message: string;
+    reminder_message: string;
+    accept_message: string;
+    reject_message: string;
+  };
+}
+
+/**
+ * Partial by design: an omitted key leaves that message untouched, and an
+ * explicit `null` clears the override so the backend default applies again.
+ */
+export interface UpdateInvitationGuestMessagesPayload {
+  whatsapp_message?: string | null;
+  reminder_message?: string | null;
+  accept_message?: string | null;
+  reject_message?: string | null;
+}
+
 export interface InvitationDetailData {
   id: number;
   reference_code: string;
@@ -619,6 +664,12 @@ export interface InvitationDetailData {
     deadline_date: string;
     deadline_time: string;
     guest_count: number;
+    /**
+     * Companion seats across the invitation, and the total charged against the
+     * allowance (`guest_count` + counted companions). Both absent until BR-16.
+     */
+    companions_count?: number;
+    counted_total?: number;
     /** Null on invitations whose order never set a response logic. */
     logic_type: 'strict_action' | 'default_accept' | 'view_only' | null;
     logic_type_label: string | null;
@@ -661,6 +712,11 @@ export interface InvitationDetailData {
   };
   /** Absent on invitations with no barcode service, and on legacy records. */
   check_in_display?: CheckInDisplay | null;
+  /**
+   * Absent until the backend ships the guest-message overrides (BR-12) — the
+   * editor is hidden while it is, rather than saving into a void.
+   */
+  guest_messages?: InvitationGuestMessages | null;
   /** Public live-attendance screen; same realtime channel as `check_in_display`. */
   live_attendance?: {
     url: string;
@@ -683,6 +739,23 @@ export interface InvitationGuest {
    * sent", since a `pending` guest who was already sent to cannot be replaced.
    */
   invitation_sent_at?: string | null;
+  /**
+   * Extra people arriving on this guest's QR. Absent until the backend ships
+   * companions (BR-16); treat `undefined` as 0.
+   */
+  companions_count?: number;
+  /**
+   * Whether those companions are billed against the package's
+   * `guests_included`. Independent of attendance — companions always come
+   * through the door; this only decides whether they consume paid seats.
+   */
+  companions_counted_in_allowance?: boolean;
+}
+
+/** PATCH body for one guest's companions. */
+export interface UpdateGuestCompanionsPayload {
+  companions_count: number;
+  companions_counted_in_allowance: boolean;
 }
 
 export interface GetInvitationsParams {
@@ -804,6 +877,51 @@ export async function updateInvitationCheckInWelcomeMessage(
   return apiRequest<InvitationDetailData>(
     `/admin/invitations/${id}/check-in-welcome-message`,
     { method: 'PATCH', body: { message }, token }
+  );
+}
+
+/**
+ * PATCH /admin/invitations/:id/guest-messages
+ *
+ * Overrides the copy the guest receives: the WhatsApp invitation text and the
+ * accept / reject confirmations on the guest page. Modelled on the check-in
+ * welcome endpoint, and editable after the invitation is sent for the same
+ * reason — the accept/reject texts are only ever read once guests respond.
+ *
+ * Partial: omit a key to leave it alone, send `null` to clear the override and
+ * fall back to the backend default. Each message is validated server-side
+ * (min 3, max 1000) — read `fieldError('whatsapp_message')` and friends.
+ */
+export async function updateInvitationGuestMessages(
+  id: number,
+  payload: UpdateInvitationGuestMessagesPayload,
+  token: string
+): Promise<ApiResponse<InvitationDetailData>> {
+  return apiRequest<InvitationDetailData>(
+    `/admin/invitations/${id}/guest-messages`,
+    { method: 'PATCH', body: payload as Record<string, unknown>, token }
+  );
+}
+
+/**
+ * PATCH /admin/invitations/:id/guests/:guestId/companions
+ *
+ * Sets how many companions share this guest's QR, and whether they count
+ * against the package allowance. Returns the updated guest.
+ *
+ * Separate from `updateInvitationGuest` because it stays available after the
+ * invitation is sent — companions get added as RSVPs come back, long after the
+ * guest's own details are frozen.
+ */
+export async function updateInvitationGuestCompanions(
+  invitationId: number,
+  guestId: number,
+  payload: UpdateGuestCompanionsPayload,
+  token: string
+): Promise<ApiResponse<InvitationGuest>> {
+  return apiRequest<InvitationGuest>(
+    `/admin/invitations/${invitationId}/guests/${guestId}/companions`,
+    { method: 'PATCH', body: payload as unknown as Record<string, unknown>, token }
   );
 }
 
@@ -1802,7 +1920,8 @@ export interface ApiServiceOrderDetail {
   /** Aliases of event_time / event_end_time. */
   start_time: string;
   end_time: string;
-  hall_name: string;
+  /** Optional — not every event has a named venue. */
+  hall_name: string | null;
   location_url: string | null;
   /**
    * Map fields, all optional and returned only by the show endpoint — the list

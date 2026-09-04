@@ -11,7 +11,7 @@ import {
   Settings, ImageIcon, QrCode, UploadCloud, PieChart as PieChartIcon,
   BarChart3, Calendar, AlertCircle, Search, SortDesc, User, Loader2,
   ChevronLeft, ChevronRight, ShieldOff, UserPlus, FileSpreadsheet, Trash2,
-  RefreshCw, Upload, X as XIcon, Check
+  RefreshCw, Upload, X as XIcon, Check, AlertTriangle
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ResponsiveContainer, Tooltip, Legend, BarChart, CartesianGrid, XAxis, YAxis, Bar } from 'recharts';
@@ -19,6 +19,8 @@ import { ConfirmModal } from './ConfirmModal';
 import { GuestFormModal, type GuestFormValues } from './GuestFormModal';
 import { GuestImportModal } from './GuestImportModal';
 import { CheckInWelcomeCard } from './CheckInWelcomeCard';
+import { GuestMessagesCard } from './GuestMessagesCard';
+import { GuestCompanionsModal } from './GuestCompanionsModal';
 import { ReplacementSendModal } from './ReplacementSendModal';
 import {
   getInvitationById,
@@ -75,6 +77,9 @@ export interface InvitationGuest {
   phone: string;
   status: InvitationGuestStatus;
   have_whatsapp?: boolean;
+  /** Companion seats on this guest's QR. Undefined until the API reports them. */
+  companions_count?: number;
+  companions_counted_in_allowance?: boolean;
 }
 
 interface CheckIn {
@@ -256,6 +261,8 @@ export function InvitationDetails({ invitation, onBack, onEdit }: InvitationDeta
   const [guestBeingEdited, setGuestBeingEdited] = useState<GuestFormValues | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [guestToDelete, setGuestToDelete] = useState<InvitationGuest | null>(null);
+  /** Guest whose companions are being edited. */
+  const [guestForCompanions, setGuestForCompanions] = useState<InvitationGuest | null>(null);
 
   const [guests, setGuests] = useState<InvitationGuest[]>([]);
   const [guestLoading, setGuestLoading] = useState(false);
@@ -576,6 +583,8 @@ export function InvitationDetails({ invitation, onBack, onEdit }: InvitationDeta
         phone: g.full_phone,
         status: (g.status === 'rejected' ? 'declined' : g.status) as any,
         have_whatsapp: g.have_whatsapp,
+        companions_count: g.companions_count,
+        companions_counted_in_allowance: g.companions_counted_in_allowance,
       }));
 
       setGuests(mapped);
@@ -634,6 +643,17 @@ export function InvitationDetails({ invitation, onBack, onEdit }: InvitationDeta
   const canBeSent = detail?.actions.can_be_sent ?? false;
   const isBarcodeSuspended = detail?.is_barcode_suspended ?? invitation.isBarcodeSuspended;
 
+  /**
+   * The design is optional when the order is booked, so an invitation can exist
+   * without one. It is the one send precondition the admin can fix from here, so
+   * it is reported separately rather than being folded into the silent
+   * `can_be_sent === false`.
+   *
+   * Gated on `detail` so a failed fetch does not claim the design is missing.
+   */
+  const hasDesign = Boolean(detail?.design.design_url);
+  const needsDesign = Boolean(detail) && !hasDesign && !isSent;
+
   const unsentGuestCount = detail?.actions.unsent_whatsapp_guests_count;
   // `undefined` means the API does not report the counter — then a plain send is
   // the only thing we can safely offer, so treat it as available.
@@ -680,6 +700,16 @@ export function InvitationDetails({ invitation, onBack, onEdit }: InvitationDeta
 
   return (
     <>
+      {/* Shared by the design card's replace overlay and the send-area prompt.
+          Kept at the root because the card itself is desktop-only. */}
+      <input
+        ref={designInputRef}
+        type="file"
+        accept={DESIGN_ACCEPT}
+        onChange={handleDesignSelected}
+        className="hidden"
+      />
+
       <div className="space-y-6 pb-10">
         <div className="flex items-start sm:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
@@ -747,9 +777,288 @@ export function InvitationDetails({ invitation, onBack, onEdit }: InvitationDeta
               exit={{ opacity: 0, y: -10 }}
               className="space-y-6"
             >
+              {/* Response totals, full width — the two columns below then start
+                  level with each other instead of one running far past the other. */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <StatCard title={t('totalSent')} value={detail?.response_stats.total_sent.count || 0} icon={Send} colorClass="bg-blue-100 text-blue-600" />
+                <StatCard title={t('accepted')} value={detail?.response_stats.accepted.count || 0} icon={CheckCircle2} colorClass="bg-emerald-100 text-emerald-600" subtitle={detail ? `${detail.response_stats.accepted.percentage}%` : ''} />
+                <StatCard title={t('declined')} value={detail?.response_stats.rejected.count || 0} icon={XCircle} colorClass="bg-red-100 text-red-600" subtitle={detail ? `${detail.response_stats.rejected.percentage}%` : ''} />
+                <StatCard title={t('pending')} value={detail?.response_stats.pending.count || 0} icon={Clock} colorClass="bg-amber-100 text-amber-600" subtitle={detail ? `${detail.response_stats.pending.percentage}%` : ''} />
+              </div>
+
+              {/*
+                Wide column = what the admin fills in before sending (the guest
+                wording first, since nothing can go out without it); narrow column =
+                the send action and the settings it depends on. Splitting it this way
+                keeps both columns within a screen of each other in height.
+              */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
+                <div className="lg:col-span-2 space-y-6">
+                  {/* Guest-facing copy. Rendered for every invitation, not only
+                      when the API serves `guest_messages` — the card falls back
+                      to local defaults, so the editor is visible before the
+                      backend endpoint lands (BR-12). Saving fails until it does,
+                      and the API's own error is what the toast shows. */}
+                  {detail && (
+                    <GuestMessagesCard
+                      invitationId={Number(invitation.id)}
+                      messages={detail.guest_messages}
+                      invitationName={detail.name || invitation.serviceOrderReference}
+                      token={token}
+                      onSaved={setDetail}
+                    />
+                  )}
+
+                  {/* Venue welcome screen — only offered once the backend
+                      exposes the block (barcode invitations). */}
+                  {detail?.check_in_display && (
+                    <CheckInWelcomeCard
+                      invitationId={Number(invitation.id)}
+                      display={detail.check_in_display}
+                      invitationName={detail.name || invitation.serviceOrderReference}
+                      token={token}
+                      onSaved={setDetail}
+                    />
+                  )}
+
+                  <div className="glass-panel p-6 rounded-3xl h-[300px] flex flex-col">
+                    <div className="flex justify-between items-center mb-2">
+                      <h3 className="font-semibold text-secondary flex items-center gap-2">
+                        <BarChart3 className="w-5 h-5 text-primary" />
+                        {t('eventAttendance')}
+                      </h3>
+                      {isPastEvent && (
+                        <button
+                          onClick={() => setShowAttendanceDetails(true)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-white/40 hover:bg-white/60 transition-colors rounded-lg text-xs font-medium text-secondary shadow-sm ring-1 ring-secondary/5 cursor-pointer"
+                        >
+                          <QrCode className="w-3.5 h-3.5" />
+                          {t('qrCheckIns')}
+                        </button>
+                      )}
+                    </div>
+                    {isPastEvent ? (
+                      <div className="flex-1 relative min-h-0">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={attendanceData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                            <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 12 }} />
+                            <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 12 }} />
+                            <Tooltip
+                              cursor={{ fill: '#f8fafc' }}
+                              contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                            />
+                            <Legend verticalAlign="bottom" height={36} iconType="circle" />
+                            <Bar dataKey="Attended" fill="#10b981" radius={[4, 4, 0, 0]} barSize={80} name={t('attended')} />
+                            <Bar dataKey="NotAttended" fill="#94a3b8" radius={[4, 4, 0, 0]} barSize={80} name={t('didntAttend')} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    ) : (
+                      <div className="flex-1 flex flex-col items-center justify-center text-center p-6 border-2 border-dashed border-secondary/10 rounded-2xl bg-white/30">
+                        <Calendar className="w-12 h-12 text-secondary/30 mb-3" />
+                        <p className="text-secondary/60 font-medium">{t('statsAvailableAfterEvent')}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
                 <div className="lg:col-span-1 space-y-6">
+                  <div className="glass-panel p-6 rounded-3xl">
+                    <h3 className="font-semibold text-secondary mb-4 flex items-center gap-2">
+                      <Send className="w-5 h-5 text-primary" />
+                      {t('sendPanelTitle')}
+                    </h3>
+                    <div className="flex flex-col gap-3">
+                      {/* Sending is blocked while the barcode is suspended */}
+                      {isBarcodeSuspended && (
+                        <div className="flex items-start gap-2.5 p-3 rounded-2xl bg-rose-50 border border-rose-200">
+                          <ShieldOff className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                          <div>
+                            <p className="text-sm font-bold text-rose-700">
+                              {t('barcodeSuspended')}
+                            </p>
+                            <p className="text-xs text-rose-600/80 mt-0.5">
+                              {t('barcodeSuspendedHint')}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                      {/* Guests added after the first send — free to message. */}
+                      {isSent && unsentGuestCount != null && unsentGuestCount > 0 && (
+                        <div className="flex items-center gap-2.5 p-3 rounded-2xl border bg-white/40 border-secondary/10">
+                          <UserPlus className="w-4 h-4 shrink-0 text-secondary/50" />
+                          <span className="text-sm text-secondary/70">{t('guestsAwaitingSend')}</span>
+                          <span className="ms-auto text-base font-bold text-secondary">{unsentGuestCount}</span>
+                        </div>
+                      )}
+
+                      {/* Replacement credit — one per rejection, only ever after a send. */}
+                      {isSent && resendCredit > 0 && (
+                        <div className="flex items-center gap-2.5 p-3 rounded-2xl border bg-primary/5 border-primary/20">
+                          <RefreshCw className="w-4 h-4 shrink-0 text-primary" />
+                          <span className="text-sm text-secondary/70">{t('availableResends')}</span>
+                          <span className="ms-auto text-base font-bold text-primary">{resendCredit}</span>
+                        </div>
+                      )}
+
+                      {/* The one blocker the admin can clear from here. Shown
+                          above the send buttons because it is why they are
+                          missing, and it uploads through the same handler as the
+                          design card's replace overlay. */}
+                      {needsDesign && (
+                        <div className="p-3 rounded-2xl border bg-amber-50 border-amber-200/70 space-y-2.5">
+                          <div className="flex items-start gap-2.5">
+                            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-amber-600" />
+                            <p className="text-xs text-amber-800 leading-relaxed">
+                              {t('designRequiredBeforeSend')}
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => designInputRef.current?.click()}
+                            disabled={designUploading}
+                            className="w-full py-2.5 rounded-xl bg-white border border-amber-300 text-amber-800 text-sm font-medium flex items-center justify-center gap-2 hover:bg-amber-100/60 transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-wait"
+                          >
+                            {designUploading
+                              ? <Loader2 className="w-4 h-4 animate-spin" />
+                              : <UploadCloud className="w-4 h-4" />}
+                            {designUploading ? t('designUploading') : t('uploadDesign')}
+                          </button>
+                        </div>
+                      )}
+
+                      {/*
+                        Both buttons hang off `can_be_sent`; the counters only pick
+                        which of them is on offer. A bodyless send goes to every
+                        not-yet-messaged guest and spends no credit, so it stays
+                        available after the first send whenever such guests exist.
+                      */}
+                      {canSendToUnsent && (
+                        <button
+                          onClick={() => setShowSendConfirm(true)}
+                          disabled={isSending}
+                          className="w-full py-4 rounded-2xl bg-gradient-to-r from-primary to-primary-light text-white font-medium shadow-xl shadow-primary/30 flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {isSending ? (
+                            <Loader2 className="w-5 h-5 animate-spin" />
+                          ) : (
+                            <Send className="w-5 h-5" />
+                          )}
+                          {isSent && unsentGuestCount != null
+                            ? `${t('sendToNewGuests')} (${unsentGuestCount})`
+                            : t('sendInvitation')}
+                        </button>
+                      )}
+
+                      {canSendReplacement && (
+                        <button
+                          onClick={() => setReplacementOpen(true)}
+                          disabled={isSending}
+                          className={cn(
+                            'w-full py-4 rounded-2xl font-medium flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed',
+                            // Demoted to secondary when the free send is also on
+                            // offer, so the cheaper action reads as the primary one.
+                            canSendToUnsent
+                              ? 'bg-white text-primary border border-primary/30 hover:bg-primary/5 shadow-sm'
+                              : 'bg-gradient-to-r from-primary to-primary-light text-white shadow-xl shadow-primary/30'
+                          )}
+                        >
+                          {isSending ? (
+                            <Loader2 className="w-5 h-5 animate-spin" />
+                          ) : (
+                            <RefreshCw className="w-5 h-5" />
+                          )}
+                          {t('sendReplacementInvitations')}
+                        </button>
+                      )}
+
+                      {/* Sent, but the API says no send is possible — name the
+                          reason instead of showing a dead button. */}
+                      {isSent && !canBeSent && !isBarcodeSuspended && (
+                        <p className="text-xs text-secondary/50 text-center">
+                          {supportsReplacementSend && resendCredit === 0
+                            ? t('noReplacementsAvailable')
+                            : t('noEligibleGuests')}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="glass-panel p-6 rounded-3xl">
+                    <h3 className="font-semibold text-secondary mb-4 flex items-center gap-2">
+                      <ImageIcon className="w-5 h-5 text-primary" />
+                      {t('designImage')}
+                    </h3>
+                    {/* The hover overlay below is unreachable on touch, so the
+                        card itself opens the picker; desktop keeps the overlay. */}
+                    <div
+                      className={cn(
+                        'relative aspect-[3/4] rounded-2xl overflow-hidden shadow-inner group border-4 border-white/40',
+                        detail?.design.can_be_changed && 'cursor-pointer'
+                      )}
+                      onMouseEnter={() => setIsDesignHovered(true)}
+                      onMouseLeave={() => setIsDesignHovered(false)}
+                      onClick={() => {
+                        if (detail?.design.can_be_changed && !designUploading) {
+                          designInputRef.current?.click();
+                        }
+                      }}
+                    >
+                      {detail?.design.design_url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={detail.design.design_url}
+                          alt="Invitation design"
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="absolute inset-0 bg-gradient-to-b from-stone-100 to-stone-200 p-6 flex flex-col items-center justify-center text-center">
+                          <div className="w-20 h-20 rounded-full border border-stone-300 mb-6 flex items-center justify-center bg-stone-50">
+                            <Ticket className="w-8 h-8 text-stone-400" />
+                          </div>
+                          <h4 className="text-2xl font-serif text-stone-800 mb-2">{invitation.serviceOrderReference}</h4>
+                          <p className="text-stone-500 text-sm mb-8 font-medium">{t('noDesignYet')}</p>
+                          <div className="mt-auto bg-white p-3 rounded-xl shadow-sm border border-stone-200">
+                            <QrCode className="w-24 h-24 text-stone-800" />
+                          </div>
+                        </div>
+                      )}
+
+                      <AnimatePresence>
+                        {/* Kept mounted while uploading so the spinner stays
+                            visible even after the pointer leaves the card. */}
+                        {(isDesignHovered || designUploading) && detail?.design.can_be_changed && (
+                          <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="absolute inset-0 bg-black/40 backdrop-blur-[2px] flex items-center justify-center"
+                          >
+                            {/* The container already opens the picker — without
+                                stopPropagation the click would fire it twice. */}
+                            <button
+                              type="button"
+                              onClick={event => event.stopPropagation()}
+                              disabled={designUploading}
+                              className="px-5 py-2.5 bg-white text-secondary rounded-xl font-medium shadow-lg hover:scale-105 active:scale-95 transition-all flex items-center gap-2 cursor-pointer disabled:opacity-70 disabled:cursor-wait disabled:hover:scale-100"
+                            >
+                              {designUploading ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <UploadCloud className="w-4 h-4" />
+                              )}
+                              {designUploading
+                                ? t('designUploading')
+                                : hasDesign ? t('replaceDesign') : t('uploadDesign')}
+                            </button>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  </div>
+
                   <div className="glass-panel p-6 rounded-3xl">
                     <h3 className="font-semibold text-secondary mb-4 flex items-center gap-2">
                       <Ticket className="w-5 h-5 text-primary" />
@@ -1016,229 +1325,9 @@ export function InvitationDetails({ invitation, onBack, onEdit }: InvitationDeta
                         </form>
                       </Form>
                     )}
-
-                    <div className="mt-6 flex flex-col gap-3">
-                      {/* Sending is blocked while the barcode is suspended */}
-                      {isBarcodeSuspended && (
-                        <div className="flex items-start gap-2.5 p-3 rounded-2xl bg-rose-50 border border-rose-200">
-                          <ShieldOff className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-                          <div>
-                            <p className="text-sm font-bold text-rose-700">
-                              {t('barcodeSuspended')}
-                            </p>
-                            <p className="text-xs text-rose-600/80 mt-0.5">
-                              {t('barcodeSuspendedHint')}
-                            </p>
-                          </div>
-                        </div>
-                      )}
-                      {/* Guests added after the first send — free to message. */}
-                      {isSent && unsentGuestCount != null && unsentGuestCount > 0 && (
-                        <div className="flex items-center gap-2.5 p-3 rounded-2xl border bg-white/40 border-secondary/10">
-                          <UserPlus className="w-4 h-4 shrink-0 text-secondary/50" />
-                          <span className="text-sm text-secondary/70">{t('guestsAwaitingSend')}</span>
-                          <span className="ms-auto text-base font-bold text-secondary">{unsentGuestCount}</span>
-                        </div>
-                      )}
-
-                      {/* Replacement credit — one per rejection, only ever after a send. */}
-                      {isSent && resendCredit > 0 && (
-                        <div className="flex items-center gap-2.5 p-3 rounded-2xl border bg-primary/5 border-primary/20">
-                          <RefreshCw className="w-4 h-4 shrink-0 text-primary" />
-                          <span className="text-sm text-secondary/70">{t('availableResends')}</span>
-                          <span className="ms-auto text-base font-bold text-primary">{resendCredit}</span>
-                        </div>
-                      )}
-
-                      {/*
-                        Both buttons hang off `can_be_sent`; the counters only pick
-                        which of them is on offer. A bodyless send goes to every
-                        not-yet-messaged guest and spends no credit, so it stays
-                        available after the first send whenever such guests exist.
-                      */}
-                      {canSendToUnsent && (
-                        <button
-                          onClick={() => setShowSendConfirm(true)}
-                          disabled={isSending}
-                          className="w-full py-4 rounded-2xl bg-gradient-to-r from-primary to-primary-light text-white font-medium shadow-xl shadow-primary/30 flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {isSending ? (
-                            <Loader2 className="w-5 h-5 animate-spin" />
-                          ) : (
-                            <Send className="w-5 h-5" />
-                          )}
-                          {isSent && unsentGuestCount != null
-                            ? `${t('sendToNewGuests')} (${unsentGuestCount})`
-                            : t('sendInvitation')}
-                        </button>
-                      )}
-
-                      {canSendReplacement && (
-                        <button
-                          onClick={() => setReplacementOpen(true)}
-                          disabled={isSending}
-                          className={cn(
-                            'w-full py-4 rounded-2xl font-medium flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed',
-                            // Demoted to secondary when the free send is also on
-                            // offer, so the cheaper action reads as the primary one.
-                            canSendToUnsent
-                              ? 'bg-white text-primary border border-primary/30 hover:bg-primary/5 shadow-sm'
-                              : 'bg-gradient-to-r from-primary to-primary-light text-white shadow-xl shadow-primary/30'
-                          )}
-                        >
-                          {isSending ? (
-                            <Loader2 className="w-5 h-5 animate-spin" />
-                          ) : (
-                            <RefreshCw className="w-5 h-5" />
-                          )}
-                          {t('sendReplacementInvitations')}
-                        </button>
-                      )}
-
-                      {/* Sent, but the API says no send is possible — name the
-                          reason instead of showing a dead button. */}
-                      {isSent && !canBeSent && !isBarcodeSuspended && (
-                        <p className="text-xs text-secondary/50 text-center">
-                          {supportsReplacementSend && resendCredit === 0
-                            ? t('noReplacementsAvailable')
-                            : t('noEligibleGuests')}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Venue welcome screen — only offered once the backend
-                      exposes the block (barcode invitations). */}
-                  {detail?.check_in_display && (
-                    <CheckInWelcomeCard
-                      invitationId={Number(invitation.id)}
-                      display={detail.check_in_display}
-                      invitationName={detail.name || invitation.serviceOrderReference}
-                      token={token}
-                      onSaved={setDetail}
-                    />
-                  )}
-
-                  <div className="glass-panel p-6 rounded-3xl hidden lg:block">
-                    <h3 className="font-semibold text-secondary mb-4 flex items-center gap-2">
-                      <ImageIcon className="w-5 h-5 text-primary" />
-                      {t('designImage')}
-                    </h3>
-                    <input
-                      ref={designInputRef}
-                      type="file"
-                      accept={DESIGN_ACCEPT}
-                      onChange={handleDesignSelected}
-                      className="hidden"
-                    />
-                    <div
-                      className="relative aspect-[3/4] rounded-2xl overflow-hidden shadow-inner group border-4 border-white/40"
-                      onMouseEnter={() => setIsDesignHovered(true)}
-                      onMouseLeave={() => setIsDesignHovered(false)}
-                    >
-                      {detail?.design.design_url ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={detail.design.design_url}
-                          alt="Invitation design"
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <div className="absolute inset-0 bg-gradient-to-b from-stone-100 to-stone-200 p-6 flex flex-col items-center justify-center text-center">
-                          <div className="w-20 h-20 rounded-full border border-stone-300 mb-6 flex items-center justify-center bg-stone-50">
-                            <Ticket className="w-8 h-8 text-stone-400" />
-                          </div>
-                          <h4 className="text-2xl font-serif text-stone-800 mb-2">{invitation.serviceOrderReference}</h4>
-                          <p className="text-stone-500 text-sm mb-8 font-medium">{t('youAreCordiallyInvited')}</p>
-                          <div className="mt-auto bg-white p-3 rounded-xl shadow-sm border border-stone-200">
-                            <QrCode className="w-24 h-24 text-stone-800" />
-                          </div>
-                        </div>
-                      )}
-
-                      <AnimatePresence>
-                        {/* Kept mounted while uploading so the spinner stays
-                            visible even after the pointer leaves the card. */}
-                        {(isDesignHovered || designUploading) && detail?.design.can_be_changed && (
-                          <motion.div
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                            className="absolute inset-0 bg-black/40 backdrop-blur-[2px] flex items-center justify-center"
-                          >
-                            <button
-                              type="button"
-                              onClick={() => designInputRef.current?.click()}
-                              disabled={designUploading}
-                              className="px-5 py-2.5 bg-white text-secondary rounded-xl font-medium shadow-lg hover:scale-105 active:scale-95 transition-all flex items-center gap-2 cursor-pointer disabled:opacity-70 disabled:cursor-wait disabled:hover:scale-100"
-                            >
-                              {designUploading ? (
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                              ) : (
-                                <UploadCloud className="w-4 h-4" />
-                              )}
-                              {designUploading ? t('designUploading') : t('replaceDesign')}
-                            </button>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                    </div>
                   </div>
                 </div>
 
-                <div className="lg:col-span-2 space-y-6">
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                    <StatCard title={t('totalSent')} value={detail?.response_stats.total_sent.count || 0} icon={Send} colorClass="bg-blue-100 text-blue-600" />
-                    <StatCard title={t('accepted')} value={detail?.response_stats.accepted.count || 0} icon={CheckCircle2} colorClass="bg-emerald-100 text-emerald-600" subtitle={detail ? `${detail.response_stats.accepted.percentage}%` : ''} />
-                    <StatCard title={t('declined')} value={detail?.response_stats.rejected.count || 0} icon={XCircle} colorClass="bg-red-100 text-red-600" subtitle={detail ? `${detail.response_stats.rejected.percentage}%` : ''} />
-                    <StatCard title={t('pending')} value={detail?.response_stats.pending.count || 0} icon={Clock} colorClass="bg-amber-100 text-amber-600" subtitle={detail ? `${detail.response_stats.pending.percentage}%` : ''} />
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* Attendance Bar Chart */}
-                    <div className="glass-panel p-6 rounded-3xl h-[300px] flex flex-col md:col-span-2">
-                      <div className="flex justify-between items-center mb-2">
-                        <h3 className="font-semibold text-secondary flex items-center gap-2">
-                          <BarChart3 className="w-5 h-5 text-primary" />
-                          {t('eventAttendance')}
-                        </h3>
-                        {isPastEvent && (
-                          <button
-                            onClick={() => setShowAttendanceDetails(true)}
-                            className="flex items-center gap-1.5 px-3 py-1.5 bg-white/40 hover:bg-white/60 transition-colors rounded-lg text-xs font-medium text-secondary shadow-sm ring-1 ring-secondary/5 cursor-pointer"
-                          >
-                            <QrCode className="w-3.5 h-3.5" />
-                            {t('qrCheckIns')}
-                          </button>
-                        )}
-                      </div>
-                      {isPastEvent ? (
-                        <div className="flex-1 relative min-h-0">
-                          <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={attendanceData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                              <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 12 }} />
-                              <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 12 }} />
-                              <Tooltip
-                                cursor={{ fill: '#f8fafc' }}
-                                contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-                              />
-                              <Legend verticalAlign="bottom" height={36} iconType="circle" />
-                              <Bar dataKey="Attended" fill="#10b981" radius={[4, 4, 0, 0]} barSize={80} name={t('attended')} />
-                              <Bar dataKey="NotAttended" fill="#94a3b8" radius={[4, 4, 0, 0]} barSize={80} name={t('didntAttend')} />
-                            </BarChart>
-                          </ResponsiveContainer>
-                        </div>
-                      ) : (
-                        <div className="flex-1 flex flex-col items-center justify-center text-center p-6 border-2 border-dashed border-secondary/10 rounded-2xl bg-white/30">
-                          <Calendar className="w-12 h-12 text-secondary/30 mb-3" />
-                          <p className="text-secondary/60 font-medium">{t('statsAvailableAfterEvent')}</p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                </div>
               </div>
             </motion.div>
           ) : (
@@ -1357,7 +1446,29 @@ export function InvitationDetails({ invitation, onBack, onEdit }: InvitationDeta
                             className="bg-white/60 p-4 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4 border border-secondary/5 hover:bg-white transition-colors cursor-pointer group"
                           >
                             <div className="flex flex-col gap-1">
-                              <span className="font-semibold text-secondary">{guest.name}</span>
+                              <div className="flex items-center gap-2">
+                                <span className="font-semibold text-secondary">{guest.name}</span>
+                                {/* Companions ride this guest's QR, so they belong on
+                                    the row rather than behind the modal. */}
+                                {(guest.companions_count ?? 0) > 0 && (
+                                  <span
+                                    title={
+                                      guest.companions_counted_in_allowance === false
+                                        ? t('companionsNotCountedShort')
+                                        : t('companionsCountedShort')
+                                    }
+                                    className={cn(
+                                      'inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-semibold',
+                                      guest.companions_counted_in_allowance === false
+                                        ? 'bg-secondary/8 text-secondary/55'
+                                        : 'bg-primary/10 text-primary'
+                                    )}
+                                  >
+                                    <Users className="w-3 h-3" />
+                                    +{guest.companions_count}
+                                  </span>
+                                )}
+                              </div>
                               <span className="text-secondary/60 text-sm" dir="ltr" style={{ textAlign: dir === 'rtl' ? 'right' : 'left' }}>{guest.phone}</span>
                             </div>
 
@@ -1377,6 +1488,13 @@ export function InvitationDetails({ invitation, onBack, onEdit }: InvitationDeta
                                 <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                   <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51a12.8 12.8 0 0 0-.57-.01c-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413Z" />
                                 </svg>
+                              </button>
+                              <button
+                                title={t('companions')}
+                                onClick={(e) => { e.stopPropagation(); setGuestForCompanions(guest); }}
+                                className="p-2 bg-white text-primary border border-transparent hover:bg-primary/10 hover:border-primary/30 hover:-translate-y-[2px] hover:scale-[1.03] hover:shadow-md active:scale-95 active:translate-y-0 rounded-xl transition-all duration-200 ease-out flex items-center justify-center cursor-pointer"
+                              >
+                                <Users className="w-4 h-4" />
                               </button>
                               <button
                                 title={t('edit')}
@@ -1451,6 +1569,31 @@ export function InvitationDetails({ invitation, onBack, onEdit }: InvitationDeta
           token={token}
           guest={guestBeingEdited}
           onClose={() => { setGuestFormOpen(false); setGuestBeingEdited(null); }}
+          onSaved={() => { fetchGuests(); refreshDetails(); }}
+        />
+      )}
+
+      {guestForCompanions && (
+        <GuestCompanionsModal
+          invitationId={Number(invitation.id)}
+          token={token}
+          guest={guestForCompanions}
+          guestsIncluded={detail?.guests_included ?? invitation.guestsIncluded ?? null}
+          // Everyone else's counted seats, so the modal can project the new
+          // total without re-fetching. Null while the API does not report it.
+          countedElsewhere={
+            detail?.details.counted_total == null
+              ? null
+              : Math.max(
+                  0,
+                  detail.details.counted_total
+                    - 1
+                    - (guestForCompanions.companions_counted_in_allowance === false
+                        ? 0
+                        : guestForCompanions.companions_count ?? 0)
+                )
+          }
+          onClose={() => setGuestForCompanions(null)}
           onSaved={() => { fetchGuests(); refreshDetails(); }}
         />
       )}

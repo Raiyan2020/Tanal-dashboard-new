@@ -1,12 +1,22 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Calendar, Clock, MapPin } from 'lucide-react';
-import { toast } from 'sonner';
 import { useLanguage } from '@/lib/i18n';
 import { DayPicker } from '@daypicker/react';
 import '@daypicker/react/dist/style.css';
 import { ar } from 'date-fns/locale';
 import { type FormState, type OrderFormErrors } from '@/lib/service-order-form';
 import { MapLocationPicker } from '@/components/map-location-picker';
+import {
+  displayOffset,
+  endOffset,
+  endSlots,
+  endsNextDay,
+  offGridSlot,
+  slotLabel,
+  startOffset,
+  startSlots,
+  type TimeSlot,
+} from '@/lib/event-time-slots';
 
 interface EventDetailsSectionProps {
   form: FormState;
@@ -20,9 +30,6 @@ interface EventDetailsSectionProps {
    */
   quick?: boolean;
 }
-
-/** Hour options shared by the start and end time selects. */
-const HOURS = Array.from({ length: 24 }, (_, h) => h);
 
 /**
  * `"2026-08-07"` → local midnight. `new Date(str)` would parse it as *UTC*
@@ -61,60 +68,82 @@ export function EventDetailsSection({
   const minDateObj = minDate ? parseLocalDate(minDate) : undefined;
   const selectedDate = form.date ? parseLocalDate(form.date) : undefined;
 
-  const hourLabel = (h: number) => {
-    const period = h < 12 ? (language === 'ar' ? 'ص' : 'AM') : (language === 'ar' ? 'م' : 'PM');
-    const hour12 = h % 12 === 0 ? 12 : h % 12;
-    return `${String(hour12).padStart(2, '0')}:00 ${period}`;
+  /**
+   * A saved order may carry a time that is not on the 30-minute grid — set
+   * before this grid existed, or outside the 06:00–23:30 start window. Keeping
+   * it in the list means opening an order for edit never silently drops it.
+   */
+  const withCurrentValue = (slots: TimeSlot[], current: string, offset: number | null) => {
+    if (!current || slots.some(s => s.value === current) || offset === null) return slots;
+    return [...slots, offGridSlot(current, offset)].sort((a, b) => a.offset - b.offset);
   };
-  const hourValue = (h: number) => `${String(h).padStart(2, '0')}:00`;
 
-  // End time is picked relative to the start, so it stays locked until a start
-  // hour exists and only offers the hours after it.
-  const startHour = /^(\d{1,2}):/.exec(form.time)
-    ? Number(/^(\d{1,2}):/.exec(form.time)![1])
-    : null;
-  const endDisabled = startHour === null;
-  // An already-saved order may carry a start with no hour after it (edit mode
-  // skips `onStartChange`), which would render an end dropdown with no options.
-  const noEndSlots = startHour !== null && !HOURS.some(h => h > startHour);
+  // Passing the date drops the slots that have already gone when the event is
+  // *today* — at 12:18 the list starts at 12:30, matching the backend's
+  // "same-day start must be in the future" rule.
+  //
+  // `displayOffset`, not `startOffset`: a start that is out of range — 05:00 on
+  // a legacy order, or a time that has since passed — must still appear, so
+  // validation can flag it rather than the dropdown silently clearing it.
+  const startOptions = withCurrentValue(
+    startSlots(form.date),
+    form.time,
+    displayOffset(form.time),
+  );
+
+  /** Today, picked after 23:30: no start is left on the operating day. */
+  const noStartSlots = startOptions.length === 0;
+
+  // The end list is relative to the start, so it stays locked until a start is
+  // chosen and only offers the slots after it — through 04:00 the next morning.
+  const endDisabled = startOffset(form.time) === null;
+  const endOptions = withCurrentValue(
+    endSlots(form.time),
+    form.endTime,
+    endOffset(form.endTime, form.time),
+  );
+  // Every start up to 23:30 has 04:00-next-day available, so this is only
+  // reachable via an off-grid start on an existing order.
+  const noEndSlots = !endDisabled && endOptions.length === 0;
 
   /** Picking a start time drops an end time that is no longer after it. */
   const onStartChange = (value: string) => {
-    const next = /^(\d{1,2}):/.exec(value);
-    const nextStart = next ? Number(next[1]) : null;
+    const nextStart = startOffset(value);
 
-    // The end list only offers hours *after* the start, so the last hour of the
-    // day leaves it empty. Refuse the pick instead of opening a dropdown with
-    // nothing in it — clearing the start keeps the end select disabled.
-    // Quick mode never asks for an end time, so the limit does not apply there.
-    if (!quick && nextStart !== null && !HOURS.some(h => h > nextStart)) {
-      toast.error(
-        language === 'ar'
-          ? 'لا توجد أوقات انتهاء متاحة بعد هذا الوقت، يرجى اختيار وقت بدء أبكر'
-          : 'No end times are available after this start time — pick an earlier start time.'
-      );
-      setForm({ ...form, time: '', endTime: '' });
+    // Quick mode never asks for an end time, so none of this applies there.
+    if (quick || nextStart === null) {
+      setForm({ ...form, time: value, endTime: nextStart === null ? '' : form.endTime });
       return;
     }
 
-    const currentEnd = /^(\d{1,2}):/.exec(form.endTime);
-    const stale =
-      nextStart === null ||
-      (currentEnd !== null && Number(currentEnd[1]) <= nextStart);
-    setForm({ ...form, time: value, endTime: stale ? '' : form.endTime });
+    // Keep the current end only if it is still after the new start and still
+    // within range — `endSlots` is the same list the dropdown will render.
+    const stillValid = endSlots(value).some(s => s.value === form.endTime);
+    setForm({ ...form, time: value, endTime: stillValid ? form.endTime : '' });
   };
 
   const errorText = 'text-xs text-red-500 mt-0.5';
   const inputClass =
     'w-full px-4 py-3 rounded-xl bg-white/50 border border-white/60 focus:border-primary/50 focus:ring-2 focus:ring-primary/20 outline-none text-secondary text-sm placeholder:text-secondary/40';
 
+  const dateFormat: Intl.DateTimeFormatOptions = {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  };
+  const dateLocale = language === 'ar' ? 'ar-EG' : 'en-US';
+
   const displayDate = form.date
-    ? parseLocalDate(form.date).toLocaleDateString(language === 'ar' ? 'ar-EG' : 'en-US', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-      })
+    ? parseLocalDate(form.date).toLocaleDateString(dateLocale, dateFormat)
     : null;
+
+  /** The calendar day after the event date — where a past-midnight end lands. */
+  const endDateLabel = (() => {
+    if (!form.date) return null;
+    const next = parseLocalDate(form.date);
+    next.setDate(next.getDate() + 1);
+    return next.toLocaleDateString(dateLocale, dateFormat);
+  })();
 
   return (
     <>
@@ -169,13 +198,25 @@ export function EventDetailsSection({
           </label>
           <select
             required
+            disabled={noStartSlots}
+            title={
+              noStartSlots
+                ? language === 'ar'
+                  ? 'لم يتبق وقت متاح اليوم، اختر تاريخاً آخر'
+                  : 'No start time is left today — pick another date'
+                : undefined
+            }
             value={form.time}
             onChange={e => onStartChange(e.target.value)}
-            className="w-full px-4 py-3 rounded-xl bg-white/50 border border-white/60 focus:border-primary/50 focus:ring-2 focus:ring-primary/20 outline-none text-secondary text-sm cursor-pointer"
+            className="w-full px-4 py-3 rounded-xl bg-white/50 border border-white/60 focus:border-primary/50 focus:ring-2 focus:ring-primary/20 outline-none text-secondary text-sm cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 disabled:bg-secondary/5"
           >
-            <option value="">{language === 'ar' ? 'اختر الوقت...' : 'Select time...'}</option>
-            {HOURS.map(h => (
-              <option key={h} value={hourValue(h)}>{hourLabel(h)}</option>
+            <option value="">
+              {noStartSlots
+                ? language === 'ar' ? 'لم يتبق وقت اليوم' : 'No time left today'
+                : language === 'ar' ? 'اختر الوقت...' : 'Select time...'}
+            </option>
+            {startOptions.map(slot => (
+              <option key={slot.value} value={slot.value}>{slotLabel(slot, language)}</option>
             ))}
           </select>
           {errors.event_time && <p className={errorText}>{errors.event_time}</p>}
@@ -212,9 +253,13 @@ export function EventDetailsSection({
                   ? language === 'ar' ? 'لا توجد أوقات متاحة' : 'No times available'
                   : language === 'ar' ? 'اختر الوقت...' : 'Select time...'}
             </option>
-            {/* Only hours after the start are offered — 04:00 PM cannot end a 06:00 PM event. */}
-            {HOURS.filter(h => startHour !== null && h > startHour).map(h => (
-              <option key={h} value={hourValue(h)}>{hourLabel(h)}</option>
+            {/*
+              Only slots after the start, running through 04:00 the next morning —
+              a 20:00 event can end at 03:00, and those options are labelled
+              "(next day)" so they are not read as the event-date morning.
+            */}
+            {endOptions.map(slot => (
+              <option key={slot.value} value={slot.value}>{slotLabel(slot, language)}</option>
             ))}
           </select>
           {errors.event_end_time && <p className={errorText}>{errors.event_end_time}</p>}
@@ -222,22 +267,39 @@ export function EventDetailsSection({
         )}
       </div>
 
+      {/*
+        Spell out the resolved span when the event runs past midnight. The option
+        is already labelled "(next day)", but naming the actual date is what stops
+        someone reading "03:00 AM" as the morning of the event date.
+      */}
+      {!quick && endDateLabel && endsNextDay(form.time, form.endTime) && (
+        <p className="flex items-center gap-1.5 text-xs text-secondary/60 -mt-2">
+          <Clock className="w-3.5 h-3.5 shrink-0 text-primary/60" />
+          {language === 'ar'
+            ? `يمتد الحفل بعد منتصف الليل وينتهي في ${endDateLabel}`
+            : `Runs past midnight and ends on ${endDateLabel}`}
+        </p>
+      )}
+
       {/* Hall + address — quick mode defers all of this to the client's form */}
       {quick ? null : (
       <>
-      {/* Hall */}
+      {/*
+        Venue — optional, and named "venue" rather than "hall": events run in
+        schools, homes and hotels as well as wedding halls, and plenty of them
+        are located by the map pin and address below instead of by a venue name.
+      */}
       <div className="space-y-1.5">
-        <label className="text-sm font-medium text-secondary/80">
-          {t('hallName') || 'Hall Name'} <span className="text-red-500">*</span>
+        <label className="flex items-center gap-2 text-sm font-medium text-secondary/80">
+          <MapPin className="w-4 h-4 text-secondary/40" />
+          {t('eventVenue') || 'Event Venue'}
+          <span className="text-xs font-normal text-secondary/40">
+            ({t('optional') || 'Optional'})
+          </span>
         </label>
         <input
           type="text"
-          required
-          placeholder={
-            language === 'ar'
-              ? 'فندق الفيصلية - قاعة الاحتفالات الكبرى'
-              : 'Al Faisaliah Hotel – Grand Ballroom'
-          }
+          placeholder={t('eventVenuePlaceholder') || 'Wedding hall, hotel, school, home…'}
           value={form.hallName}
           onChange={e => setForm({ ...form, hallName: e.target.value })}
           className={inputClass}

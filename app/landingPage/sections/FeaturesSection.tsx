@@ -13,6 +13,7 @@ import {
   getLandingFeatures, createFeature, updateFeature, deleteFeature, reorderFeatures,
   type LandingFeature
 } from '@/lib/api';
+import { API_ORIGIN } from '@/lib/api-config';
 import { BilingualField, ImageUploadBox, SectionSkeleton, DeleteConfirm } from './shared';
 
 interface StepForm {
@@ -57,7 +58,9 @@ export default function FeaturesSection({ token }: { token: string }) {
           const iconName = arItem.icon || '';
           return {
             ...arItem,
-            icon_url: iconName ? (iconName.startsWith('http') ? iconName : `https://portal.tanalevents.com/storage/images/landing/features/${iconName}`) : '',
+            // Bare filenames are resolved against the API origin rather than a
+            // hardcoded host, so this follows NEXT_PUBLIC_API_BASE_URL.
+            icon_url: iconName ? (iconName.startsWith('http') ? iconName : `${API_ORIGIN}/storage/images/landing/features/${iconName}`) : '',
             title_ar: arItem.title || '',
             title_en: enItem?.title || '',
             description_ar: arItem.description || '',

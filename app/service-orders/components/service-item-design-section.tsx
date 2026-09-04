@@ -18,7 +18,12 @@ interface ServiceItemDesignSectionProps {
 
 const MAX_BYTES = 10 * 1024 * 1024;
 
-/** Uploads the primary design for one photobooth service-order item. */
+/**
+ * Uploads the primary design for one photobooth service-order item.
+ *
+ * Optional: the order saves without it, and the image can be added afterwards
+ * through the item's attachments.
+ */
 export function ServiceItemDesignSection({
   item,
   setForm,
@@ -101,13 +106,15 @@ export function ServiceItemDesignSection({
     <div className="space-y-2 pt-3 border-t border-secondary/10">
       <label className="flex items-center gap-2 text-sm font-medium text-secondary/80">
         <ImageIcon className="w-4 h-4 text-secondary/40" />
-        {isAr ? 'تصميم الفوتوبوث' : 'Photobooth Design'}{' '}
-        <span className="text-red-500">*</span>
+        {isAr ? 'تصميم الفوتوبوث' : 'Photobooth Design'}
+        <span className="text-xs font-normal text-secondary/40">
+          ({isAr ? 'اختياري' : 'Optional'})
+        </span>
       </label>
       <p className="text-xs text-secondary/45">
         {isAr
-          ? 'ارفع صورة التصميم قبل حفظ الطلب. الحد الأقصى 10 ميجابايت.'
-          : 'Upload the design image before saving the order. Maximum size is 10MB.'}
+          ? 'يمكنك رفعه الآن أو إضافته لاحقاً من مرفقات الخدمة. الحد الأقصى 10 ميجابايت.'
+          : 'Upload it now or add it later from the service attachments. Maximum size is 10MB.'}
       </p>
 
       <input

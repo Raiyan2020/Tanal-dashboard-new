@@ -15,11 +15,10 @@ import {
   createEmptyServiceItem,
   buildItemPayload,
   isInvitationDesignExpired,
-  isPhotoboothService,
   isServiceItemDesignExpired,
-  needsInvitationDesignUpload,
-  needsServiceItemDesignUpload,
+  canUploadInvitationDesign,
 } from '@/lib/service-order-form';
+import { todayInEventZone } from '@/lib/event-time-slots';
 
 import { ClientSection } from './client-section';
 import { EventDetailsSection } from './event-details-section';
@@ -61,19 +60,17 @@ export function OrderForm({
 }: OrderFormProps) {
   const { t, dir, language } = useLanguage();
 
-  // On create the earliest bookable day is tomorrow — same-day orders leave no
-  // time to staff them. When editing, an order may legitimately sit in the past,
-  // so the constraint is dropped.
-  // Built from local date parts rather than `toISOString()`, which would shift
-  // the day either side of midnight for any non-UTC timezone.
-  const minDate = useMemo(() => {
-    if (editing) return undefined;
-    const d = new Date();
-    d.setDate(d.getDate() + 1);
-    const mm = String(d.getMonth() + 1).padStart(2, '0');
-    const dd = String(d.getDate()).padStart(2, '0');
-    return `${d.getFullYear()}-${mm}-${dd}`;
-  }, [editing]);
+  // Same-day booking is allowed — today is the floor, matching the backend's
+  // `event_date|after_or_equal:today`. A start time on today is separately held
+  // to being in the future (see `startSlots` / `isStartInPast`).
+  //
+  // Resolved in the backend's timezone, not the browser's, so the picker's floor
+  // and the start-time slots can never disagree about which day "today" is.
+  // When editing, an order may legitimately sit in the past, so there is no floor.
+  const minDate = useMemo(
+    () => (editing ? undefined : todayInEventZone()),
+    [editing],
+  );
 
   const [dbServices, setDbServices] = useState<any[]>([]);
   const [dbEmployees, setDbEmployees] = useState<any[]>([]);
@@ -290,21 +287,14 @@ export function OrderForm({
   const quick = !editing && form.creationMode === 'quick';
 
   /**
-   * Submit stays blocked until a valid, unexpired design token exists. Applies
-   * when editing too: adding QR to an order that has no invitation yet needs a
-   * design just as much as creating one from scratch does.
+   * Both designs are optional, so their absence never blocks submit. An upload
+   * whose token has *expired* does: the backend rejects the token, so the save
+   * would fail on a field the admin thinks is already filled in.
    */
-  const missingInvitationDesign =
-    needsInvitationDesignUpload(form)
-    && (!form.invitationDesignToken || isInvitationDesignExpired(form));
+  const expiredInvitationDesign =
+    canUploadInvitationDesign(form) && isInvitationDesignExpired(form);
 
-  const missingItemDesign = form.services.some(item =>
-    isPhotoboothService(item)
-    && (
-      (needsServiceItemDesignUpload(item) && !item.designToken)
-      || (item.designToken && isServiceItemDesignExpired(item))
-    )
-  );
+  const expiredItemDesign = form.services.some(isServiceItemDesignExpired);
 
   /**
    * True once the order includes the barcode/QR system service. The backend
@@ -533,7 +523,7 @@ export function OrderForm({
                 </div>
                 {/* An order that already has an invitation already has a
                     design — it is changed from the invitation's own screen. */}
-                {needsInvitationDesignUpload(form) && (
+                {canUploadInvitationDesign(form) && (
                   <InvitationDesignSection
                     form={form}
                     setForm={setForm}
@@ -581,7 +571,7 @@ export function OrderForm({
               className="flex-1 py-3 text-sm font-medium text-secondary/70 bg-white/60 hover:bg-white border border-secondary/15 rounded-xl transition-colors cursor-pointer">
               {t('cancel') || 'Cancel'}
             </button>
-            <button type="submit" disabled={loading || form.services.length === 0 || form.services.some(s => !s.serviceId) || hasDuplicateServices || missingInvitationDesign || missingItemDesign}
+            <button type="submit" disabled={loading || form.services.length === 0 || form.services.some(s => !s.serviceId) || hasDuplicateServices || expiredInvitationDesign || expiredItemDesign}
               className="flex-1 flex items-center justify-center gap-2 py-3 text-sm font-medium text-white bg-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-all cursor-pointer shadow-md shadow-primary/20 hover:-translate-y-0.5">
               {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
               {editing ? t('saveChanges') || 'Save Changes' : t('createSendLinks') || 'Create & Send Link'}

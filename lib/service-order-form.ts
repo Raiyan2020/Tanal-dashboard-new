@@ -7,6 +7,13 @@
  */
 
 import { getServiceById } from '@/lib/api';
+import {
+  LAST_END_LABEL,
+  isStartInPast,
+  startOffset,
+  startSlots,
+  validateTimeRange,
+} from '@/lib/event-time-slots';
 import { parseLatLng, toCoord } from '@/lib/map-location';
 import { validatePhone } from '@/lib/phone-validation';
 import type {
@@ -199,18 +206,17 @@ export const createEmptyOrderForm = (): FormState => ({
   invitationDesignExpiresAt: '',
 });
 
-/** `"18:00"` → minutes since midnight, or null when unparseable. */
-function toMinutes(time: string): number | null {
-  const match = /^(\d{1,2}):(\d{2})/.exec(time);
-  if (!match) return null;
-  return Number(match[1]) * 60 + Number(match[2]);
-}
-
 /**
- * True when the order needs a fresh design upload: it carries the QR service but
- * has no invitation yet. Adding QR to an existing order hits this too.
+ * True when the order form is where an invitation design can be uploaded: the
+ * order carries the QR service but has no invitation yet. Adding QR to an
+ * existing order hits this too.
+ *
+ * The upload is optional — an order can be saved without it, and the design is
+ * then added from the invitation's own screen. It gates the *token* because the
+ * backend rejects `invitation_design_token` on an order that has no QR service
+ * or already has a design.
  */
-export function needsInvitationDesignUpload(form: FormState): boolean {
+export function canUploadInvitationDesign(form: FormState): boolean {
   return form.requiresInvitationDesign && !form.hasExistingInvitationDesign;
 }
 
@@ -238,11 +244,6 @@ export function isServiceItemDesignExpired(item: FormServiceItem): boolean {
   if (!item.designToken || !item.designExpiresAt) return false;
   const expiry = new Date(item.designExpiresAt).getTime();
   return Number.isFinite(expiry) && expiry <= Date.now();
-}
-
-/** New photobooth items need an upload; edited items may retain their saved image. */
-export function needsServiceItemDesignUpload(item: FormServiceItem): boolean {
-  return isPhotoboothService(item) && !item.existingDesignUrl;
 }
 
 /** Maps dotted backend fields (`items.0.design_token`) to stable local row ids. */
@@ -292,25 +293,55 @@ export function validateOrderForm(form: FormState, language: 'ar' | 'en'): Order
     errors.event_date = ar ? 'تاريخ التنفيذ مطلوب' : 'Event date is required';
   }
   if (!form.time) {
-    errors.event_time = ar ? 'وقت البدء مطلوب' : 'Start time is required';
+    // Today, chosen after the last slot: telling the admin to pick a time they
+    // cannot pick is a dead end — point at the date instead.
+    errors.event_time = form.date && startSlots(form.date).length === 0
+      ? (ar
+          ? 'لم يتبق وقت متاح اليوم، اختر تاريخاً آخر'
+          : 'No start time is left today — pick another date')
+      : (ar ? 'وقت البدء مطلوب' : 'Start time is required');
+  } else if (startOffset(form.time) === null) {
+    // Reachable when editing an order saved under the old 00:00–23:00 picker.
+    errors.event_time = ar
+      ? 'وقت البدء يجب أن يكون بين 06:00 صباحاً و11:30 مساءً'
+      : 'Start time must be between 06:00 AM and 11:30 PM';
+  } else if (isStartInPast(form.date, form.time)) {
+    // Same-day orders are allowed, but not one that has already started. The
+    // dropdown hides these slots; this catches a start that has been sitting in
+    // an open form long enough to lapse, and a saved same-day order being
+    // edited after its start. Mirrors the backend's own 422 on `event_time`.
+    errors.event_time = ar
+      ? 'وقت المناسبة يجب أن يكون في المستقبل إذا كان التاريخ اليوم'
+      : 'Event time must be in the future when the event date is today';
   }
 
   // In quick mode the end time and hall come from the client's own form later,
   // so they are optional here — but still validated when supplied.
   if (!quick && !form.endTime) {
     errors.event_end_time = ar ? 'وقت الانتهاء مطلوب' : 'End time is required';
-  } else if (form.endTime) {
-    const start = toMinutes(form.time);
-    const end = toMinutes(form.endTime);
-    if (start !== null && end !== null && end <= start) {
-      errors.event_end_time = ar
-        ? 'وقت الانتهاء يجب أن يكون بعد وقت البدء'
-        : 'End time must be after the start time';
+  } else if (form.endTime && form.time) {
+    // An event may run past midnight — 20:00 → 03:00 is valid and ends the next
+    // day — so the comparison happens on the operating-day timeline rather than
+    // on raw clock times, which would reject it.
+    switch (validateTimeRange(form.time, form.endTime)) {
+      case 'end_not_after_start':
+        errors.event_end_time = ar
+          ? 'وقت الانتهاء يجب أن يكون بعد وقت البدء'
+          : 'End time must be after the start time';
+        break;
+      case 'end_too_late':
+        errors.event_end_time = ar
+          ? `وقت الانتهاء يجب ألا يتجاوز ${LAST_END_LABEL} صباح اليوم التالي`
+          : `End time cannot be later than ${LAST_END_LABEL} the next morning`;
+        break;
+      case 'start_out_of_range':
+        // Already reported against `event_time` above; nothing to add here.
+        break;
     }
   }
-  if (!quick && !form.hallName.trim()) {
-    errors.hall_name = ar ? 'اسم القاعة مطلوب' : 'Hall name is required';
-  }
+  // The venue is optional: events run in homes, schools and hotels, and many are
+  // identified by the map pin and address rather than by a venue name. The
+  // backend may still reject it on length, which surfaces via `hall_name`.
 
   if (form.services.length === 0 || form.services.some(s => !s.serviceId)) {
     errors.items = ar ? 'يجب اختيار خدمة واحدة على الأقل' : 'At least one service is required';
@@ -325,26 +356,27 @@ export function validateOrderForm(form: FormState, language: 'ar' | 'en'): Order
     }
   }
 
-  // The QR service cannot be ordered without a design uploaded up front —
-  // unless the order already has an invitation, which already has one.
-  if (needsInvitationDesignUpload(form) && !form.invitationDesignToken) {
+  // Neither design blocks the order any more. The photobooth image can be added
+  // afterwards from the item's attachments, and the invitation image is only
+  // required before the invitations are sent — the invitation screen asks for it
+  // and the backend refuses the send without it.
+  //
+  // An *expired* upload token is still an error: the backend rejects it, so
+  // submitting would fail anyway.
+  if (isInvitationDesignExpired(form)) {
     errors.invitation_design = ar
-      ? 'يجب رفع تصميم الدعوة أولاً'
-      : 'An invitation design must be uploaded first';
+      ? 'انتهت صلاحية رفع تصميم الدعوة، يرجى رفعه مرة أخرى'
+      : 'The invitation design upload expired; upload it again';
   }
 
   const itemDesignErrors: Record<string, string> = {};
   for (const item of form.services) {
-    if (!isPhotoboothService(item)) continue;
-
-    if (item.designToken && isServiceItemDesignExpired(item)) {
+    // Only an item carrying a fresh upload token can be expired, so this needs
+    // no photobooth check of its own.
+    if (isServiceItemDesignExpired(item)) {
       itemDesignErrors[item.id] = ar
         ? 'انتهت صلاحية تصميم الفوتوبوث، يرجى رفعه مرة أخرى'
         : 'The photobooth design has expired; upload it again';
-    } else if (needsServiceItemDesignUpload(item) && !item.designToken) {
-      itemDesignErrors[item.id] = ar
-        ? 'يجب رفع تصميم الفوتوبوث أولاً'
-        : 'A photobooth design must be uploaded first';
     }
   }
   if (Object.keys(itemDesignErrors).length > 0) {
@@ -481,9 +513,9 @@ export function buildCreatePayload(form: FormState): CreateServiceOrderPayload {
   return {
     ...buildBasePayload(form),
     creation_mode: form.creationMode,
-    // Sent only alongside the QR service — the backend rejects it otherwise.
+    // Optional, but only accepted alongside the QR service.
     invitation_design_token:
-      needsInvitationDesignUpload(form) && form.invitationDesignToken
+      canUploadInvitationDesign(form) && form.invitationDesignToken
         ? form.invitationDesignToken
         : undefined,
     is_paid: form.isPaid ? 1 : 0,
@@ -499,9 +531,9 @@ export function buildUpdatePayload(form: FormState): UpdateServiceOrderPayload {
   return {
     ...buildBasePayload(form),
     creation_mode: form.creationMode,
-    // Only when the QR service is being added to an order that has no design.
+    // Optional, and only when QR is being added to an order that has no design.
     invitation_design_token:
-      needsInvitationDesignUpload(form) && form.invitationDesignToken
+      canUploadInvitationDesign(form) && form.invitationDesignToken
         ? form.invitationDesignToken
         : undefined,
   };

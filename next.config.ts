@@ -1,9 +1,20 @@
 import type { NextConfig } from 'next';
 
+import {
+  API_HOSTNAME,
+  API_ORIGIN,
+  API_PROTOCOL,
+} from './lib/api-config';
+
 const isDevelopment = process.env.NODE_ENV === 'development';
 const isProduction = process.env.NODE_ENV === 'production';
 
-const API_ORIGIN = 'https://portal.tanalevents.com';
+/*
+ * The API origin is derived from NEXT_PUBLIC_API_BASE_URL rather than hardcoded,
+ * so repointing the dashboard at another backend updates the CSP and the allowed
+ * image hosts along with it. A mismatch here is invisible at runtime: the browser
+ * blocks the request with no error the app can catch.
+ */
 const NOMINATIM_ORIGIN = 'https://nominatim.openstreetmap.org';
 
 /**
@@ -187,14 +198,14 @@ const nextConfig: NextConfig = {
         pathname: '/**',
       },
       {
-        protocol: 'https',
-        hostname: 'portal.tanalevents.com',
+        protocol: API_PROTOCOL,
+        hostname: API_HOSTNAME,
         port: '',
         pathname: '/storage/images/**',
       },
       {
-        protocol: 'https',
-        hostname: 'portal.tanalevents.com',
+        protocol: API_PROTOCOL,
+        hostname: API_HOSTNAME,
         port: '',
         pathname: '/api/**',
       }

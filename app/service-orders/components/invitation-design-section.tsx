@@ -16,10 +16,14 @@ const ACCEPTED = 'image/png,image/jpeg,image/webp';
 const MAX_BYTES = 10 * 1024 * 1024;
 
 /**
- * The QR/barcode service requires its invitation design to be uploaded *before*
- * the order is created: the upload returns a single-use token that is then sent
- * as `invitation_design_token`. The token expires after roughly an hour, so a
- * long-lived form may need a re-upload before it can be submitted.
+ * Offers the invitation design at order time, as a head start rather than a
+ * requirement: the upload returns a single-use token that is sent as
+ * `invitation_design_token`. Skipping it saves the order all the same, and the
+ * design is then uploaded from the invitation's own screen — it is only needed
+ * before the invitations can be sent.
+ *
+ * The token expires after roughly an hour, so a long-lived form may need a
+ * re-upload before it can be submitted.
  */
 export function InvitationDesignSection({
   form,
@@ -83,7 +87,10 @@ export function InvitationDesignSection({
     <div className="space-y-2 border-t border-secondary/10 pt-4">
       <label className="flex items-center gap-2 text-sm font-medium text-secondary/80">
         <ImageIcon className="w-4 h-4 text-secondary/40" />
-        {t('invitationDesign')} <span className="text-red-500">*</span>
+        {t('invitationDesign')}
+        <span className="text-xs font-normal text-secondary/40">
+          ({t('optional')})
+        </span>
       </label>
       <p className="text-xs text-secondary/45">{t('invitationDesignHint')}</p>
 
