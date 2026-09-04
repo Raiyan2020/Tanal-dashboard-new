@@ -19,11 +19,21 @@ const getStatusBadgeClass = (status: string) => {
       return 'bg-emerald-100 text-emerald-700';
     case 'unpaid':
       return 'bg-orange-100 text-orange-700';
+    case 'partial':
+      return 'bg-amber-100 text-amber-700';
     case 'installments':
       return 'bg-blue-100 text-blue-700';
+    case 'cancelled':
+      return 'bg-red-100 text-red-700';
     default:
       return 'bg-secondary/10 text-secondary/70';
   }
+};
+
+/** Money arrives as a decimal string (`"250.000"`); `null` on older API builds. */
+const toAmount = (value?: string | null) => {
+  const n = Number(value ?? 0);
+  return Number.isFinite(n) ? n : 0;
 };
 
 export function FinancialRecordRow({ item, idx, onClick, language, t }: FinancialRecordRowProps) {
@@ -35,12 +45,17 @@ export function FinancialRecordRow({ item, idx, onClick, language, t }: Financia
         return t('statusUnpaid');
       case 'installments':
         return t('statusInstallments');
+      case 'partial':
+        return t('statusPartial');
       case 'cancelled':
         return t('statusCancelled');
       default:
         return status.toUpperCase();
     }
   };
+
+  const refunded = toAmount(item.refunded_amount);
+  const fmt = (n: number) => n.toLocaleString(language === 'ar' ? 'ar-EG' : 'en-US');
 
   return (
     <motion.div
@@ -77,10 +92,21 @@ export function FinancialRecordRow({ item, idx, onClick, language, t }: Financia
           <span className="text-[10px] font-bold text-secondary/40 whitespace-nowrap uppercase">
             {t('totalAmount')}
           </span>
-          <span className="text-sm font-bold text-primary">
-            {Number(item.amount).toLocaleString(language === 'ar' ? 'ar-EG' : 'en-US')}{' '}
-            {item.currency}
+          <span
+            className={cn(
+              'text-sm font-bold',
+              // A refunded record's total no longer represents money held, so it
+              // is struck through rather than shown as ordinary revenue.
+              refunded > 0 ? 'text-secondary/40 line-through' : 'text-primary',
+            )}
+          >
+            {fmt(toAmount(item.amount))} {item.currency}
           </span>
+          {refunded > 0 && (
+            <span className="text-[10px] font-bold text-red-600 whitespace-nowrap">
+              −{fmt(refunded)} {item.currency} · {t('refundedAmount')}
+            </span>
+          )}
         </div>
       </div>
     </motion.div>

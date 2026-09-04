@@ -29,6 +29,7 @@ import {
   isOrderCancelled,
   isOrderPaid,
 } from './order-list';
+import { endsNextDay } from '@/lib/event-time-slots';
 import { ItemAttachments } from './item-attachments';
 import { LeafletMap } from '@/components/leaflet-map';
 import { buildMapsUrl, toCoord } from '@/lib/map-location';
@@ -424,10 +425,27 @@ export function OrderDetailModal({
                     </h3>
                     <div className="bg-secondary/3 rounded-2xl px-4 py-1">
                       <InfoRow icon={Calendar} label={isAr ? 'التاريخ' : 'Date'} value={formatDate(effectiveOrder.event_date, isAr ? 'ar' : 'en')} />
+                      {/*
+                        An event may legitimately run past midnight, so a bare
+                        "20:00 — 03:00" reads as ending that same morning. The
+                        server states the rollover in `ends_next_day`; the local
+                        computation is the fallback for the list payload, which
+                        omits it.
+                      */}
                       <InfoRow icon={Clock} label={isAr ? 'الوقت' : 'Time'} value={
-                        [effectiveOrder.event_time?.slice(0, 5), effectiveOrder.event_end_time?.slice(0, 5)]
+                        [
+                          effectiveOrder.event_time?.slice(0, 5),
+                          effectiveOrder.event_end_time?.slice(0, 5),
+                        ]
                           .filter(Boolean)
                           .join(' — ')
+                        + ((effectiveOrder.ends_next_day
+                             ?? endsNextDay(
+                                  effectiveOrder.event_time?.slice(0, 5) ?? '',
+                                  effectiveOrder.event_end_time?.slice(0, 5) ?? '',
+                                ))
+                            ? (isAr ? ' (اليوم التالي)' : ' (next day)')
+                            : '')
                       } />
                       {/* "Venue", not "Hall" — the field also holds schools, homes and hotels. */}
                       <InfoRow icon={Briefcase} label={isAr ? 'مكان الحفل' : 'Venue'} value={effectiveOrder.hall_name} />

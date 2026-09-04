@@ -26,11 +26,21 @@ const getStatusBadgeClass = (status: string) => {
       return 'bg-emerald-100 text-emerald-700';
     case 'unpaid':
       return 'bg-orange-100 text-orange-700';
+    case 'partial':
+      return 'bg-amber-100 text-amber-700';
     case 'installments':
       return 'bg-blue-100 text-blue-700';
+    case 'cancelled':
+      return 'bg-red-100 text-red-700';
     default:
       return 'bg-secondary/10 text-secondary/70';
   }
+};
+
+/** Money arrives as a decimal string (`"250.000"`); absent on older API builds. */
+const toAmount = (value?: string | null) => {
+  const n = Number(value ?? 0);
+  return Number.isFinite(n) ? n : 0;
 };
 
 export function FinancialDetailsModal({
@@ -53,12 +63,23 @@ export function FinancialDetailsModal({
         return t('statusUnpaid');
       case 'installments':
         return t('statusInstallments');
+      case 'partial':
+        return t('statusPartial');
       case 'cancelled':
         return t('statusCancelled');
       default:
         return status.toUpperCase();
     }
   };
+
+  // Safe before `record` loads: both read as 0 and the refund block stays hidden.
+  const refunded = toAmount(record?.refunded_amount);
+  // Prefer the server's figure — it is the authority on what was kept — and fall
+  // back to the subtraction for API builds that predate the field.
+  const netReceived =
+    record?.net_amount != null
+      ? toAmount(record.net_amount)
+      : Math.max(0, toAmount(record?.paid_amount) - refunded);
 
   return (
     <AnimatePresence>
@@ -141,6 +162,37 @@ export function FinancialDetailsModal({
                         </span>
                       </div>
                     </div>
+
+                    {/*
+                      Refunds only exist on a cancelled order, and they are paid
+                      out by hand — so the board above still shows what the
+                      client paid, and this restates what the company kept.
+                    */}
+                    {refunded > 0 && (
+                      <div className="p-4 rounded-2xl bg-red-50 border border-red-200/70 space-y-2.5">
+                        <p className="text-xs text-red-800 leading-relaxed">
+                          {t('refundedNotice')}
+                        </p>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="text-center">
+                            <span className="text-[10px] text-red-500/70 font-bold block mb-0.5 uppercase">
+                              {t('refundedAmount')}
+                            </span>
+                            <span className="text-xs sm:text-sm font-bold text-red-600">
+                              −{refunded.toLocaleString()} {record.currency}
+                            </span>
+                          </div>
+                          <div className="text-center border-s border-red-200/70">
+                            <span className="text-[10px] text-red-500/70 font-bold block mb-0.5 uppercase">
+                              {t('netAmount')}
+                            </span>
+                            <span className="text-xs sm:text-sm font-bold text-secondary">
+                              {netReceived.toLocaleString()} {record.currency}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
 
                     {/* Info Details List */}
                     <div className="space-y-4">

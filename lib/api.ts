@@ -713,8 +713,9 @@ export interface InvitationDetailData {
   /** Absent on invitations with no barcode service, and on legacy records. */
   check_in_display?: CheckInDisplay | null;
   /**
-   * Absent until the backend ships the guest-message overrides (BR-12) — the
-   * editor is hidden while it is, rather than saving into a void.
+   * Optional only for resilience: the editor renders either way, falling back to
+   * its own copy of the built-in defaults, so an API build that omits the block
+   * degrades to "showing defaults" rather than to a missing card.
    */
   guest_messages?: InvitationGuestMessages | null;
   /** Public live-attendance screen; same realtime channel as `check_in_display`. */
@@ -1920,6 +1921,19 @@ export interface ApiServiceOrderDetail {
   /** Aliases of event_time / event_end_time. */
   start_time: string;
   end_time: string;
+  /**
+   * Absolute event bounds, resolved server-side in the app timezone. Prefer
+   * these over pairing `event_date` with the bare `HH:mm` times: an event that
+   * ends after midnight rolls `event_ends_at` onto the following date, which is
+   * exactly what the naked times cannot express.
+   *
+   * `ends_next_day` is that rollover as a flag, so a read-only view can label
+   * the end time without re-deriving the operating-day arithmetic. All three are
+   * optional because the list endpoint omits them.
+   */
+  event_starts_at?: string;
+  event_ends_at?: string | null;
+  ends_next_day?: boolean;
   /** Optional — not every event has a named venue. */
   hall_name: string | null;
   location_url: string | null;
@@ -2103,8 +2117,13 @@ export interface ServiceOrderBasePayload {
    * `creation_mode: 'quick'`, where the client supplies it through their form.
    */
   event_end_time?: string;
-  /** Optional only for `creation_mode: 'quick'` — see `event_end_time`. */
-  hall_name?: string;
+  /**
+   * Optional everywhere — plenty of events are at a home or a private address
+   * with no venue name. On update, an explicit `null` *clears* a stored venue,
+   * whereas omitting the key leaves it untouched; send `null` when the admin
+   * empties the field, or the old name survives the edit.
+   */
+  hall_name?: string | null;
   location_url?: string;
   /** Free-text description of the spot on the map (max 500 chars). */
   map_desc?: string;
@@ -2315,13 +2334,31 @@ export async function deleteServiceOrderItemAttachment(
   );
 }
 
+/**
+ * `partial` is written whenever an order is part-paid, and `cancelled` whenever
+ * its order is cancelled or rejected — both are live values, not legacy ones, so
+ * every status renderer must handle all five.
+ */
+export type FinancialRecordStatus =
+  | 'paid'
+  | 'unpaid'
+  | 'partial'
+  | 'installments'
+  | 'cancelled';
+
 export interface ApiFinancialRecordItem {
   id: number;
   reference_number: number;
   reference_code: string;
-  client_id: number;
-  client_name: string;
-  client_phone: string;
+  /**
+   * Null for every record created from a service order — those carry an embedded
+   * client rather than a `clients` row, and the name/phone below are resolved
+   * from the order instead. Only legacy event-backed records have an id.
+   */
+  client_id: number | null;
+  client_name: string | null;
+  /** Digits only, including the country code — e.g. `96550123456`. */
+  client_phone: string | null;
   /** Records are linked to service orders; the event fields persist for legacy rows. */
   service_order_id: number | null;
   service_order_reference: string | null;
@@ -2329,9 +2366,21 @@ export interface ApiFinancialRecordItem {
   event_name?: string | null;
   amount: string;
   paid_amount: string;
+  /**
+   * Money handed back to the client after a cancellation. Refunds happen outside
+   * the system, so this is a record of what was returned, not a transaction.
+   * `"0.000"` on every record that was never cancelled.
+   */
+  refunded_amount?: string;
+  /**
+   * `paid_amount − refunded_amount`, i.e. what the company actually kept. This
+   * is the figure to show as revenue; `paid_amount` alone overstates it for a
+   * cancelled order.
+   */
+  net_amount?: string;
   remaining_amount: string;
   currency: string;
-  status: 'paid' | 'unpaid' | 'installments';
+  status: FinancialRecordStatus;
   record_date: string;
   record_date_label: string;
 }
@@ -2342,13 +2391,18 @@ export interface ApiFinancialRecordDetail {
   reference_code: string;
   amount: string;
   paid_amount: string;
+  /** See `ApiFinancialRecordItem` — refund bookkeeping for a cancelled order. */
+  refunded_amount?: string;
+  net_amount?: string;
+  /** `"0"` on a cancelled record: nothing is owed once the order is off. */
   remaining_amount: string;
   currency: string;
-  status: 'paid' | 'unpaid' | 'installments' | "cancelled";
+  status: FinancialRecordStatus;
   record_date: string;
   notes: string | null;
   client: {
-    id: number;
+    /** Null for an order's embedded client — see `client_id` on the list row. */
+    id: number | null;
     name: string;
     phone: string;
     full_phone: string;
@@ -2361,7 +2415,8 @@ export interface ApiFinancialRecordDetail {
     reference_label: string;
     event_date: string;
     event_time: string;
-    hall_name?: string;
+    /** Optional — not every event has a named venue. */
+    hall_name?: string | null;
     status?: string;
   } | null;
   /** Legacy shape, still returned for pre-migration records. */

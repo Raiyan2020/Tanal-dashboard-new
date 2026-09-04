@@ -654,6 +654,20 @@ export function InvitationDetails({ invitation, onBack, onEdit }: InvitationDeta
   const hasDesign = Boolean(detail?.design.design_url);
   const needsDesign = Boolean(detail) && !hasDesign && !isSent;
 
+  /**
+   * Guest rows, and the figure actually charged against the package allowance.
+   * They differ once companions are on the list: `counted_total` is
+   * `guest_count` plus every companion whose seat was marked as counted, and it
+   * is the number the send endpoint compares to `guests_included`. Comparing the
+   * raw row count instead would show a comfortable "50 / 50" on an invitation
+   * whose send is about to be refused for overage.
+   */
+  const guestRowCount = detail?.details.guest_count ?? invitation.guestsNumber;
+  const companionsCount = detail?.details.companions_count ?? 0;
+  const countedTotal = detail?.details.counted_total ?? guestRowCount;
+  const guestsAllowance = detail?.guests_included ?? invitation.guestsIncluded;
+  const overAllowance = guestsAllowance != null && countedTotal > guestsAllowance;
+
   const unsentGuestCount = detail?.actions.unsent_whatsapp_guests_count;
   // `undefined` means the API does not report the counter — then a plain send is
   // the only thing we can safely offer, so treat it as available.
@@ -1080,18 +1094,23 @@ export function InvitationDetails({ invitation, onBack, onEdit }: InvitationDeta
                             <Users className="w-5 h-5" />
                             <span className="text-sm">{t('numOfGuests')}</span>
                           </div>
-                          <span className="font-medium text-secondary">
-                            {detail?.details.guest_count || invitation.guestsNumber}
+                          <span className="font-medium text-secondary text-end">
+                            {countedTotal}
                             {/* Show the package allowance so overage is visible before sending */}
-                            {(detail?.guests_included ?? invitation.guestsIncluded) != null && (
+                            {guestsAllowance != null && (
                               <span className={cn(
                                 'ms-1.5 text-xs font-bold',
-                                (detail?.details.guest_count || invitation.guestsNumber) >
-                                  (detail?.guests_included ?? invitation.guestsIncluded ?? Infinity)
-                                  ? 'text-amber-600'
-                                  : 'text-secondary/40'
+                                overAllowance ? 'text-amber-600' : 'text-secondary/40'
                               )}>
-                                / {detail?.guests_included ?? invitation.guestsIncluded}
+                                / {guestsAllowance}
+                              </span>
+                            )}
+                            {/* Spell out the split, or the total looks like a miscount. */}
+                            {companionsCount > 0 && (
+                              <span className="block text-[11px] font-normal text-secondary/45 mt-0.5">
+                                {dir === 'rtl'
+                                  ? `${guestRowCount} مدعو + ${companionsCount} مرافق`
+                                  : `${guestRowCount} guests + ${companionsCount} companions`}
                               </span>
                             )}
                           </span>

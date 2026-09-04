@@ -530,6 +530,10 @@ export function buildCreatePayload(form: FormState): CreateServiceOrderPayload {
 export function buildUpdatePayload(form: FormState): UpdateServiceOrderPayload {
   return {
     ...buildBasePayload(form),
+    // Optional fields are omitted when blank, which on an edit means "leave as
+    // is" — right for everything except a venue the admin deliberately cleared.
+    // `null` is the backend's clear signal, so spell it out here.
+    hall_name: trimmed(form.hallName) ?? null,
     creation_mode: form.creationMode,
     // Optional, and only when QR is being added to an order that has no design.
     invitation_design_token:
