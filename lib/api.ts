@@ -667,9 +667,22 @@ export interface InvitationDetailData {
     /**
      * Companion seats across the invitation, and the total charged against the
      * allowance (`guest_count` + counted companions). Both absent until BR-16.
+     *
+     * Since BR-17 the guest picks their own number, so `companions_count` is
+     * the *effective* sum: a guest who has not answered yet still reserves
+     * their full ceiling, which is why `counted_total` can shrink as RSVPs
+     * arrive. Both figures are upper bounds while
+     * `companions_pending_selection` is above zero.
      */
     companions_count?: number;
     counted_total?: number;
+    /** Sum of the admin-set ceilings. Absent until BR-17. */
+    companions_max_total?: number;
+    /**
+     * Guests allowed companions who have not picked a number yet — each still
+     * holds their maximum. Absent until BR-17.
+     */
+    companions_pending_selection?: number;
     /** Null on invitations whose order never set a response logic. */
     logic_type: 'strict_action' | 'default_accept' | 'view_only' | null;
     logic_type_label: string | null;
@@ -741,8 +754,16 @@ export interface InvitationGuest {
    */
   invitation_sent_at?: string | null;
   /**
-   * Extra people arriving on this guest's QR. Absent until the backend ships
-   * companions (BR-16); treat `undefined` as 0.
+   * The ceiling the admin set — the guest may pick 0..this on their invitation
+   * page. Absent until BR-17; fall back to `companions_count`, which is what
+   * the admin's number meant before the guest could choose.
+   */
+  companions_max?: number;
+  /**
+   * Extra people **effectively** arriving on this guest's QR: their own answer
+   * once they gave one, otherwise the reserved ceiling (BR-17). This is the
+   * number the door, the head counts and the allowance all use. Absent until
+   * BR-16; treat `undefined` as 0.
    */
   companions_count?: number;
   /**
@@ -751,12 +772,28 @@ export interface InvitationGuest {
    * through the door; this only decides whether they consume paid seats.
    */
   companions_counted_in_allowance?: boolean;
+  /**
+   * Has the guest picked their own number yet? `false` means
+   * `companions_count` is a reservation ("up to N"), not a confirmed figure.
+   * Absent until BR-17.
+   */
+  companions_selected?: boolean;
+  /** When the guest picked. Non-null also means they can no longer change it. */
+  companions_selected_at?: string | null;
 }
 
-/** PATCH body for one guest's companions. */
+/**
+ * PATCH body for one guest's companion ceiling.
+ *
+ * `companions_max` is the admin's ceiling, not the effective count — the guest
+ * picks that themselves (BR-17). `reset_selection` clears an answer they
+ * already gave so they can choose again; it is the only way to reopen a
+ * locked selection.
+ */
 export interface UpdateGuestCompanionsPayload {
-  companions_count: number;
+  companions_max: number;
   companions_counted_in_allowance: boolean;
+  reset_selection?: boolean;
 }
 
 export interface GetInvitationsParams {
@@ -907,8 +944,12 @@ export async function updateInvitationGuestMessages(
 /**
  * PATCH /admin/invitations/:id/guests/:guestId/companions
  *
- * Sets how many companions share this guest's QR, and whether they count
- * against the package allowance. Returns the updated guest.
+ * Sets the **ceiling** on how many companions may share this guest's QR, and
+ * whether those seats count against the package allowance. The guest picks the
+ * actual number (0..ceiling) on their own invitation page, so this endpoint no
+ * longer decides how many people walk through the door. Returns the updated
+ * guest, whose `companions_count` is either their answer or the reserved
+ * ceiling.
  *
  * Separate from `updateInvitationGuest` because it stays available after the
  * invitation is sent — companions get added as RSVPs come back, long after the
@@ -1066,6 +1107,14 @@ export interface InvitationOverageError {
   guest_count: number;
   guests_included: number;
   requires_confirmation: true;
+  /** Companion seats inside `guest_count`. Absent until BR-16. */
+  companions_count?: number;
+  /**
+   * How much of `guest_count` is still a reservation: guests who may bring
+   * companions but have not picked a number, each counted at their ceiling
+   * (BR-17). Absent until BR-17.
+   */
+  companions_pending_selection?: number;
 }
 
 /** Narrows an ApiError to the guest-overage confirmation case. */

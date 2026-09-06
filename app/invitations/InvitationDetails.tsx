@@ -23,6 +23,7 @@ import { GuestMessagesCard } from './GuestMessagesCard';
 import { GuestCompanionsModal } from './GuestCompanionsModal';
 import { ReplacementSendModal } from './ReplacementSendModal';
 import {
+  ApiError,
   getInvitationById,
   getInvitationGuests,
   deleteInvitationGuest,
@@ -77,9 +78,17 @@ export interface InvitationGuest {
   phone: string;
   status: InvitationGuestStatus;
   have_whatsapp?: boolean;
-  /** Companion seats on this guest's QR. Undefined until the API reports them. */
+  /** The ceiling the admin set; the guest picks 0..this themselves (BR-17). */
+  companions_max?: number;
+  /**
+   * Effective companion seats on this guest's QR: their own answer, or the
+   * reserved ceiling while they have not answered. Undefined until the API
+   * reports them.
+   */
   companions_count?: number;
   companions_counted_in_allowance?: boolean;
+  /** `false` means `companions_count` is still a reservation, not their answer. */
+  companions_selected?: boolean;
 }
 
 interface CheckIn {
@@ -251,6 +260,11 @@ export function InvitationDetails({ invitation, onBack, onEdit }: InvitationDeta
 
   const [detail, setDetail] = useState<InvitationDetailData | null>(null);
   const [detailLoading, setDetailLoading] = useState(true);
+  /**
+   * Why the detail fetch failed, so the page can say so instead of rendering an
+   * empty shell behind a toast that has already faded. Cleared on success.
+   */
+  const [detailError, setDetailError] = useState<string | null>(null);
 
   // Design replacement (hover overlay on the design card)
   const designInputRef = useRef<HTMLInputElement>(null);
@@ -320,12 +334,19 @@ export function InvitationDetails({ invitation, onBack, onEdit }: InvitationDeta
     try {
       const res = await getInvitationById(Number(invitation.id), token);
       setDetail(res.data);
+      setDetailError(null);
     } catch (err) {
-      toast.error((err as Error).message || 'حدث خطأ أثناء تحميل تفاصيل الدعوة');
+      const message = (err as Error).message || t('invitationLoadFailedMessage');
+      // The HTTP status is the one thing that tells an admin (or the backend
+      // dev they forward this to) whether it is permissions, a missing record
+      // or a server fault — the API's generic Arabic message does not.
+      const status = err instanceof ApiError ? err.status : undefined;
+      setDetailError(status ? `${message} (${status})` : message);
+      toast.error(message);
     } finally {
       if (showLoader) setDetailLoading(false);
     }
-  }, [token, invitation.id]);
+  }, [token, invitation.id, t]);
 
   // Fetch full details
   useEffect(() => {
@@ -583,8 +604,10 @@ export function InvitationDetails({ invitation, onBack, onEdit }: InvitationDeta
         phone: g.full_phone,
         status: (g.status === 'rejected' ? 'declined' : g.status) as any,
         have_whatsapp: g.have_whatsapp,
+        companions_max: g.companions_max,
         companions_count: g.companions_count,
         companions_counted_in_allowance: g.companions_counted_in_allowance,
+        companions_selected: g.companions_selected,
       }));
 
       setGuests(mapped);
@@ -665,6 +688,13 @@ export function InvitationDetails({ invitation, onBack, onEdit }: InvitationDeta
   const guestRowCount = detail?.details.guest_count ?? invitation.guestsNumber;
   const companionsCount = detail?.details.companions_count ?? 0;
   const countedTotal = detail?.details.counted_total ?? guestRowCount;
+  /**
+   * Guests who may bring companions but have not picked a number — each still
+   * holds their ceiling, so every total above is an upper bound while this is
+   * above zero (BR-17, D2). Saying so is the difference between a number the
+   * admin trusts and one they report as a bug.
+   */
+  const companionsPending = detail?.details.companions_pending_selection ?? 0;
   const guestsAllowance = detail?.guests_included ?? invitation.guestsIncluded;
   const overAllowance = guestsAllowance != null && countedTotal > guestsAllowance;
 
@@ -682,6 +712,38 @@ export function InvitationDetails({ invitation, onBack, onEdit }: InvitationDeta
     return (
       <div className="flex justify-center items-center py-32">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  // Nothing loaded and the request failed: render the reason and a way out.
+  // Falling through would draw the whole page with every field empty, which
+  // reads as "this invitation is blank" rather than "the request failed".
+  if (detailError && !detail) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 px-6 text-center">
+        <span className="w-16 h-16 rounded-3xl bg-red-50 text-red-500 flex items-center justify-center mb-5">
+          <AlertCircle className="w-8 h-8" />
+        </span>
+        <h2 className="text-xl font-semibold text-secondary mb-2">
+          {t('invitationLoadFailedTitle')}
+        </h2>
+        <p className="text-sm text-secondary/55 max-w-sm leading-relaxed mb-6">{detailError}</p>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => refreshDetails(true)}
+            className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-primary text-white text-sm font-medium hover:bg-primary/90 transition-colors cursor-pointer shadow-md shadow-primary/20"
+          >
+            <RefreshCw className="w-4 h-4" />
+            {t('retry')}
+          </button>
+          <button
+            onClick={onBack}
+            className="px-5 py-3 rounded-xl bg-white/60 border border-secondary/15 text-secondary/70 text-sm font-medium hover:bg-white transition-colors cursor-pointer"
+          >
+            {t('back')}
+          </button>
+        </div>
       </div>
     );
   }
@@ -1113,6 +1175,13 @@ export function InvitationDetails({ invitation, onBack, onEdit }: InvitationDeta
                                   : `${guestRowCount} guests + ${companionsCount} companions`}
                               </span>
                             )}
+                            {/* The total holds every unanswered guest's ceiling, so it
+                                can only fall as RSVPs land — say it, or it reads wrong. */}
+                            {companionsPending > 0 && (
+                              <span className="block text-[11px] font-normal text-amber-600/80 mt-0.5 max-w-[220px] text-start">
+                                {t('companionsPendingSelection').replace('{count}', String(companionsPending))}
+                              </span>
+                            )}
                           </span>
                         </div>
                         {/* Logic row — compact inline picker in read-only mode */}
@@ -1468,25 +1537,43 @@ export function InvitationDetails({ invitation, onBack, onEdit }: InvitationDeta
                               <div className="flex items-center gap-2">
                                 <span className="font-semibold text-secondary">{guest.name}</span>
                                 {/* Companions ride this guest's QR, so they belong on
-                                    the row rather than behind the modal. */}
-                                {(guest.companions_count ?? 0) > 0 && (
-                                  <span
-                                    title={
-                                      guest.companions_counted_in_allowance === false
-                                        ? t('companionsNotCountedShort')
-                                        : t('companionsCountedShort')
-                                    }
-                                    className={cn(
-                                      'inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-semibold',
-                                      guest.companions_counted_in_allowance === false
-                                        ? 'bg-secondary/8 text-secondary/55'
-                                        : 'bg-primary/10 text-primary'
-                                    )}
-                                  >
-                                    <Users className="w-3 h-3" />
-                                    +{guest.companions_count}
-                                  </span>
-                                )}
+                                    the row rather than behind the modal. A dashed
+                                    outline marks a ceiling the guest has not answered
+                                    yet — "+3" and "up to 3" are different facts. */}
+                                {(() => {
+                                  const ceiling = guest.companions_max ?? guest.companions_count ?? 0;
+                                  if (ceiling <= 0) return null;
+
+                                  const picked = guest.companions_selected === true;
+                                  const notCounted = guest.companions_counted_in_allowance === false;
+                                  const allowanceHint = notCounted
+                                    ? t('companionsNotCountedShort')
+                                    : t('companionsCountedShort');
+
+                                  return (
+                                    <span
+                                      title={`${
+                                        picked
+                                          ? t('companionsChoseOf')
+                                              .replace('{count}', String(guest.companions_count ?? 0))
+                                              .replace('{max}', String(ceiling))
+                                          : t('companionsGuestPending')
+                                      } · ${allowanceHint}`}
+                                      className={cn(
+                                        'inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-semibold',
+                                        notCounted
+                                          ? 'bg-secondary/8 text-secondary/55'
+                                          : 'bg-primary/10 text-primary',
+                                        !picked && 'border border-dashed border-current/40 bg-transparent'
+                                      )}
+                                    >
+                                      <Users className="w-3 h-3" />
+                                      {picked
+                                        ? `+${guest.companions_count ?? 0}`
+                                        : t('companionsUpTo').replace('{count}', String(ceiling))}
+                                    </span>
+                                  );
+                                })()}
                               </div>
                               <span className="text-secondary/60 text-sm" dir="ltr" style={{ textAlign: dir === 'rtl' ? 'right' : 'left' }}>{guest.phone}</span>
                             </div>
@@ -1665,9 +1752,19 @@ export function InvitationDetails({ invitation, onBack, onEdit }: InvitationDeta
         onClose={() => { setOverageInfo(null); setPendingGuestIds(null); }}
         onConfirm={() => handleSendInvitation({ forceOverage: true, guestIds: pendingGuestIds ?? undefined })}
         title={t('guestLimitExceeded')}
-        message={t('guestLimitExceededMessage')
-          .replace('{count}', String(overageInfo?.guest_count ?? ''))
-          .replace('{included}', String(overageInfo?.guests_included ?? ''))}
+        message={
+          t('guestLimitExceededMessage')
+            .replace('{count}', String(overageInfo?.guest_count ?? ''))
+            .replace('{included}', String(overageInfo?.guests_included ?? '')) +
+          // The refused total counts every unanswered guest at their ceiling, so
+          // without this the admin is asked to approve a number they cannot explain.
+          ((overageInfo?.companions_pending_selection ?? 0) > 0
+            ? t('guestLimitExceededPendingNote').replace(
+                '{count}',
+                String(overageInfo?.companions_pending_selection ?? ''),
+              )
+            : '')
+        }
         confirmLabel={t('sendAnyway')}
         confirmColor="bg-amber-500 hover:bg-amber-600"
       />

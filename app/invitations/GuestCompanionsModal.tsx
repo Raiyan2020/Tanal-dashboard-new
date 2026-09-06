@@ -16,8 +16,13 @@ import { updateInvitationGuestCompanions, ApiError } from '@/lib/api';
 export interface CompanionsGuest {
   id: string | number;
   name: string;
+  /** The admin-set ceiling. Falls back to `companions_count` on pre-BR-17 API builds. */
+  companions_max?: number;
+  /** Effective seats: the guest's own answer, or the reserved ceiling. */
   companions_count?: number;
   companions_counted_in_allowance?: boolean;
+  /** Has the guest picked their number yet? */
+  companions_selected?: boolean;
 }
 
 interface GuestCompanionsModalProps {
@@ -38,13 +43,19 @@ const inputClass =
   'w-full px-4 py-3 rounded-xl bg-white/60 border border-secondary/15 focus:border-primary/50 focus:ring-2 focus:ring-primary/20 outline-none text-secondary text-sm';
 
 /**
- * Sets how many companions arrive on one guest's QR, and whether they count
- * against the event's paid guest allowance.
+ * Sets the **maximum** number of companions one guest may bring, and whether
+ * those seats count against the event's paid guest allowance.
  *
- * The two are deliberately separate: companions always walk through the door
- * with the guest (so the venue headcount includes them), but whether they are
- * *billed* against `guests_included` is the admin's call — some are absorbed as
- * a courtesy. Hence the toggle rather than a single number.
+ * The guest picks the actual number (0..max) on their own invitation page, so
+ * this modal no longer decides how many people arrive — it decides how many
+ * they are *allowed* to bring. Until they answer, the full ceiling stays
+ * reserved against the allowance, which is why the projection below can read
+ * higher than the event will end up being.
+ *
+ * The allowance toggle is separate on purpose: companions always walk through
+ * the door with the guest (so the venue headcount includes them), but whether
+ * they are *billed* against `guests_included` is the admin's call — some are
+ * absorbed as a courtesy.
  */
 export function GuestCompanionsModal({
   invitationId,
@@ -58,10 +69,18 @@ export function GuestCompanionsModal({
   const { t, language } = useLanguage();
   const isAr = language === 'ar';
 
-  const [count, setCount] = useState(guest.companions_count ?? 0);
+  /** The guest's own answer, if they gave one. */
+  const hasChosen = guest.companions_selected === true;
+  const chosen = guest.companions_count ?? 0;
+
+  // Pre-BR-17 builds report no ceiling; the admin's old number was the ceiling
+  // in all but name, so it is the right seed.
+  const [max, setMax] = useState(guest.companions_max ?? guest.companions_count ?? 0);
   const [counted, setCounted] = useState(
     guest.companions_counted_in_allowance ?? true,
   );
+  /** Let the guest choose again — the only way past the one-shot lock. */
+  const [resetSelection, setResetSelection] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -75,12 +94,23 @@ export function GuestCompanionsModal({
   }, [onClose]);
 
   /**
+   * Seats this guest would hold after saving: their own answer while it still
+   * stands, otherwise the reserved ceiling. Mirrors `applyCompanionsMax` on the
+   * backend so the readout cannot disagree with what gets stored.
+   */
+  const effective = hasChosen && !resetSelection ? Math.min(chosen, max) : max;
+  /** The saved answer is about to be trimmed because the ceiling dropped under it. */
+  const clampsChoice = hasChosen && !resetSelection && chosen > max;
+  /** The projected seats are a reservation, not a confirmed figure. */
+  const isReservation = (!hasChosen || resetSelection) && max > 0;
+
+  /**
    * What the invitation would total against the allowance if this were saved:
-   * everyone else's counted seats, plus this guest, plus their companions when
-   * the toggle is on.
+   * everyone else's counted seats, plus this guest, plus their companion seats
+   * when the toggle is on.
    */
   const projectedTotal =
-    countedElsewhere == null ? null : countedElsewhere + 1 + (counted ? count : 0);
+    countedElsewhere == null ? null : countedElsewhere + 1 + (counted ? effective : 0);
   const overflows =
     projectedTotal != null && guestsIncluded != null && projectedTotal > guestsIncluded;
 
@@ -98,10 +128,13 @@ export function GuestCompanionsModal({
         invitationId,
         Number(guest.id),
         {
-          companions_count: count,
+          companions_max: max,
           // Meaningless with no companions, but sent anyway so the stored flag
           // matches what the admin last chose if they add some later.
           companions_counted_in_allowance: counted,
+          // Only sent when it means something — the guest has an answer on
+          // record that the admin is deliberately clearing.
+          ...(hasChosen && resetSelection ? { reset_selection: true } : {}),
         },
         token,
       );
@@ -110,7 +143,7 @@ export function GuestCompanionsModal({
       onClose();
     } catch (err) {
       if (err instanceof ApiError) {
-        setError(err.fieldError('companions_count') ?? null);
+        setError(err.fieldError('companions_max') ?? err.fieldError('companions_count') ?? null);
       }
       toast.error((err as Error).message || t('companionsSaveFailed'));
     } finally {
@@ -140,19 +173,43 @@ export function GuestCompanionsModal({
         </div>
 
         <p className="text-xs text-secondary/50 leading-relaxed mb-5">
-          {t('companionsHint')}
+          {t('companionsMaxHint')}
         </p>
+
+        {/* Where this guest stands: their own answer, or still pending. */}
+        {max > 0 && (
+          <div
+            className={cn(
+              'flex items-start gap-2.5 p-3 rounded-2xl border mb-5',
+              hasChosen
+                ? 'bg-primary/5 border-primary/25'
+                : 'bg-white/40 border-secondary/10',
+            )}
+          >
+            <Users
+              className={cn(
+                'w-4 h-4 shrink-0 mt-0.5',
+                hasChosen ? 'text-primary' : 'text-secondary/40',
+              )}
+            />
+            <p className="text-xs leading-relaxed text-secondary/70">
+              {hasChosen
+                ? t('companionsGuestChose').replace('{count}', String(chosen))
+                : t('companionsGuestPending')}
+            </p>
+          </div>
+        )}
 
         <form onSubmit={submit} className="space-y-5">
           <div className="space-y-1.5">
             <label className="text-sm font-medium text-secondary/80">
-              {t('companionsCount')}
+              {t('companionsMax')}
             </label>
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => setCount(c => clamp(c - 1))}
-                disabled={count <= 0}
+                onClick={() => setMax(c => clamp(c - 1))}
+                disabled={max <= 0}
                 className="w-11 h-11 shrink-0 rounded-xl bg-white/60 border border-secondary/15 text-secondary/70 text-lg font-medium hover:bg-white transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 −
@@ -162,24 +219,32 @@ export function GuestCompanionsModal({
                 inputMode="numeric"
                 min={0}
                 max={MAX_COMPANIONS}
-                value={count}
-                onChange={e => setCount(clamp(Number(e.target.value)))}
+                value={max}
+                onChange={e => setMax(clamp(Number(e.target.value)))}
                 className={`${inputClass} text-center font-mono`}
               />
               <button
                 type="button"
-                onClick={() => setCount(c => clamp(c + 1))}
-                disabled={count >= MAX_COMPANIONS}
+                onClick={() => setMax(c => clamp(c + 1))}
+                disabled={max >= MAX_COMPANIONS}
                 className="w-11 h-11 shrink-0 rounded-xl bg-white/60 border border-secondary/15 text-secondary/70 text-lg font-medium hover:bg-white transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 +
               </button>
             </div>
             {error && <p className="text-xs text-red-500">{error}</p>}
+            {/* Dropping the ceiling under a saved answer trims it — say so before saving. */}
+            {clampsChoice && (
+              <p className="text-xs text-amber-700">
+                {t('companionsClampsChoice')
+                  .replace('{from}', String(chosen))
+                  .replace('{to}', String(max))}
+              </p>
+            )}
           </div>
 
-          {/* The allowance toggle — only meaningful once there is a companion. */}
-          {count > 0 && (
+          {/* The allowance toggle — only meaningful once companions are allowed. */}
+          {max > 0 && (
             <label
               className={cn(
                 'flex items-start gap-3 p-3.5 rounded-2xl border cursor-pointer transition-colors',
@@ -200,6 +265,33 @@ export function GuestCompanionsModal({
                 </span>
                 <span className="block text-xs text-secondary/55 mt-0.5 leading-relaxed">
                   {t('companionsCountedHint')}
+                </span>
+              </span>
+            </label>
+          )}
+
+          {/* Reopening a locked answer — only offered when there is one. */}
+          {hasChosen && (
+            <label
+              className={cn(
+                'flex items-start gap-3 p-3.5 rounded-2xl border cursor-pointer transition-colors',
+                resetSelection
+                  ? 'border-amber-300 bg-amber-50'
+                  : 'border-secondary/15 bg-white/50 hover:bg-white/80',
+              )}
+            >
+              <input
+                type="checkbox"
+                checked={resetSelection}
+                onChange={e => setResetSelection(e.target.checked)}
+                className="mt-0.5 w-4 h-4 shrink-0 accent-primary"
+              />
+              <span>
+                <span className="block text-sm font-medium text-secondary">
+                  {t('companionsAllowReselect')}
+                </span>
+                <span className="block text-xs text-secondary/55 mt-0.5 leading-relaxed">
+                  {t('companionsAllowReselectHint')}
                 </span>
               </span>
             </label>
@@ -235,6 +327,13 @@ export function GuestCompanionsModal({
                     {isAr ? ` من ${guestsIncluded}` : ` of ${guestsIncluded}`}
                     {overflows && (isAr ? ' — تجاوز العدد المتاح' : ' — over the allowance')}
                   </>
+                )}
+                {/* The ceiling is held until the guest answers, so this is an
+                    upper bound — without saying so, the number reads as final. */}
+                {isReservation && (
+                  <span className="block mt-1 text-secondary/50">
+                    {t('companionsReservedNote').replace('{count}', String(max))}
+                  </span>
                 )}
               </p>
             </div>
