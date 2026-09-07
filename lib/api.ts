@@ -306,7 +306,88 @@ export interface DashboardStats {
   total_service_orders: DashboardStat;
   upcoming_service_orders: DashboardStat;
   monthly_revenue: DashboardStat;
+  /** Number of QR scans today — use only when the UI means scans, not people. */
   today_scans: DashboardStat;
+  /**
+   * People-oriented today counter (companion-aware handover, 2026-09-07):
+   * one guest QR admits the guest plus every companion attached to them, so
+   * `value = guest_records + companions` and the backend never records a
+   * partial companion arrival. Optional until the backend ships it —
+   * `resolveTodayArrivals` falls back to `today_scans` meanwhile.
+   */
+  today_arrivals?: DashboardTodayArrivals;
+  /**
+   * Global expected attendance for sent invitations, excluding rejected
+   * guests and their companions. The main attendance UI must use `people`;
+   * `guest_records` / `companions` are for breakdowns only. Optional until
+   * the backend ships it — there is no old key to fall back to, so the UI
+   * simply hides the card until the API provides it.
+   */
+  attendance_overview?: DashboardAttendanceOverview;
+}
+
+/**
+ * `stats.today_arrivals` — people who arrived today, companions included:
+ * `value = guest_records + companions` (BR-16).
+ */
+export interface DashboardTodayArrivals extends DashboardStat {
+  /** Scanned guest QR records behind `value` — one per scan. */
+  guest_records: number;
+  /** Companions admitted by those scans. */
+  companions: number;
+}
+
+/** One `attendance_overview` bucket: expected vs. already at the venue. */
+export interface DashboardAttendanceBucket {
+  total: number;
+  checked_in: number;
+  remaining: number;
+}
+
+/** `stats.attendance_overview` shape — use `people` for the main figure. */
+export interface DashboardAttendanceOverview {
+  guest_records: DashboardAttendanceBucket;
+  companions: DashboardAttendanceBucket;
+  people: DashboardAttendanceBucket;
+}
+
+export interface ResolvedTodayArrivals {
+  value: number;
+  growth: number;
+  trend: 'up' | 'down';
+  /** Present only when the API already reports the breakdown. */
+  guest_records?: number;
+  companions?: number;
+  /** True when derived from `today_scans` (API predates `today_arrivals`). */
+  fromTodayScans: boolean;
+}
+
+/**
+ * People who arrived today (guests + companions) for the dashboard's arrival
+ * card. `today_arrivals` is consumed verbatim — the frontend never recomputes
+ * companions or adds +1. Falls back to `today_scans` so the card still renders
+ * while the frontend deploys before the backend: before companions existed one
+ * scan admitted exactly one person, making the scan count the closest
+ * available approximation.
+ */
+export function resolveTodayArrivals(stats: DashboardStats): ResolvedTodayArrivals {
+  const arrivals = stats.today_arrivals;
+  if (arrivals) {
+    return {
+      value: arrivals.value,
+      growth: arrivals.growth,
+      trend: arrivals.trend,
+      guest_records: arrivals.guest_records,
+      companions: arrivals.companions,
+      fromTodayScans: false,
+    };
+  }
+  return {
+    value: stats.today_scans.value,
+    growth: stats.today_scans.growth,
+    trend: stats.today_scans.trend,
+    fromTodayScans: true,
+  };
 }
 
 export interface DashboardRevenueChart {

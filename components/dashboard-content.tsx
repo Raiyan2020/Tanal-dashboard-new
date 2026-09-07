@@ -8,16 +8,33 @@ import {
   CalendarHeart,
   HandCoins,
   QrCode,
+  UserCheck,
+  ClipboardCheck,
   UsersRound,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  type LucideIcon
 } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { cn } from '@/lib/utils';
-import { getDashboardData, parseAmount, type DashboardData } from '@/lib/api';
+import { getDashboardData, parseAmount, resolveTodayArrivals, type DashboardData } from '@/lib/api';
 import { getToken, getPermissions } from '@/lib/auth';
 
 type Period = 'this_year' | 'this_month' | 'last_12_months' | 'last_6months' | 'all_time';
+
+/** One card of the dashboard stats grid. */
+type DashboardStatEntry = {
+  title: string;
+  value: string;
+  icon: LucideIcon;
+  /** Growth badge; omitted when the metric has no period comparison. */
+  change?: string;
+  isPositive?: boolean;
+  onClick?: () => void;
+  financeOnly: boolean;
+  /** Guest/companion breakdown rendered under the main figure. */
+  subtitle?: string;
+};
 
 export function DashboardContent({
   onNavigate,
@@ -66,7 +83,16 @@ export function DashboardContent({
     fetchDashboard(period);
   }, [period, fetchDashboard]);
 
-  const stats = data ? [
+  // People-oriented counters (companion-aware statistics handover, 2026-09-07):
+  // the arrival card counts heads — guests plus the companions their QR
+  // admitted — not scans; `today_scans` is kept only as the pre-companions
+  // fallback while the backend ships. The overview uses
+  // `attendance_overview.people` with the guest/companion buckets as a
+  // breakdown. Backend totals are consumed verbatim — never +1 here.
+  const arrivals = data ? resolveTodayArrivals(data.stats) : null;
+  const attendanceOverview = data?.stats.attendance_overview ?? null;
+
+  const stats: DashboardStatEntry[] = data && arrivals ? [
     {
       title: 'totalServiceOrders',
       value: data.stats.total_service_orders.value.toLocaleString(),
@@ -94,13 +120,30 @@ export function DashboardContent({
       financeOnly: true,
     },
     {
-      title: 'qrCheckInsToday',
-      value: data.stats.today_scans.value.toLocaleString(),
-      icon: QrCode,
-      change: `${data.stats.today_scans.growth >= 0 ? '+' : ''}${data.stats.today_scans.growth}%`,
-      isPositive: data.stats.today_scans.trend === 'up',
+      title: 'todayArrivals',
+      value: arrivals.value.toLocaleString(),
+      icon: UserCheck,
+      change: `${arrivals.growth >= 0 ? '+' : ''}${arrivals.growth}%`,
+      isPositive: arrivals.trend === 'up',
       financeOnly: false,
+      subtitle:
+        arrivals.guest_records !== undefined && arrivals.companions !== undefined
+          ? `${arrivals.guest_records} ${t('guests')} + ${arrivals.companions} ${t('companions')}`
+          : undefined,
     },
+    ...(attendanceOverview
+      ? [
+          {
+            title: 'attendanceOverview',
+            value: `${attendanceOverview.people.checked_in.toLocaleString()} / ${attendanceOverview.people.total.toLocaleString()}`,
+            icon: ClipboardCheck,
+            financeOnly: false,
+            subtitle:
+              `${t('remaining')}: ${attendanceOverview.people.remaining} · ` +
+              `${attendanceOverview.guest_records.checked_in} ${t('guests')} + ${attendanceOverview.companions.checked_in} ${t('companions')}`,
+          },
+        ]
+      : []),
   ].filter(s => !s.financeOnly || hasFinanceAccess) : [];
 
   const statCardsVariants: any = {
@@ -185,8 +228,9 @@ export function DashboardContent({
         </div>
       </div>
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
+      {/* Stats Grid — one column wider while the attendance overview card is
+          rendered (it only exists once the backend serves the new key). */}
+      <div className={cn('grid grid-cols-2 gap-4 lg:gap-6', attendanceOverview ? 'lg:grid-cols-5' : 'lg:grid-cols-4')}>
         {stats.map((stat, i) => (
           <motion.div
             key={i}
@@ -195,7 +239,10 @@ export function DashboardContent({
             animate="visible"
             variants={statCardsVariants}
             onClick={stat.onClick}
-            className="p-4 sm:p-6 rounded-3xl glass-panel relative overflow-hidden group hover:-translate-y-1 transition-transform duration-300 h-[130px] sm:h-[160px] flex flex-col justify-between cursor-pointer"
+            className={cn(
+              'p-4 sm:p-6 rounded-3xl glass-panel relative overflow-hidden group hover:-translate-y-1 transition-transform duration-300 flex flex-col justify-between cursor-pointer',
+              stat.subtitle ? 'h-[150px] sm:h-[185px]' : 'h-[130px] sm:h-[160px]'
+            )}
           >
             <div className="absolute top-0 right-0 p-4 -mr-4 -mt-4 opacity-5 group-hover:opacity-10 transition-opacity pointer-events-none">
               <stat.icon className="w-24 h-24 text-primary" />
@@ -207,10 +254,17 @@ export function DashboardContent({
               <p className="text-secondary/70 text-xs sm:text-sm font-medium truncate">{t(stat.title as any)}</p>
               <div className="flex items-center sm:items-baseline gap-1.5 sm:gap-2 mt-0.5 sm:mt-1 flex-nowrap overflow-hidden">
                 <h3 className={cn("font-semibold text-secondary leading-none truncate min-w-0 flex-shrink", stat.value.length > 7 ? "text-base sm:text-lg" : "text-xl sm:text-3xl")}>{stat.value}</h3>
-                <span className={cn("text-[10px] sm:text-xs font-medium px-1.5 sm:px-2 py-0.5 rounded-full shrink-0", stat.isPositive ? "bg-emerald-100/50 text-emerald-700" : "bg-red-100/50 text-red-700")}>
-                  {stat.change}
-                </span>
+                {stat.change && (
+                  <span className={cn("text-[10px] sm:text-xs font-medium px-1.5 sm:px-2 py-0.5 rounded-full shrink-0", stat.isPositive ? "bg-emerald-100/50 text-emerald-700" : "bg-red-100/50 text-red-700")}>
+                    {stat.change}
+                  </span>
+                )}
               </div>
+              {stat.subtitle && (
+                <p className="text-[10px] sm:text-xs text-secondary/50 font-medium truncate mt-1">
+                  {stat.subtitle}
+                </p>
+              )}
             </div>
           </motion.div>
         ))}
