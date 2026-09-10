@@ -339,9 +339,18 @@ export function validateOrderForm(form: FormState, language: 'ar' | 'en'): Order
         break;
     }
   }
-  // The venue is optional: events run in homes, schools and hotels, and many are
-  // identified by the map pin and address rather than by a venue name. The
-  // backend may still reject it on length, which surfaces via `hall_name`.
+  // Event name — hidden in quick mode (the client fills it in later via their
+  // own form), so it is only required once the full details are being entered.
+  if (!quick) {
+    const eventName = form.hallName.trim();
+    if (!eventName) {
+      errors.hall_name = ar ? 'اسم المناسبة مطلوب' : 'Event name is required';
+    } else if (eventName.length < 3) {
+      errors.hall_name = ar
+        ? 'اسم المناسبة يجب أن يكون 3 أحرف على الأقل'
+        : 'Event name must be at least 3 characters';
+    }
+  }
 
   if (form.services.length === 0 || form.services.some(s => !s.serviceId)) {
     errors.items = ar ? 'يجب اختيار خدمة واحدة على الأقل' : 'At least one service is required';

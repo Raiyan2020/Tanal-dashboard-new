@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Calendar, Clock, MapPin } from 'lucide-react';
+import { Book, Calendar, Clock, MapPin } from 'lucide-react';
 import { useLanguage } from '@/lib/i18n';
 import { DayPicker } from '@daypicker/react';
 import '@daypicker/react/dist/style.css';
@@ -148,6 +148,26 @@ export function EventDetailsSection({
   return (
     <>
       {/* Date */}
+       {quick ? null : (
+      <>
+      <div className="space-y-1.5">
+        <label className="flex items-center gap-2 text-sm font-medium text-secondary/80">
+          <Book className="w-4 h-4 text-secondary/40" />
+          {t('eventName')} <span className="text-red-500">*</span>
+        </label>
+        <input
+          type="text"
+          required
+          minLength={3}
+          placeholder={t('eventNamePlaceholder')}
+          value={form.hallName}
+          onChange={e => setForm({ ...form, hallName: e.target.value })}
+          className={inputClass}
+        />
+        {errors.hall_name && <p className={errorText}>{errors.hall_name}</p>}
+      </div>
+      </>
+      )}
       <div className="grid grid-cols-1 gap-4">
         {/* Date — DayPicker dropdown */}
         <div className="space-y-1.5">
@@ -276,7 +296,7 @@ export function EventDetailsSection({
         <p className="flex items-center gap-1.5 text-xs text-secondary/60 -mt-2">
           <Clock className="w-3.5 h-3.5 shrink-0 text-primary/60" />
           {language === 'ar'
-            ? `يمتد الحفل بعد منتصف الليل وينتهي في ${endDateLabel}`
+            ? `يمتد المناسية بعد منتصف الليل وينتهي في ${endDateLabel}`
             : `Runs past midnight and ends on ${endDateLabel}`}
         </p>
       )}
@@ -284,29 +304,7 @@ export function EventDetailsSection({
       {/* Hall + address — quick mode defers all of this to the client's form */}
       {quick ? null : (
       <>
-      {/*
-        Venue — optional, and named "venue" rather than "hall": events run in
-        schools, homes and hotels as well as wedding halls, and plenty of them
-        are located by the map pin and address below instead of by a venue name.
-      */}
-      <div className="space-y-1.5">
-        <label className="flex items-center gap-2 text-sm font-medium text-secondary/80">
-          <MapPin className="w-4 h-4 text-secondary/40" />
-          {t('eventVenue') || 'Event Venue'}
-          <span className="text-xs font-normal text-secondary/40">
-            ({t('optional') || 'Optional'})
-          </span>
-        </label>
-        <input
-          type="text"
-          placeholder={t('eventVenuePlaceholder') || 'Wedding hall, hotel, school, home…'}
-          value={form.hallName}
-          onChange={e => setForm({ ...form, hallName: e.target.value })}
-          className={inputClass}
-        />
-        {errors.hall_name && <p className={errorText}>{errors.hall_name}</p>}
-      </div>
-
+   
       {/* Hall location — pin, description and link */}
       <MapLocationPicker
         value={{
@@ -409,7 +407,7 @@ export function EventDetailsSection({
             rows={2}
             placeholder={
               language === 'ar'
-                ? 'يرجى وصول الفريق قبل ساعة من بدء الحفل'
+                ? 'يرجى وصول الفريق قبل ساعة من بدء المناسية'
                 : 'Team should arrive an hour before the event starts'
             }
             value={form.executionNotes}

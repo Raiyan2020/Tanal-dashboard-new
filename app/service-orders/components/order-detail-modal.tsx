@@ -448,7 +448,7 @@ export function OrderDetailModal({
                             : '')
                       } />
                       {/* "Venue", not "Hall" — the field also holds schools, homes and hotels. */}
-                      <InfoRow icon={Briefcase} label={isAr ? 'مكان الحفل' : 'Venue'} value={effectiveOrder.hall_name} />
+                      <InfoRow icon={Briefcase} label={isAr ? 'مكان المناسية' : 'Venue'} value={effectiveOrder.hall_name} />
                       {effectiveOrder.location_url && (
                         <InfoRow icon={MapPin} label={isAr ? 'الموقع' : 'Location'} value={
                           <a href={effectiveOrder.location_url} target="_blank" rel="noreferrer"

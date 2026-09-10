@@ -182,7 +182,7 @@ export function MapLocationPicker({ value, onChange }: MapLocationPickerProps) {
       <div className="flex items-center justify-between gap-2">
         <label className="flex items-center gap-2 text-sm font-medium text-secondary/80">
           <MapPin className="w-4 h-4 text-secondary/40" />
-          {ar ? 'موقع مكان الحفل على الخريطة' : 'Event Location on Map'}
+          {ar ? 'موقع مكان المناسية على الخريطة' : 'Event Location on Map'}
         </label>
         <div className="flex items-center gap-1.5">
           <button
