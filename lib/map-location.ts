@@ -80,6 +80,7 @@ export function parseLatLng(input: string): LatLng | null {
  * under that, and results must be credited to OpenStreetMap in the UI.
  */
 const NOMINATIM_SEARCH_URL = 'https://nominatim.openstreetmap.org/search';
+const NOMINATIM_REVERSE_URL = 'https://nominatim.openstreetmap.org/reverse';
 
 /**
  * The area to prefer, roughly Kuwait. Sent unbounded so an address abroad is
@@ -146,4 +147,32 @@ export async function searchPlaces(
   // Stable partition: local hits first, each group keeping the geocoder's own
   // relevance order.
   return [...places.filter(isNearby), ...places.filter(place => !isNearby(place))];
+}
+
+/** Resolves a point picked directly on the map into a human-readable address. */
+export async function reverseGeocodePlace(
+  point: LatLng,
+  options: { language?: 'ar' | 'en'; signal?: AbortSignal } = {},
+): Promise<string | null> {
+  const { language = 'en', signal } = options;
+  const params = new URLSearchParams({
+    lat: String(point.lat),
+    lon: String(point.lng),
+    format: 'jsonv2',
+    zoom: '18',
+    addressdetails: '0',
+    'accept-language': language === 'ar' ? 'ar' : 'en',
+  });
+
+  const response = await fetch(`${NOMINATIM_REVERSE_URL}?${params.toString()}`, {
+    signal,
+    headers: { Accept: 'application/json' },
+  });
+  if (!response.ok) throw new Error(`Reverse geocoding failed with ${response.status}`);
+
+  const row: unknown = await response.json();
+  if (!row || typeof row !== 'object') return null;
+
+  const label = String((row as { display_name?: unknown }).display_name ?? '').trim();
+  return label || null;
 }

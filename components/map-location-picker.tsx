@@ -7,6 +7,7 @@ import { LeafletMap } from '@/components/leaflet-map';
 import {
   buildMapsUrl,
   formatLatLng,
+  reverseGeocodePlace,
   roundCoord,
   searchPlaces,
   type PlaceResult,
@@ -70,12 +71,55 @@ export function MapLocationPicker({ value, onChange }: MapLocationPickerProps) {
   const hasPoint = value.lat !== null && value.lng !== null;
 
   /**
-   * The pin is the single source of truth for the link — the field below is
-   * read-only, so a moved pin always rewrites it. Leaving a hand-written link in
-   * place would strand it: nothing in the UI could correct it afterwards.
+   * The pin is the source of truth for the link. A raw map click/drag has no
+   * label, so reverse-geocode it until the search and description fields agree.
    */
-  const setPoint = (lat: number, lng: number) => {
-    onChange({ ...value, lat, lng, locationUrl: buildMapsUrl({ lat, lng }) });
+  const handleMapPick = (lat: number, lng: number) => {
+    const point = { lat, lng };
+    const locationUrl = buildMapsUrl(point);
+    const fallbackDescription = formatLatLng(point);
+
+    // Move the pin and populate the fields immediately; the human-readable
+    // address replaces this coordinate fallback a moment later.
+    skipQueryRef.current = fallbackDescription;
+    setQuery(fallbackDescription);
+    onChange({ ...value, ...point, locationUrl, mapDesc: fallbackDescription });
+
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    setSearching(true);
+    setSearchError('');
+    setResults([]);
+    setResultsOpen(false);
+
+    void reverseGeocodePlace(point, { language, signal: controller.signal })
+      .then(label => {
+        if (controller.signal.aborted) return;
+
+        // Coordinates keep the fields useful even when the geocoder has no
+        // named feature for this exact point.
+        const description = (label ?? fallbackDescription).slice(0, MAP_DESC_MAX);
+        skipQueryRef.current = description;
+        setQuery(description);
+        onChange({ ...value, ...point, locationUrl, mapDesc: description });
+      })
+      .catch(() => {
+        if (controller.signal.aborted) return;
+
+        const description = fallbackDescription;
+        skipQueryRef.current = description;
+        setQuery(description);
+        onChange({ ...value, ...point, locationUrl, mapDesc: description });
+        setSearchError(
+          ar
+            ? 'تعذر جلب اسم المكان؛ تم استخدام الإحداثيات'
+            : 'Could not load the place name; coordinates were used',
+        );
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setSearching(false);
+      });
   };
 
   const handleClear = () => {
@@ -93,7 +137,7 @@ export function MapLocationPicker({ value, onChange }: MapLocationPickerProps) {
     navigator.geolocation.getCurrentPosition(
       pos => {
         setLocating(false);
-        setPoint(roundCoord(pos.coords.latitude), roundCoord(pos.coords.longitude));
+        handleMapPick(roundCoord(pos.coords.latitude), roundCoord(pos.coords.longitude));
         setFocusSignal(n => n + 1);
       },
       () => {
@@ -159,6 +203,9 @@ export function MapLocationPicker({ value, onChange }: MapLocationPickerProps) {
   }, []);
 
   const handleQueryChange = (next: string) => {
+    // Manual typing supersedes a pending reverse-geocode from a map click.
+    abortRef.current?.abort();
+    setSearching(false);
     setQuery(next);
     if (next.trim().length < MIN_QUERY_LENGTH) {
       abortRef.current?.abort();
@@ -170,7 +217,18 @@ export function MapLocationPicker({ value, onChange }: MapLocationPickerProps) {
   };
 
   const handleSelectPlace = (place: PlaceResult) => {
-    setPoint(place.lat, place.lng);
+    const mapDesc = place.label.trim().slice(0, MAP_DESC_MAX);
+
+    onChange({
+      ...value,
+      lat: place.lat,
+      lng: place.lng,
+      locationUrl: buildMapsUrl(place),
+      // A searched place already has a human-readable address. Keep it with
+      // the picked coordinates so the admin does not need to copy it into the
+      // location-description field manually.
+      mapDesc: mapDesc || value.mapDesc,
+    });
     setFocusSignal(n => n + 1);
     skipQueryRef.current = place.label;
     setQuery(place.label);
@@ -285,7 +343,7 @@ export function MapLocationPicker({ value, onChange }: MapLocationPickerProps) {
         <LeafletMap
           lat={value.lat}
           lng={value.lng}
-          onPick={setPoint}
+          onPick={handleMapPick}
           focusSignal={focusSignal}
           className="h-[260px] w-full z-0"
         />
