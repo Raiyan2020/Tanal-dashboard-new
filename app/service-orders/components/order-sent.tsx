@@ -3,7 +3,29 @@ import { useLanguage } from '@/lib/i18n';
 import { motion } from 'motion/react';
 import { CheckCircle2 } from 'lucide-react';
 import Image from 'next/image';
-import { ServiceOrder } from '@/lib/orderStore';
+/**
+ * The shape this confirmation screen needs from a freshly created order.
+ * Declared locally because `lib/orderStore.ts` — the localStorage prototype
+ * store these types used to live in — was deleted along with the four mock
+ * public pages it backed. Nothing here is the live API shape
+ * (`ApiServiceOrder` in `lib/api.ts`); this component is not currently
+ * rendered by any route.
+ */
+interface OrderSentServiceItem {
+  id: string;
+  serviceName: string;
+  serviceNameAr: string;
+  price: number;
+  employeeName: string;
+  employeePhone: string;
+}
+
+interface ServiceOrder {
+  id: string;
+  services: OrderSentServiceItem[];
+  clientName: string;
+  clientPhone: string;
+}
 
 interface OrderSentProps {
   createdOrder: ServiceOrder;

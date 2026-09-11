@@ -1,6 +1,6 @@
 import React from 'react';
 import { getServerToken, handlePrefetchError } from '@/lib/server-auth';
-import { getAdminServiceOrders, type ApiServiceOrderItem } from '@/lib/api';
+import { getServiceOrdersForDate, type ApiServiceOrderItem } from '@/lib/api';
 import CalendarClient from './CalendarClient';
 
 export default async function Page() {
@@ -13,14 +13,7 @@ export default async function Page() {
 
   if (token) {
     try {
-      const res = await getAdminServiceOrders(token, {
-        page: 1,
-        per_page: 100,
-        date: today,
-        order_by: 'event_date',
-        order: 'ASC',
-      });
-      initialOrders = res.data.items;
+      initialOrders = await getServiceOrdersForDate(token, today);
     } catch (e) {
       handlePrefetchError(e, 'calendar orders');
     }

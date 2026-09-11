@@ -81,16 +81,19 @@ export function ServiceDetailView({
     if (!serviceDetail?.options) return [];
     const valuesList: any[] = [];
     serviceDetail.options.forEach((opt) => {
-      if (opt.values && opt.values.length > 0) {
-        opt.values.forEach((v: any) => {
-          valuesList.push({
-            id: String(v.id),
-            optionId: String(opt.id),
-            labelEn: v.value,
-            labelAr: v.value,
-          });
+      // `ServiceOptionResource` puts the members of a `list` option under
+      // `labels` and those of a `color` option under `values`, never both —
+      // the same `labels || values` read the order form already uses. Each
+      // member carries `label_ar` / `label_en`, not a single `value`.
+      const members = opt.labels ?? opt.values ?? [];
+      members.forEach((v) => {
+        valuesList.push({
+          id: String(v.id),
+          optionId: String(opt.id),
+          labelEn: v.label_en || v.label_ar || '',
+          labelAr: v.label_ar || v.label_en || '',
         });
-      }
+      });
     });
     return valuesList;
   }, [serviceDetail]);

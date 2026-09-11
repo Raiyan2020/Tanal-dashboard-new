@@ -17,13 +17,9 @@ const MainLayoutContent = dynamic(() =>
   import('./main-layout-content').then(m => m.MainLayoutContent),
 );
 
-/** Routes rendered without the dashboard chrome (login + token-linked pages). */
+/** Routes rendered without the dashboard chrome. */
 const BARE_PATHS = [
   '/login',
-  '/client-portal',
-  '/guest-view',
-  '/order-client',
-  '/order-employee',
 ];
 
 export function MainLayout({ children }: { children: React.ReactNode }) {

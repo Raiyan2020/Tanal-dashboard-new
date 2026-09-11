@@ -1405,10 +1405,12 @@ export interface ApiService {
 /** Services whose packages must declare a guest allowance. */
 export const BARCODE_INVITATIONS_KEY = 'barcode_invitations';
 
+/** One member of a `list` or `color` option — `ServiceOptionValueResource`. */
 export interface ApiServiceOptionValue {
   id: number;
-  service_option_id: number;
-  value: string;
+  label_ar: string;
+  label_en: string;
+  /** Only meaningful for `color` options. */
   color_hex: string | null;
   sort: number;
 }
@@ -1421,7 +1423,14 @@ export interface ApiServiceOption {
   is_required: boolean;
   sort: number;
   requires_values: boolean;
-  values: ApiServiceOptionValue[];
+  /**
+   * `ServiceOptionResource` splits the members by option type and never sends
+   * both: `list` options carry them under `labels` (and a duplicate `options`),
+   * `color` options under `values`. Read them as `labels || values`.
+   */
+  labels?: ApiServiceOptionValue[];
+  values?: ApiServiceOptionValue[];
+  labels_count?: number;
   values_count?: number;
 }
 
@@ -2036,6 +2045,67 @@ export async function getAdminServiceOrders(
     `/admin/service-orders${qs ? `?${qs}` : ''}`,
     { token }
   );
+}
+
+/** `per_page` ceiling enforced by `ServiceOrders/IndexRequest` (`max:100`). */
+const SERVICE_ORDERS_MAX_PER_PAGE = 100;
+
+/**
+ * Hard stop on the page walk below — 20 pages x 100 = 2 000 service orders on a
+ * single calendar day, far past anything real. It exists so a malformed or
+ * ever-growing `last_page` can never spin the loop.
+ */
+const SERVICE_ORDERS_MAX_PAGES = 20;
+
+/**
+ * Every service order on one calendar day.
+ *
+ * The list endpoint caps `per_page` at 100, so a day with more than 100 orders
+ * does not fit in one response — reading only page 1 dropped the remainder
+ * silently, with no error and no indicator. This walks the extra pages the
+ * server itself reports in `pagination.last_page` and concatenates them.
+ *
+ * The walk is bounded three ways: by `last_page` from the first response, by
+ * `SERVICE_ORDERS_MAX_PAGES`, and by an empty page. Results are de-duplicated by
+ * id, so a row that shifts across the page boundary between requests cannot be
+ * listed twice. A failed page rejects rather than returning a partial day —
+ * silently-incomplete data is the bug being fixed here. Callers already handle
+ * the rejection (`handlePrefetchError` on the server, a toast in the client).
+ */
+export async function getServiceOrdersForDate(
+  token: string,
+  date: string
+): Promise<ApiServiceOrderItem[]> {
+  const fetchPage = (page: number) =>
+    getAdminServiceOrders(token, {
+      page,
+      per_page: SERVICE_ORDERS_MAX_PER_PAGE,
+      date,
+      order_by: 'event_date',
+      order: 'ASC',
+    });
+
+  const first = await fetchPage(1);
+  const items = [...(first.data?.items ?? [])];
+
+  const lastPage = Math.min(
+    first.data?.pagination?.last_page ?? 1,
+    SERVICE_ORDERS_MAX_PAGES
+  );
+
+  for (let page = 2; page <= lastPage; page++) {
+    const next = await fetchPage(page);
+    const pageItems = next.data?.items ?? [];
+    if (pageItems.length === 0) break;
+    items.push(...pageItems);
+  }
+
+  const seen = new Set<number>();
+  return items.filter((order) => {
+    if (seen.has(order.id)) return false;
+    seen.add(order.id);
+    return true;
+  });
 }
 
 // ── Detail types ──────────────────────────────────────────────────────────────

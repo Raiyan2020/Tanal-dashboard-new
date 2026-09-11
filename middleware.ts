@@ -7,10 +7,6 @@ import type { NextRequest } from 'next/server';
  */
 const PUBLIC_PATHS = [
   '/login',
-  '/client-portal',
-  '/guest-view',
-  '/order-client',
-  '/order-employee',
 ];
 
 /**

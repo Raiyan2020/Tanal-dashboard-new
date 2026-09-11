@@ -18,7 +18,7 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { getToken } from '@/lib/auth';
 import {
-  getAdminServiceOrders, getAdminServiceOrderById, parseAmount,
+  getServiceOrdersForDate, getAdminServiceOrderById, parseAmount,
   type ApiServiceOrderItem, type ApiServiceOrderDetail,
 } from '@/lib/api';
 import { OrderDetailModal } from '../service-orders/components/order-detail-modal';
@@ -66,14 +66,7 @@ export default function CalendarClient({
     if (!token) return;
     setLoading(true);
     try {
-      const res = await getAdminServiceOrders(token, {
-        page: 1,
-        per_page: 100,
-        date: isoDate,
-        order_by: 'event_date',
-        order: 'ASC',
-      });
-      setOrders(res.data.items);
+      setOrders(await getServiceOrdersForDate(token, isoDate));
     } catch (err) {
       toast.error((err as Error).message || (isAr ? 'حدث خطأ أثناء تحميل الطلبات' : 'Failed to load orders'));
     } finally {
