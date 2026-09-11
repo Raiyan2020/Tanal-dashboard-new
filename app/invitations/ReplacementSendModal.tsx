@@ -39,14 +39,17 @@ interface ReplacementSendModalProps {
 const PER_PAGE = 15;
 
 /**
- * The API has no "never messaged" filter, so the unsent tab asks for `pending`
- * and drops anyone already messaged. `invitation_sent_at` is absent on older API
- * builds — then the row stays listed and the backend has the final say.
+ * Each tab is filtered server-side — `status=rejected` for rejections, and
+ * `invitation_status=not_sent` for guests who were never messaged. The latter
+ * cannot be expressed as `status=pending`: a guest who has never been messaged
+ * has no stored response at all, so that filter skips exactly the people this
+ * tab is for.
+ *
+ * Only the WhatsApp check is left to the client, because the guest list has no
+ * filter for it. Everything else the backend already decided.
  */
-function isEligible(guest: InvitationGuest, tab: EligibleTab): boolean {
-  if (!guest.have_whatsapp) return false;
-  if (tab === 'rejected') return guest.status === 'rejected';
-  return guest.status === 'pending' && !guest.invitation_sent_at;
+function isEligible(guest: InvitationGuest): boolean {
+  return guest.have_whatsapp;
 }
 
 export function ReplacementSendModal({
@@ -91,11 +94,13 @@ export function ReplacementSendModal({
           page,
           per_page: PER_PAGE,
           keyword: debouncedSearch || undefined,
-          status: tab === 'rejected' ? 'rejected' : 'pending',
+          ...(tab === 'rejected'
+            ? { status: 'rejected' as const }
+            : { invitation_status: 'not_sent' as const }),
         },
         token
       );
-      setGuests(res.data.items.filter((g) => isEligible(g, tab)));
+      setGuests(res.data.items.filter(isEligible));
       setTotalPages(res.data.pagination.last_page);
     } catch (err) {
       toast.error((err as Error).message || t('guestsLoadFailed'));

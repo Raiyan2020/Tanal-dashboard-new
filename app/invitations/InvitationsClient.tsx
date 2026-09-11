@@ -10,6 +10,7 @@ import { ConfirmModal } from './ConfirmModal';
 import { InvitationEditForm } from './InvitationEditForm';
 import { getInvitations, deleteInvitation, type ApiInvitation } from '@/lib/api';
 import { getToken } from '@/lib/auth';
+import { usePermissions } from '@/hooks/use-permissions';
 import { toast } from 'sonner';
 
 export type InvitationStatus = 'sent' | 'unsent' | 'past';
@@ -63,6 +64,7 @@ export default function InvitationsClient({
   initialTotalPages: number;
 }) {
   const { t, dir } = useLanguage();
+  const { can } = usePermissions();
   const router = useRouter();
   const [token] = useState(() => getToken() ?? '');
 
@@ -346,18 +348,18 @@ export default function InvitationsClient({
                         {/* The list resource carries no capability flags, so a
                             sent invitation is filtered out here on status; the
                             detail screen enforces `can_be_edited` properly. */}
-                        {invitation.status === 'unsent' && (
+                        {invitation.status === 'unsent' && can('edit-invitation') && (
                           <button
-                            title={t('edit' as any) || (dir === 'ltr' ? 'Edit' : 'تعديل')}
+                            title={t('edit') || (dir === 'ltr' ? 'Edit' : 'تعديل')}
                             onClick={() => setEditingInvitation(invitation)}
                             className="p-2 sm:p-2.5 bg-white text-yellow-500 border border-transparent hover:bg-yellow-50 hover:border-yellow-200 hover:text-yellow-600 hover:-translate-y-[2px] hover:scale-[1.03] hover:shadow-md active:scale-95 active:translate-y-0 rounded-xl transition-all duration-200 ease-out flex items-center justify-center cursor-pointer"
                           >
                             <Edit2 className="w-4 h-4" />
                           </button>
                         )}
-                        {invitation.status === 'unsent' && (
+                        {invitation.status === 'unsent' && can('delete-invitation') && (
                           <button
-                            title={t('remove' as any) || (dir === 'ltr' ? 'Remove' : 'إزالة')}
+                            title={t('remove') || (dir === 'ltr' ? 'Remove' : 'إزالة')}
                             onClick={() => setInvitationToDelete(invitation.id)}
                             className="p-2 sm:p-2.5 bg-white text-red-500 border border-transparent hover:bg-red-50 hover:border-red-200 hover:text-red-600 hover:-translate-y-[2px] hover:scale-[1.03] hover:shadow-md active:scale-95 active:translate-y-0 rounded-xl transition-all duration-200 ease-out flex items-center justify-center cursor-pointer"
                           >

@@ -11,6 +11,7 @@ import { AttendanceDetails } from '../invitations/InvitationDetails';
 import { getEmployeeById } from '@/lib/api';
 import type { ApiEmployeeDetail } from '@/lib/api';
 import { getToken } from '@/lib/auth';
+import { usePermissions } from '@/hooks/use-permissions';
 import { toast } from 'sonner';
 
 export function EmployeeDetails({
@@ -29,6 +30,7 @@ export function EmployeeDetails({
   onNavigateToEvent?: (id: string) => void
 }) {
   const { t, dir, language } = useLanguage();
+  const { can } = usePermissions();
   const token = getToken() ?? '';
 
   const [detail, setDetail] = useState<ApiEmployeeDetail | null>(null);
@@ -130,20 +132,24 @@ export function EmployeeDetails({
         </div>
 
         <div className="flex items-center justify-end gap-2 w-full sm:w-auto">
-          <button
-            title={t('edit' as any) || 'Edit'}
-            onClick={onEdit}
-            className="w-10 h-10 bg-white text-yellow-500 rounded-xl transition-all shadow-sm ring-1 ring-black/5 hover:scale-105 active:scale-95 flex items-center justify-center cursor-pointer hover:bg-yellow-50 font-medium"
-          >
-            <Edit2 className="w-4 h-4" />
-          </button>
-          <button
-            title={t('remove' as any) || 'Remove'}
-            onClick={onDelete}
-            className="w-10 h-10 bg-white text-red-500 rounded-xl transition-all shadow-sm ring-1 ring-black/5 hover:scale-105 active:scale-95 flex items-center justify-center cursor-pointer hover:bg-red-50 font-medium"
-          >
-            <Trash2 className="w-4 h-4" />
-          </button>
+          {can('edit-employee') && (
+            <button
+              title={t('edit') || 'Edit'}
+              onClick={onEdit}
+              className="w-10 h-10 bg-white text-yellow-500 rounded-xl transition-all shadow-sm ring-1 ring-black/5 hover:scale-105 active:scale-95 flex items-center justify-center cursor-pointer hover:bg-yellow-50 font-medium"
+            >
+              <Edit2 className="w-4 h-4" />
+            </button>
+          )}
+          {can('delete-employee') && (
+            <button
+              title={t('remove') || 'Remove'}
+              onClick={onDelete}
+              className="w-10 h-10 bg-white text-red-500 rounded-xl transition-all shadow-sm ring-1 ring-black/5 hover:scale-105 active:scale-95 flex items-center justify-center cursor-pointer hover:bg-red-50 font-medium"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          )}
         </div>
       </div>
 

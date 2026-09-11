@@ -198,8 +198,11 @@ const translations: Record<Language, Record<string, string>> = {
     contactSection: 'Contact',
     contactDesc: 'Manage contact information, map location, and social links.',
     unread: 'unread',
-    markAllAsRead: 'Mark all as read',
+    // There is no mark-as-read endpoint on the admin API — clearing is the only
+    // action it offers, so that is what the screen exposes.
+    clearAllNotifications: 'Clear all',
     noNotifications: 'No new notifications',
+    deleteFailed: 'Delete failed',
     profile: 'Profile',
     security: 'Security',
     preferences: 'Preferences',
@@ -946,8 +949,9 @@ const translations: Record<Language, Record<string, string>> = {
     services: 'الخدمات',
     contactDesc: 'إدارة معلومات التواصل والموقع الجغرافي وروابط التواصل الاجتماعي.',
     unread: 'غير مقروء',
-    markAllAsRead: 'تحديد الكل كمقروء',
+    clearAllNotifications: 'مسح الكل',
     noNotifications: 'لا توجد إشعارات جديدة',
+    deleteFailed: 'فشل الحذف',
     profile: 'الملف الشخصي',
     security: 'الأمان',
     preferences: 'التفضيلات',

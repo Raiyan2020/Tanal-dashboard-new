@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils';
 import { AvatarImage } from '@/components/ui/avatar-image';
 import { toast } from 'sonner';
 import { getToken } from '@/lib/auth';
+import { usePermissions } from '@/hooks/use-permissions';
 import {
   getAdmins, getRoles,
   type Admin, type Role, type PaginatedItems,
@@ -33,6 +34,7 @@ export default function AdminsClient({
   initialPagination: PaginatedItems<Admin>['pagination'] | null;
 }) {
   const { t, dir } = useLanguage();
+  const { can } = usePermissions();
   const token = getToken() ?? '';
 
   // ── list state ──
@@ -172,13 +174,15 @@ export default function AdminsClient({
             </p>
           )}
         </div>
-        <button
-          onClick={() => { setEditAdmin(null); setView('form'); }}
-          className="bg-primary hover:bg-primary-dark text-white px-5 py-2.5 rounded-xl flex items-center justify-center gap-2 font-medium transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 cursor-pointer w-full sm:w-auto"
-        >
-          <Plus className="w-5 h-5" />
-          {t('addAdmin' as any) || 'إضافة مسؤول'}
-        </button>
+        {can('add-admin') && (
+          <button
+            onClick={() => { setEditAdmin(null); setView('form'); }}
+            className="bg-primary hover:bg-primary-dark text-white px-5 py-2.5 rounded-xl flex items-center justify-center gap-2 font-medium transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 cursor-pointer w-full sm:w-auto"
+          >
+            <Plus className="w-5 h-5" />
+            {t('addAdmin') || 'إضافة مسؤول'}
+          </button>
+        )}
       </div>
 
       <div className="glass-panel rounded-3xl p-3 sm:p-6 w-full mx-auto overflow-hidden">
@@ -277,14 +281,16 @@ export default function AdminsClient({
                     >
                       <Eye className="w-4 h-4" />
                     </button>
-                    <button
-                      title={t('edit' as any)}
-                      onClick={e => { e.stopPropagation(); setEditAdmin(admin.id); setView('form'); }}
-                      className="p-2 sm:p-2.5 bg-white text-yellow-500 border border-transparent hover:bg-yellow-50 hover:border-yellow-200 hover:text-yellow-600 hover:-translate-y-[2px] hover:scale-[1.03] hover:shadow-md active:scale-95 rounded-xl transition-all duration-200 cursor-pointer"
-                    >
-                      <Edit2 className="w-4 h-4" />
-                    </button>
-                    {admin.can_be_deleted && (
+                    {can('edit-admin') && (
+                      <button
+                        title={t('edit')}
+                        onClick={e => { e.stopPropagation(); setEditAdmin(admin.id); setView('form'); }}
+                        className="p-2 sm:p-2.5 bg-white text-yellow-500 border border-transparent hover:bg-yellow-50 hover:border-yellow-200 hover:text-yellow-600 hover:-translate-y-[2px] hover:scale-[1.03] hover:shadow-md active:scale-95 rounded-xl transition-all duration-200 cursor-pointer"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+                    )}
+                    {admin.can_be_deleted && can('delete-admin') && (
                       <button
                         title={t('remove' as any)}
                         onClick={e => { e.stopPropagation(); setDeleteAdmin_(admin); }}

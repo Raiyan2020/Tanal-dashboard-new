@@ -145,21 +145,32 @@ export function normaliseValidationErrors(errors: unknown): ValidationErrors {
  */
 const pendingGetRequests = new Map<string, Promise<any>>();
 
+/**
+ * Language for a request: an explicit `Accept-Language` header wins, otherwise
+ * the stored UI language (the backend defaults to `ar` when neither is sent).
+ *
+ * Shared with the GET de-duplication key below so the two can never disagree.
+ * They used to: the key read `options.headers['Accept-Language']`, which almost
+ * no caller sets, so it was always the empty string and two requests for the
+ * same path in different languages could share one in-flight response.
+ */
+function resolveLang(options: RequestOptions): string {
+  const explicit = options.headers?.['Accept-Language'];
+  if (explicit) return explicit;
+  if (typeof window === 'undefined') return 'ar';
+  return localStorage.getItem('tanal_lang') || 'ar';
+}
+
 async function apiRequestInternal<T = unknown>(
   path: string,
   options: RequestOptions = {}
 ): Promise<ApiResponse<T>> {
   const { method = 'GET', body, token, headers: customHeaders } = options;
 
-  let storedLang = 'ar';
-  if (typeof window !== 'undefined') {
-    storedLang = localStorage.getItem('tanal_lang') || 'ar';
-  }
-
   const headers: Record<string, string> = {
     Accept: 'application/json',
-    'Accept-Language': storedLang,
-    lang: storedLang,
+    'Accept-Language': resolveLang(options),
+    lang: resolveLang(options),
     ...customHeaders,
   };
 
@@ -236,8 +247,7 @@ export async function apiRequest<T = unknown>(
 
   // Deduplicate active/pending GET requests to prevent duplicate client-side network calls
   if (method === 'GET') {
-    const langHeader = options.headers?.['Accept-Language'] || '';
-    const key = `${path}::${token || ''}::${langHeader}`;
+    const key = `${path}::${token || ''}::${resolveLang(options)}`;
     if (pendingGetRequests.has(key)) {
       return pendingGetRequests.get(key)!;
     }
@@ -275,20 +285,104 @@ export async function logoutAdmin(token: string): Promise<void> {
   });
 }
 
-/** POST /admin/auth/profile — update authenticated admin profile */
+/**
+ * POST /admin/auth/profile?_method=put — update the authenticated admin.
+ *
+ * Name, email and avatar only. The password lives behind its own endpoint
+ * (`updateAdminPassword`) because changing it requires the current password;
+ * sending it here is silently ignored by the API.
+ */
 export async function updateProfile(
-  fields: { name: string; email: string; password?: string; image?: File },
+  fields: { name: string; email: string; image?: File },
   token: string
 ): Promise<ApiResponse<Admin>> {
   const formData = new FormData();
   formData.append('name', fields.name);
   formData.append('email', fields.email);
-  if (fields.password) formData.append('password', fields.password);
   if (fields.image) formData.append('image', fields.image);
 
   return apiRequest<Admin>('/admin/auth/profile?_method=put', {
     method: 'POST',
     body: formData,
+    token,
+  });
+}
+
+/**
+ * PUT /admin/auth/password — change the signed-in admin's own password.
+ *
+ * Separate from the profile endpoint, which has no password rule at all. A
+ * wrong `current_password` comes back as a 422 keyed on that field, so read it
+ * with `ApiError.fieldError('current_password')`.
+ */
+export async function updateAdminPassword(
+  fields: { current_password: string; password: string; password_confirmation: string },
+  token: string
+): Promise<ApiResponse<unknown>> {
+  return apiRequest('/admin/auth/password', {
+    method: 'PUT',
+    body: { ...fields },
+    token,
+  });
+}
+
+/* ─── Notifications ─────────────────────────────────────────── */
+
+/**
+ * One row from `GET /admin/notifications`.
+ *
+ * `type` is a UI category the backend derives from the notification payload —
+ * use it for icon/colour mapping only. `time` is already humanised and
+ * localised server-side ("منذ ساعة", "3 September 2026"), so it is rendered
+ * verbatim rather than parsed.
+ */
+export interface AdminNotification {
+  /** UUID — the id `deleteNotifications` expects. */
+  id: string;
+  title: string;
+  body: string;
+  type: 'guest_confirmation' | 'payment_received' | 'invitation_qr' | 'system_update';
+  time: string;
+  is_read: boolean;
+  read_at: string | null;
+}
+
+/** GET /admin/notifications — paginated, newest first. Permission: `notifications`. */
+export async function getNotifications(
+  token: string,
+  params?: { page?: number; per_page?: number }
+): Promise<ApiResponse<PaginatedItems<AdminNotification>>> {
+  const query = new URLSearchParams();
+  if (params?.page) query.set('page', String(params.page));
+  if (params?.per_page) query.set('per_page', String(params.per_page));
+  const qs = query.toString();
+  return apiRequest<PaginatedItems<AdminNotification>>(
+    `/admin/notifications${qs ? `?${qs}` : ''}`,
+    { token }
+  );
+}
+
+/**
+ * POST /admin/notifications/delete — remove specific rows.
+ * Permission: `delete-notification`. Ids must be the UUIDs from the list.
+ */
+export async function deleteNotifications(
+  ids: string[],
+  token: string
+): Promise<ApiResponse<{ deleted_count: number }>> {
+  return apiRequest<{ deleted_count: number }>('/admin/notifications/delete', {
+    method: 'POST',
+    body: { ids },
+    token,
+  });
+}
+
+/** DELETE /admin/notifications — clear every row. Permission: `delete-notification`. */
+export async function clearAllNotifications(
+  token: string
+): Promise<ApiResponse<{ deleted_count: number }>> {
+  return apiRequest<{ deleted_count: number }>('/admin/notifications', {
+    method: 'DELETE',
     token,
   });
 }
@@ -423,7 +517,7 @@ export interface DashboardData {
 
 /** GET /admin/dashboard — fetch dashboard stats/charts/upcoming orders */
 export async function getDashboardData(
-  period: 'this_year' | 'this_month' | 'last_12_months' | 'last_6months' | 'all_time',
+  period: 'this_year' | 'this_month' | 'last_12_months' | 'last_6_months' | 'all_time',
   token: string
 ): Promise<ApiResponse<DashboardData>> {
   return apiRequest<DashboardData>(`/admin/dashboard?period=${period}`, {
@@ -620,7 +714,12 @@ export interface ApiInvitation {
   deadline_date: string | null;
   deadline_time: string | null;
   is_sent: boolean;
-  status: 'upcoming' | 'previous';
+  /**
+   * `InvitationDisplayStatusEnum`. `previous` wins once the deadline has
+   * passed, so it is not mutually exclusive with having been sent — read
+   * `is_sent` for that.
+   */
+  status: 'not_sent' | 'sent' | 'previous';
   status_label: string;
 }
 
@@ -1068,7 +1167,14 @@ export interface GetInvitationGuestsParams {
   keyword?: string;
   name?: string;
   phone?: string;
+  /** Response status — `pending` matches only guests who were messaged and have not answered. */
   status?: string;
+  /**
+   * Delivery status, independent of the response above. `not_sent` is the only
+   * way to ask for guests who have never been messaged: they carry no stored
+   * response, so `status=pending` does not return them.
+   */
+  invitation_status?: 'sent' | 'not_sent';
   page?: number;
   per_page?: number;
 }
@@ -1084,6 +1190,7 @@ export async function getInvitationGuests(
   if (params.name) query.set('name', params.name);
   if (params.phone) query.set('phone', params.phone);
   if (params.status) query.set('status', params.status);
+  if (params.invitation_status) query.set('invitation_status', params.invitation_status);
   if (params.page !== undefined) query.set('page', String(params.page));
   if (params.per_page !== undefined) query.set('per_page', String(params.per_page));
   const qs = query.toString();
@@ -1160,13 +1267,20 @@ export async function deleteInvitationGuest(
 }
 
 /**
- * Shape of a partially-failed import. The backend contract for this is not yet
- * confirmed, so the fields are all optional and the UI degrades to `msg`.
+ * Result of a guest import, including partial failures.
+ *
+ * The API returns each count twice — `imported`/`imported_count` and
+ * `failed`/`failed_count` — and each error row both as an `errors[]` array and
+ * as a flattened `message`. The `_count` and `message` spellings are the ones
+ * read here; the originals are kept optional so nothing breaks if the aliases
+ * are ever retired.
  */
 export interface InvitationGuestImportResult {
+  imported?: number;
   imported_count?: number;
+  failed?: number;
   failed_count?: number;
-  errors?: Array<{ row?: number; message?: string }>;
+  errors?: Array<{ row?: number; message?: string; errors?: string[] }>;
 }
 
 /** POST /admin/invitations/:invitationId/guests/import — multipart */
@@ -1560,28 +1674,13 @@ export async function deleteServiceAddon(
   });
 }
 
-/* ─── Service Options ─── */
-
-export interface GetServiceOptionsParams {
-  page?: number;
-  per_page?: number;
-}
-
-/** GET /admin/services/:serviceId/options */
-export async function getServiceOptions(
-  serviceId: number,
-  params: GetServiceOptionsParams,
-  token: string
-): Promise<ApiResponse<PaginatedItems<ApiServiceOption>>> {
-  const query = new URLSearchParams();
-  if (params.page !== undefined) query.set('page', String(params.page));
-  if (params.per_page !== undefined) query.set('per_page', String(params.per_page));
-  const qs = query.toString();
-  return apiRequest<PaginatedItems<ApiServiceOption>>(
-    `/admin/services/1/options${qs ? `?${qs}` : ''}`,
-    { token }
-  );
-}
+/*
+ * `GET /admin/services/:id/options` has no caller: a service's options arrive
+ * embedded in `getServiceById`, and the standalone catalog is
+ * `getAdminServiceOptions`. The wrapper that used to live here ignored its
+ * `serviceId` argument and always requested service 1, so it is removed rather
+ * than left as a correct-looking call that returns another service's options.
+ */
 
 /* ─── Employees CRUD ─── */
 

@@ -20,7 +20,7 @@ import { cn } from '@/lib/utils';
 import { getDashboardData, parseAmount, resolveTodayArrivals, type DashboardData } from '@/lib/api';
 import { getToken, getPermissions } from '@/lib/auth';
 
-type Period = 'this_year' | 'this_month' | 'last_12_months' | 'last_6months' | 'all_time';
+type Period = 'this_year' | 'this_month' | 'last_12_months' | 'last_6_months' | 'all_time';
 
 /** One card of the dashboard stats grid. */
 type DashboardStatEntry = {
@@ -294,7 +294,7 @@ export function DashboardContent({
                     <option value="this_year">{t('thisYear')}</option>
                     <option value="this_month">{t('thisMonth')}</option>
                     <option value="last_12_months">{t('last12Months')}</option>
-                    <option value="last_6months">{t('last6Months')}</option>
+                    <option value="last_6_months">{t('last6Months')}</option>
                     <option value="all_time">{t('allTime')}</option>
                   </select>
                   <div className={cn("absolute inset-y-0 flex items-center pointer-events-none text-secondary/50", dir === 'ltr' ? 'right-2' : 'left-2')}>

@@ -11,6 +11,7 @@ import { EmployeeDetails } from './EmployeeDetails';
 import { getEmployees, deleteEmployee, createEmployee, updateEmployee, getEmployeeById } from '@/lib/api';
 import type { ApiEmployee, PaginatedItems } from '@/lib/api';
 import { getToken } from '@/lib/auth';
+import { usePermissions } from '@/hooks/use-permissions';
 import { toast } from 'sonner';
 
 export default function EmployeesClient({
@@ -21,6 +22,7 @@ export default function EmployeesClient({
   initialPagination: PaginatedItems<ApiEmployee>['pagination'] | null;
 }) {
   const { t, dir, language } = useLanguage();
+  const { can } = usePermissions();
   const [token] = useState(() => getToken() ?? '');
 
   const [employees, setEmployees] = useState<ApiEmployee[]>(initialData ?? []);
@@ -163,13 +165,15 @@ export default function EmployeesClient({
             )}
           </div>
 
-          <button
-            onClick={() => { setEmployeeToEdit(null); setIsEditing(true); }}
-            className="bg-primary hover:bg-primary-dark text-white px-5 py-2.5 rounded-xl font-medium transition-all shadow-md hover:shadow-lg flex items-center gap-2 cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            {t('addEmployee')}
-          </button>
+          {can('add-employee') && (
+            <button
+              onClick={() => { setEmployeeToEdit(null); setIsEditing(true); }}
+              className="bg-primary hover:bg-primary-dark text-white px-5 py-2.5 rounded-xl font-medium transition-all shadow-md hover:shadow-lg flex items-center gap-2 cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              {t('addEmployee')}
+            </button>
+          )}
           </div>
 
           <div className="glass-panel rounded-3xl p-3 sm:p-6 w-full mx-auto overflow-hidden min-h-[300px] relative">
@@ -230,20 +234,24 @@ export default function EmployeesClient({
                           >
                             <Eye className="w-4 h-4" />
                           </button>
-                          <button
-                            title={t('edit')}
-                            onClick={() => { setEmployeeToEdit(employee); setIsEditing(true); }}
-                            className="p-2 sm:p-2.5 bg-white text-yellow-500 border border-transparent hover:bg-yellow-50 hover:border-yellow-200 hover:text-yellow-600 hover:-translate-y-[2px] hover:scale-[1.03] hover:shadow-md active:scale-95 active:translate-y-0 rounded-xl transition-all duration-200 ease-out flex items-center justify-center cursor-pointer"
-                          >
-                            <Edit2 className="w-4 h-4" />
-                          </button>
-                          <button
-                            title={t('remove')}
-                            onClick={() => setEmployeeToDelete(employee.id)}
-                            className="p-2 sm:p-2.5 bg-white text-red-500 border border-transparent hover:bg-red-50 hover:border-red-200 hover:text-red-600 hover:-translate-y-[2px] hover:scale-[1.03] hover:shadow-md active:scale-95 active:translate-y-0 rounded-xl transition-all duration-200 ease-out flex items-center justify-center cursor-pointer"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                          {can('edit-employee') && (
+                            <button
+                              title={t('edit')}
+                              onClick={() => { setEmployeeToEdit(employee); setIsEditing(true); }}
+                              className="p-2 sm:p-2.5 bg-white text-yellow-500 border border-transparent hover:bg-yellow-50 hover:border-yellow-200 hover:text-yellow-600 hover:-translate-y-[2px] hover:scale-[1.03] hover:shadow-md active:scale-95 active:translate-y-0 rounded-xl transition-all duration-200 ease-out flex items-center justify-center cursor-pointer"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                          )}
+                          {can('delete-employee') && (
+                            <button
+                              title={t('remove')}
+                              onClick={() => setEmployeeToDelete(employee.id)}
+                              className="p-2 sm:p-2.5 bg-white text-red-500 border border-transparent hover:bg-red-50 hover:border-red-200 hover:text-red-600 hover:-translate-y-[2px] hover:scale-[1.03] hover:shadow-md active:scale-95 active:translate-y-0 rounded-xl transition-all duration-200 ease-out flex items-center justify-center cursor-pointer"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
                         </div>
                       </motion.div>
                     ))}

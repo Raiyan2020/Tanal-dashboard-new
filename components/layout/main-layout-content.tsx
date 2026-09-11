@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, Suspense, useMemo } from 'react';
+import React, { useState, useEffect, Suspense, useMemo } from 'react';
 import { useLanguage } from '@/lib/i18n';
 import { motion, AnimatePresence } from 'motion/react';
 import { LayoutDashboard, UserCog, Briefcase, MailPlus, Settings, Globe, Menu, Bell, LogOut, Loader2, Wallet, ShoppingBag, Layers, SlidersHorizontal, UserPen, ShieldCheck, CalendarDays, User } from 'lucide-react';
@@ -10,7 +10,7 @@ import Image from 'next/image';
 import { AvatarImage } from '@/components/ui/avatar-image';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { clearAuth, getAdmin, getToken, getPermissions } from '@/lib/auth';
-import { logoutAdmin } from '@/lib/api';
+import { getNotifications, logoutAdmin } from '@/lib/api';
 import type { Admin } from '@/lib/api';
 import { ProfileEditDialog } from './profile-edit-dialog';
 
@@ -51,6 +51,34 @@ export function MainLayoutContent({ children }: { children: React.ReactNode }) {
 
   // Admin state — starts from localStorage, can be refreshed on profile update
   const [admin, setAdmin] = useState<Admin | null>(() => getAdmin<Admin>());
+
+  /*
+   * Unread badge on the bell. Previously a hardcoded dot, so it claimed unread
+   * notifications on every screen forever. One page of the list is enough to
+   * answer "is there anything unread": the API returns newest first, so an
+   * unread row on a later page is only possible once 15 newer ones are all
+   * read — and the count is capped for display anyway.
+   */
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    const token = getToken();
+    if (!token) return;
+
+    let cancelled = false;
+    getNotifications(token, { page: 1, per_page: 15 })
+      .then((res) => {
+        if (!cancelled) {
+          setUnreadCount(res.data.items.filter((n) => !n.is_read).length);
+        }
+      })
+      // A missing permission (403) or any other failure just means no badge.
+      .catch(() => undefined);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [pathname]);
 
   // Permissions — read once from localStorage on mount
   const visibleNavItems = useMemo(() => {
@@ -239,7 +267,9 @@ export function MainLayoutContent({ children }: { children: React.ReactNode }) {
                 )}
               >
                 <Bell className="w-5 h-5 text-secondary" strokeWidth={1.5} />
-                <span className="absolute top-2 right-2 w-2 h-2 bg-primary rounded-full ring-2 ring-white"></span>
+                {unreadCount > 0 && (
+                  <span className="absolute top-2 right-2 w-2 h-2 bg-primary rounded-full ring-2 ring-white" />
+                )}
               </button>
 
               <div className="h-8 w-[1px] bg-secondary/10 mx-1 sm:mx-2" />

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useLanguage } from '@/lib/i18n';
 import { AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
@@ -36,6 +36,7 @@ export default function ServiceOrdersClient({
 }) {
   const { language } = useLanguage();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [token] = useState(() => getToken() ?? '');
 
   const [orders, setOrders] = useState<ApiServiceOrderItem[]>(initialData ?? []);
@@ -45,6 +46,9 @@ export default function ServiceOrdersClient({
 
   // Filter & Search states
   const [search, setSearch] = useState('');
+  // The list refetches on `debouncedSearch`, so typing costs one request per
+  // pause rather than one per keystroke. 400ms matches the other list screens.
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [activeTab, setActiveTab] = useState('all');
   const [orderBy, setOrderBy] = useState('event_date');
   const [orderDir, setOrderDir] = useState<'ASC' | 'DESC'>('DESC');
@@ -58,11 +62,32 @@ export default function ServiceOrdersClient({
   const [deleteTarget, setDeleteTarget] = useState<ApiServiceOrderItem | null>(null);
   const [cancelTarget, setCancelTarget] = useState<ApiServiceOrderItem | null>(null);
 
-  // Detail modal state
+  /*
+   * `?orderId=` deep link — the financial record modal links here to show the
+   * order behind a record. Without this the link landed on an unfiltered list
+   * and the reference was left for the admin to find by hand.
+   */
+  const deepLinkedOrderId = searchParams.get('orderId');
+  const deepLinkedId = Number(deepLinkedOrderId);
+  const hasDeepLink = Number.isInteger(deepLinkedId) && deepLinkedId > 0;
+
+  // Detail modal state. The spinner starts on for a deep link so the modal is
+  // already open while its order loads, rather than appearing a beat later.
   const [detailOrder, setDetailOrder] = useState<ApiServiceOrderDetail | null>(null);
-  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailLoading, setDetailLoading] = useState(hasDeepLink);
 
   const isInitialMount = useRef(true);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+      // A new search invalidates the page number; resetting it here rather than
+      // in a separate effect keeps it in the same render as the term itself, so
+      // the list fetches once instead of twice.
+      setPage(1);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [search]);
 
   const fetchOrders = useCallback(async () => {
     if (!token) return;
@@ -71,7 +96,7 @@ export default function ServiceOrdersClient({
       const res = await getAdminServiceOrders(token, {
         page,
         per_page: 15,
-        keyword: search || undefined,
+        keyword: debouncedSearch || undefined,
         // The API owns status filtering — filtering the current page locally
         // would silently hide matches on other pages.
         status: activeTab === 'all' ? undefined : (activeTab as ServiceOrderListStatus),
@@ -89,7 +114,7 @@ export default function ServiceOrdersClient({
     } finally {
       setLoading(false);
     }
-  }, [token, page, search, activeTab, orderBy, orderDir]);
+  }, [token, page, debouncedSearch, activeTab, orderBy, orderDir]);
 
   useEffect(() => {
     if (isInitialMount.current && initialData) {
@@ -99,23 +124,35 @@ export default function ServiceOrdersClient({
     fetchOrders();
   }, [fetchOrders, initialData]);
 
-  // Changing a filter invalidates the current page number.
+  // Changing a filter invalidates the current page number. Search is handled by
+  // the debounce effect above, which resets the page alongside the term.
   useEffect(() => {
     setPage(1);
-  }, [search, activeTab, orderBy, orderDir]);
+  }, [activeTab, orderBy, orderDir]);
 
-  const openDetail = async (order: ApiServiceOrderItem) => {
+  const openDetailById = useCallback(async (id: number) => {
     setDetailLoading(true);
     setDetailOrder(null);
     try {
-      const res = await getAdminServiceOrderById(order.id, token);
+      const res = await getAdminServiceOrderById(id, token);
       setDetailOrder(res.data);
     } catch (err) {
       toast.error((err as Error).message || 'فشل جلب تفاصيل الطلب');
     } finally {
       setDetailLoading(false);
     }
-  };
+  }, [token]);
+
+  const openDetail = (order: ApiServiceOrderItem) => openDetailById(order.id);
+
+  // Opened once per linked id: closing the modal must not reopen it.
+  const handledDeepLink = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!token || !hasDeepLink || handledDeepLink.current === deepLinkedId) return;
+    handledDeepLink.current = deepLinkedId;
+    openDetailById(deepLinkedId);
+  }, [token, hasDeepLink, deepLinkedId, openDetailById]);
 
   const closeDetail = () => {
     setDetailOrder(null);

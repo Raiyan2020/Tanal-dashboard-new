@@ -14,6 +14,7 @@ import {
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { getToken } from '@/lib/auth';
+import { usePermissions } from '@/hooks/use-permissions';
 import {
   getAdminServiceOptions,
   getAdminServiceOptionById,
@@ -553,6 +554,7 @@ export default function ServiceOptionsClient({
   initialPagination: PaginatedItems<ServiceOptionItem>['pagination'] | null;
 }) {
   const { t, dir } = useLanguage();
+  const { can } = usePermissions();
   const [token] = useState(() => getToken() ?? '');
 
   // ── List State ──
@@ -659,13 +661,15 @@ export default function ServiceOptionsClient({
             </p>
           )}
         </div>
-        <button
-          onClick={() => { setEditOption(null); setView('form'); }}
-          className="bg-primary hover:bg-primary-dark text-white px-5 py-2.5 rounded-xl flex items-center justify-center gap-2 font-medium transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 cursor-pointer w-full sm:w-auto"
-        >
-          <Plus className="w-5 h-5" />
-          {t('addOption')}
-        </button>
+        {can('add-service-option') && (
+          <button
+            onClick={() => { setEditOption(null); setView('form'); }}
+            className="bg-primary hover:bg-primary-dark text-white px-5 py-2.5 rounded-xl flex items-center justify-center gap-2 font-medium transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 cursor-pointer w-full sm:w-auto"
+          >
+            <Plus className="w-5 h-5" />
+            {t('addOption')}
+          </button>
+        )}
       </div>
 
       <div className="glass-panel rounded-3xl p-3 sm:p-6 w-full mx-auto overflow-hidden">
@@ -745,20 +749,24 @@ export default function ServiceOptionsClient({
 
                   {/* Actions Column */}
                   <div className="flex items-center gap-2 flex-wrap shrink-0 justify-end border-t border-secondary/5 md:border-none pt-2 md:pt-0">
-                    <button
-                      title={t('edit')}
-                      onClick={() => { setEditOption(opt); setView('form'); }}
-                      className="p-2 sm:p-2.5 bg-white text-yellow-500 border border-transparent hover:bg-yellow-50 hover:border-yellow-200 hover:text-yellow-600 hover:-translate-y-[2px] hover:scale-[1.03] hover:shadow-md active:scale-95 rounded-xl transition-all duration-200 cursor-pointer"
-                    >
-                      <Edit2 className="w-4 h-4" />
-                    </button>
-                    <button
-                      title={t('remove')}
-                      onClick={() => setDeleteOption_(opt)}
-                      className="p-2 sm:p-2.5 bg-white text-red-500 border border-transparent hover:bg-red-50 hover:border-red-200 hover:text-red-600 hover:-translate-y-[2px] hover:scale-[1.03] hover:shadow-md active:scale-95 rounded-xl transition-all duration-200 cursor-pointer"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    {can('edit-service-option') && (
+                      <button
+                        title={t('edit')}
+                        onClick={() => { setEditOption(opt); setView('form'); }}
+                        className="p-2 sm:p-2.5 bg-white text-yellow-500 border border-transparent hover:bg-yellow-50 hover:border-yellow-200 hover:text-yellow-600 hover:-translate-y-[2px] hover:scale-[1.03] hover:shadow-md active:scale-95 rounded-xl transition-all duration-200 cursor-pointer"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+                    )}
+                    {can('delete-service-option') && (
+                      <button
+                        title={t('remove')}
+                        onClick={() => setDeleteOption_(opt)}
+                        className="p-2 sm:p-2.5 bg-white text-red-500 border border-transparent hover:bg-red-50 hover:border-red-200 hover:text-red-600 hover:-translate-y-[2px] hover:scale-[1.03] hover:shadow-md active:scale-95 rounded-xl transition-all duration-200 cursor-pointer"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}

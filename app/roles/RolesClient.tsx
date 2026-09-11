@@ -7,6 +7,7 @@ import { Plus, ShieldCheck, Edit2, Trash2, Users, Lock, Loader2 } from 'lucide-r
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { getToken } from '@/lib/auth';
+import { usePermissions } from '@/hooks/use-permissions';
 import { getRoles, type Role } from '@/lib/api';
 
 import { RoleForm } from './components/RoleForm';
@@ -22,6 +23,7 @@ export default function RolesClient({
   initialData: Role[] | null;
 }) {
   const { t, dir, language } = useLanguage();
+  const { can } = usePermissions();
   const [token] = useState(() => getToken() ?? '');
 
   const [roles, setRoles] = useState<Role[]>(initialData ?? []);
@@ -108,13 +110,15 @@ export default function RolesClient({
           </h1>
           <p className="text-sm text-secondary/50 mt-1">{roles.length} {t('roleCount')}</p>
         </div>
-        <button
-          onClick={() => { setEditRoleId(null); setView('form'); }}
-          className="bg-primary hover:bg-primary-dark text-white px-5 py-2.5 rounded-xl flex items-center justify-center gap-2 font-medium transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 cursor-pointer w-full sm:w-auto"
-        >
-          <Plus className="w-5 h-5" />
-          {t('addRole')}
-        </button>
+        {can('add-role') && (
+          <button
+            onClick={() => { setEditRoleId(null); setView('form'); }}
+            className="bg-primary hover:bg-primary-dark text-white px-5 py-2.5 rounded-xl flex items-center justify-center gap-2 font-medium transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 cursor-pointer w-full sm:w-auto"
+          >
+            <Plus className="w-5 h-5" />
+            {t('addRole')}
+          </button>
+        )}
       </div>
 
       <div className="glass-panel rounded-3xl p-3 sm:p-6 w-full mx-auto overflow-hidden">
@@ -162,18 +166,18 @@ export default function RolesClient({
                   </div>
 
                   <div className="flex items-center gap-2 shrink-0 justify-end border-t border-secondary/5 sm:border-none pt-2 sm:pt-0">
-                    {role.can_be_edited && (
+                    {role.can_be_edited && can('edit-role') && (
                       <button
-                        title={t('edit' as any)}
+                        title={t('edit')}
                         onClick={e => { e.stopPropagation(); setEditRoleId(role.id); setView('form'); }}
                         className="p-2 sm:p-2.5 bg-white text-yellow-500 border border-transparent hover:bg-yellow-50 hover:border-yellow-200 hover:-translate-y-[2px] hover:scale-[1.03] hover:shadow-md active:scale-95 rounded-xl transition-all cursor-pointer"
                       >
                         <Edit2 className="w-4 h-4" />
                       </button>
                     )}
-                    {role.can_be_deleted && (
+                    {role.can_be_deleted && can('delete-role') && (
                       <button
-                        title={t('remove' as any)}
+                        title={t('remove')}
                         onClick={e => { e.stopPropagation(); setDeleteRole_(role); }}
                         className="p-2 sm:p-2.5 bg-white text-red-500 border border-transparent hover:bg-red-50 hover:border-red-200 hover:-translate-y-[2px] hover:scale-[1.03] hover:shadow-md active:scale-95 rounded-xl transition-all cursor-pointer"
                       >

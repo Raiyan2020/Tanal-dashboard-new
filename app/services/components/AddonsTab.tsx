@@ -11,6 +11,7 @@ import {
 } from '@/lib/api';
 import { getToken } from '@/lib/auth';
 import { toast } from 'sonner';
+import { usePermissions } from '@/hooks/use-permissions';
 import { useLanguage } from '@/lib/i18n';
 
 interface AddonsTabProps {
@@ -28,6 +29,7 @@ const EMPTY_FORM: FormState = { nameAr: '', nameEn: '', price: '', sortOrder: '1
 
 export function AddonsTab({ serviceId }: AddonsTabProps) {
   const { t, language } = useLanguage();
+  const canEdit = usePermissions().can('edit-service');
   const [addons, setAddons] = useState<ApiServiceAddon[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -138,12 +140,14 @@ export function AddonsTab({ serviceId }: AddonsTabProps) {
           {ar ? 'إضافات الخدمة' : 'Service Add-ons'}{' '}
           <span className="text-secondary/40 font-normal text-xs">({addons.length})</span>
         </span>
-        <button
-          onClick={openAdd}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-white rounded-xl text-xs font-medium cursor-pointer hover:bg-primary-dark transition-colors shadow-sm"
-        >
-          <Plus className="w-3.5 h-3.5" /> {ar ? 'إضافة' : 'Add Add-on'}
-        </button>
+        {canEdit && (
+          <button
+            onClick={openAdd}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-white rounded-xl text-xs font-medium cursor-pointer hover:bg-primary-dark transition-colors shadow-sm"
+          >
+            <Plus className="w-3.5 h-3.5" /> {ar ? 'إضافة' : 'Add Add-on'}
+          </button>
+        )}
       </div>
 
       {/* List */}
@@ -172,18 +176,22 @@ export function AddonsTab({ serviceId }: AddonsTabProps) {
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    onClick={() => openEdit(addon)}
-                    className="p-1.5 bg-white text-yellow-500 hover:bg-yellow-50 hover:text-yellow-600 rounded-lg transition-colors border border-secondary/5 cursor-pointer shadow-sm"
-                  >
-                    <Edit2 className="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    onClick={() => setDeleteTarget(addon)}
-                    className="p-1.5 bg-white text-red-500 hover:bg-red-50 hover:text-red-600 rounded-lg transition-colors border border-secondary/5 cursor-pointer shadow-sm"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                  {canEdit && (
+                    <>
+                      <button
+                        onClick={() => openEdit(addon)}
+                        className="p-1.5 bg-white text-yellow-500 hover:bg-yellow-50 hover:text-yellow-600 rounded-lg transition-colors border border-secondary/5 cursor-pointer shadow-sm"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => setDeleteTarget(addon)}
+                        className="p-1.5 bg-white text-red-500 hover:bg-red-50 hover:text-red-600 rounded-lg transition-colors border border-secondary/5 cursor-pointer shadow-sm"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             );

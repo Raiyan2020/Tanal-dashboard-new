@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { FileText, X, Loader2, User, Phone, Mail, Download } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { ApiFinancialRecordDetail } from '@/lib/api';
+import { usePermissions } from '@/hooks/use-permissions';
 
 interface FinancialDetailsModalProps {
   isOpen: boolean;
@@ -55,6 +56,10 @@ export function FinancialDetailsModal({
   language,
   t
 }: FinancialDetailsModalProps) {
+  // Settling posts to `PATCH /financial-records/{id}/settle`, which the API
+  // gates on `edit-finance`; `finance` alone is read-only.
+  const canSettle = usePermissions().can('edit-finance');
+
   const getStatusLabel = (status: string) => {
     switch (status) {
       case 'paid':
@@ -279,7 +284,7 @@ export function FinancialDetailsModal({
                         {t('downloadInvoice')}
                       </button>
 
-                      {record.status !== "paid" && record.status !== 'cancelled' && (
+                      {record.status !== "paid" && record.status !== 'cancelled' && canSettle && (
                         <button type="button" onClick={onSettle} disabled={settling} className="flex-1 flex items-center justify-center gap-2 py-3 text-sm font-medium text-white bg-primary hover:bg-primary/95 rounded-xl transition-all cursor-pointer shadow-md shadow-primary/20 disabled:opacity-50">
                           {settling && <Loader2 className="w-4 h-4 animate-spin" />}
                           {t('manualSettle')}

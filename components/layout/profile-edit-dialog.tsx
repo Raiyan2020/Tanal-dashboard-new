@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { AvatarImage } from '@/components/ui/avatar-image';
 import { cn } from '@/lib/utils';
-import { updateProfile } from '@/lib/api';
+import { ApiError, updateAdminPassword, updateProfile } from '@/lib/api';
 import { getAdmin, getToken, saveAdmin } from '@/lib/auth';
 import type { Admin } from '@/lib/api';
 
@@ -40,16 +40,52 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 
 /* ─── Zod schema ─────────────────────────────────────────────── */
-const schema = z.object({
-  name: z.string().min(2, 'الاسم يجب أن يكون حرفين على الأقل'),
-  email: z.string().email('البريد الإلكتروني غير صالح'),
-  password: z
-    .string()
-    .optional()
-    .refine((v) => !v || v.length >= 8, {
-      message: 'كلمة المرور يجب أن تكون 8 أحرف على الأقل',
-    }),
-});
+/**
+ * Mirrors the two endpoints this dialog talks to. The password trio is optional
+ * as a group: leaving all three blank saves only the profile. The length bounds
+ * are the API's own (`min:6|max:100`) so the form never rejects a password the
+ * server would accept, nor accepts one it would not.
+ */
+const schema = z
+  .object({
+    name: z.string().min(2, 'الاسم يجب أن يكون حرفين على الأقل'),
+    email: z.string().email('البريد الإلكتروني غير صالح'),
+    current_password: z.string().optional(),
+    password: z.string().optional(),
+    password_confirmation: z.string().optional(),
+  })
+  .superRefine((values, ctx) => {
+    const { current_password, password, password_confirmation } = values;
+    if (!current_password && !password && !password_confirmation) return;
+
+    if (!current_password) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['current_password'],
+        message: 'أدخل كلمة المرور الحالية لتغييرها',
+      });
+    }
+    if (!password || password.length < 6) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['password'],
+        message: 'كلمة المرور الجديدة يجب أن تكون 6 أحرف على الأقل',
+      });
+    } else if (password.length > 100) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['password'],
+        message: 'كلمة المرور الجديدة يجب ألا تتجاوز 100 حرف',
+      });
+    }
+    if (password !== password_confirmation) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['password_confirmation'],
+        message: 'تأكيد كلمة المرور غير مطابق',
+      });
+    }
+  });
 
 type FormValues = z.infer<typeof schema>;
 
@@ -80,7 +116,9 @@ export function ProfileEditDialog({
     defaultValues: {
       name: admin?.name ?? '',
       email: admin?.email ?? '',
+      current_password: '',
       password: '',
+      password_confirmation: '',
     },
   });
 
@@ -110,29 +148,58 @@ export function ProfileEditDialog({
     try {
       const token = getToken();
       if (!token) throw new Error('غير مخوّل');
+
       const res = await updateProfile(
         {
           name: values.name,
           email: values.email,
-          ...(values.password ? { password: values.password } : {}),
           ...(imageFile ? { image: imageFile } : {}),
         },
         token
       );
 
-      // Keep the existing cached admin data and replace only its image with the
-      // URL returned by the update endpoint.
-      const cachedAdmin = getAdmin<Admin>() ?? admin ?? res.data;
-      const updatedAdmin = { ...cachedAdmin, image: res.data.image };
+      /*
+       * The password has its own endpoint and its own failure mode (a wrong
+       * current password is a 422 on that field). It runs after the profile
+       * save so a rejected password never discards the name/email edit.
+       */
+      if (values.password) {
+        try {
+          await updateAdminPassword(
+            {
+              current_password: values.current_password ?? '',
+              password: values.password,
+              password_confirmation: values.password_confirmation ?? '',
+            },
+            token
+          );
+        } catch (err) {
+          if (err instanceof ApiError && err.fieldError('current_password')) {
+            form.setError('current_password', {
+              message: err.fieldError('current_password'),
+            });
+          }
+          throw err;
+        }
+      }
+
+      // The response is the full updated admin, so it replaces the cached copy
+      // outright — merging only the image would leave a stale name in the
+      // sidebar until the next sign-in.
+      const cachedAdmin = getAdmin<Admin>() ?? admin;
+      const updatedAdmin = { ...cachedAdmin, ...res.data };
       saveAdmin(updatedAdmin);
       onSuccess(updatedAdmin);
+      form.resetField('current_password');
+      form.resetField('password');
+      form.resetField('password_confirmation');
       setStatus('success');
       setTimeout(onClose, 1200);
     } catch (err: unknown) {
       setStatus('error');
       setErrorMsg(err instanceof Error ? err.message : 'حدث خطأ غير متوقع');
     }
-  }, [admin, imageFile, onClose, onSuccess]);
+  }, [admin, form, imageFile, onClose, onSuccess]);
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) onClose(); }}>
@@ -231,15 +298,18 @@ export function ProfileEditDialog({
               )}
             />
 
-            {/* Password */}
+            {/* Password change — optional as a group: all three blank saves
+                only the profile. */}
+            <div className="pt-1 border-t border-secondary/8" />
+            <p className="text-xs text-secondary/45 -mb-1">
+              تغيير كلمة المرور <span className="text-secondary/35">(اتركها فارغة للإبقاء على الحالية)</span>
+            </p>
             <FormField
               control={form.control}
-              name="password"
+              name="current_password"
               render={({ field }) => (
                 <FormItem className="space-y-1.5">
-                  <FormLabel className="text-xs font-medium text-secondary/70">
-                    كلمة المرور <span className="text-secondary/40 font-normal">(اتركها فارغة للإبقاء على الحالية)</span>
-                  </FormLabel>
+                  <FormLabel className="text-xs font-medium text-secondary/70">كلمة المرور الحالية</FormLabel>
                   <div className="relative">
                     <Lock className="absolute top-1/2 -translate-y-1/2 right-3 rtl:right-3 ltr:left-3 ltr:right-auto w-4 h-4 text-secondary/30" />
                     <FormControl>
@@ -247,6 +317,53 @@ export function ProfileEditDialog({
                         {...field}
                         type="password"
                         dir="ltr"
+                        autoComplete="current-password"
+                        placeholder="••••••••"
+                        className="pr-9 pl-3 rtl:pr-9 rtl:pl-3 ltr:pl-9 ltr:pr-3 text-sm text-secondary"
+                      />
+                    </FormControl>
+                  </div>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="password"
+              render={({ field }) => (
+                <FormItem className="space-y-1.5">
+                  <FormLabel className="text-xs font-medium text-secondary/70">كلمة المرور الجديدة</FormLabel>
+                  <div className="relative">
+                    <Lock className="absolute top-1/2 -translate-y-1/2 right-3 rtl:right-3 ltr:left-3 ltr:right-auto w-4 h-4 text-secondary/30" />
+                    <FormControl>
+                      <Input
+                        {...field}
+                        type="password"
+                        dir="ltr"
+                        autoComplete="new-password"
+                        placeholder="••••••••"
+                        className="pr-9 pl-3 rtl:pr-9 rtl:pl-3 ltr:pl-9 ltr:pr-3 text-sm text-secondary"
+                      />
+                    </FormControl>
+                  </div>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="password_confirmation"
+              render={({ field }) => (
+                <FormItem className="space-y-1.5">
+                  <FormLabel className="text-xs font-medium text-secondary/70">تأكيد كلمة المرور الجديدة</FormLabel>
+                  <div className="relative">
+                    <Lock className="absolute top-1/2 -translate-y-1/2 right-3 rtl:right-3 ltr:left-3 ltr:right-auto w-4 h-4 text-secondary/30" />
+                    <FormControl>
+                      <Input
+                        {...field}
+                        type="password"
+                        dir="ltr"
+                        autoComplete="new-password"
                         placeholder="••••••••"
                         className="pr-9 pl-3 rtl:pr-9 rtl:pl-3 ltr:pl-9 ltr:pr-3 text-sm text-secondary"
                       />

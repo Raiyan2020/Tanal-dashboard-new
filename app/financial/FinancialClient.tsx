@@ -30,6 +30,8 @@ export default function FinancialClient({
   const [records, setRecords] = useState<ApiFinancialRecordItem[]>(initialData ?? []);
   const [loading, setLoading] = useState(!initialData);
   const [searchTerm, setSearchTerm] = useState('');
+  // Refetch on the settled term, not on every keystroke — 400ms, as elsewhere.
+  const [debouncedSearch, setDebouncedSearch] = useState('');
 
   // Pagination states
   const [page, setPage] = useState(1);
@@ -45,6 +47,14 @@ export default function FinancialClient({
 
   const isInitialMount = useRef(true);
 
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchTerm);
+      setPage(1);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
   const fetchRecords = useCallback(async () => {
     if (!token) return;
     setLoading(true);
@@ -52,7 +62,7 @@ export default function FinancialClient({
       const res = await getAdminFinancialRecords(token, {
         page,
         per_page: 15,
-        keyword: searchTerm || undefined,
+        keyword: debouncedSearch || undefined,
       });
       setRecords(res.data.items || []);
       setTotalPages(res.data.pagination.last_page || 1);
@@ -62,7 +72,7 @@ export default function FinancialClient({
     } finally {
       setLoading(false);
     }
-  }, [token, page, searchTerm, t]);
+  }, [token, page, debouncedSearch, t]);
 
   useEffect(() => {
     if (isInitialMount.current && initialData) {
@@ -447,10 +457,7 @@ export default function FinancialClient({
               type="text"
               placeholder={t('searchFinancialPlaceholder')}
               value={searchTerm}
-              onChange={e => {
-                setSearchTerm(e.target.value);
-                setPage(1);
-              }}
+              onChange={e => setSearchTerm(e.target.value)}
               className="w-full bg-white/50 border border-white/60 focus:border-primary/50 focus:ring-2 focus:ring-primary/20 rounded-xl py-3 pl-10 pr-4 rtl:pr-10 rtl:pl-4 outline-none text-secondary text-sm transition-all"
             />
           </div>

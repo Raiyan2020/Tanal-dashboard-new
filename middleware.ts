@@ -30,6 +30,10 @@ const ROUTE_PERMISSIONS: Record<string, string> = {
   '/service-options': 'service-options',
   '/employees':       'employees',
   '/financial':       'finance',
+  // The route folder is `app/landingPage`, so the sidebar links to /landingPage.
+  // `/landing-page` is kept because the catch-all `[slug]` route answers it too,
+  // which would otherwise be an ungated way in.
+  '/landingPage':     'landing-page',
   '/landing-page':    'landing-page',
   '/notifications':   'notifications',
   '/settings':        'show-settings',

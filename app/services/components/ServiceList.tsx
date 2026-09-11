@@ -8,6 +8,7 @@ import {
 import { cn } from '@/lib/utils';
 import { getServiceById, type ApiService } from '@/lib/api';
 import { toast } from 'sonner';
+import { usePermissions } from '@/hooks/use-permissions';
 
 interface ServiceListProps {
   services: ApiService[];
@@ -40,6 +41,8 @@ export function ServiceList({
   t,
   token,
 }: ServiceListProps) {
+  const { can } = usePermissions();
+
   return (
     <div className="space-y-6 pb-10 text-start">
       {/* Header */}
@@ -56,13 +59,15 @@ export function ServiceList({
           <p className="text-sm text-secondary/50">
             {t('manageServicesDesc')}
           </p>
-          <button
-            onClick={onAddService}
-            className="flex items-center gap-2 px-4 py-2.5 bg-primary text-white rounded-xl text-sm font-medium hover:bg-primary/90 transition-colors shadow-sm shadow-primary/20 cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            {t('addService')}
-          </button>
+          {can('add-service') && (
+            <button
+              onClick={onAddService}
+              className="flex items-center gap-2 px-4 py-2.5 bg-primary text-white rounded-xl text-sm font-medium hover:bg-primary/90 transition-colors shadow-sm shadow-primary/20 cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              {t('addService')}
+            </button>
+          )}
         </div>
       </div>
 
@@ -105,6 +110,7 @@ export function ServiceList({
                     )}
                   </div>
                   <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
+                    {can('edit-service') && (
                     <button
                       onClick={async () => {
                         const toastId = toast.loading(t('loadingTranslations'));
@@ -134,6 +140,7 @@ export function ServiceList({
                     >
                       <Edit2 className="w-3.5 h-3.5" />
                     </button>
+                    )}
                     {/* System services are backend-managed and cannot be deleted */}
                     {svc.is_system ? (
                       <span
@@ -142,7 +149,7 @@ export function ServiceList({
                       >
                         {t('systemBadge')}
                       </span>
-                    ) : (
+                    ) : can('delete-service') ? (
                       <button
                         onClick={() => onDeleteService(svc)}
                         className="p-1.5 bg-white text-red-500 hover:bg-red-50 hover:text-red-600 rounded-lg transition-colors border border-secondary/5 cursor-pointer shadow-sm"
@@ -150,7 +157,7 @@ export function ServiceList({
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
-                    )}
+                    ) : null}
                     <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary/10 text-primary text-xs font-bold shadow-sm">
                       <SlidersHorizontal className="w-3 h-3" />
                       {svc.options_count}

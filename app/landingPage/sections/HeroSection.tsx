@@ -32,34 +32,31 @@ export default function HeroSection({ token }: { token: string }) {
       getLandingHero(token, 'ar'),
       getLandingHero(token, 'en')
     ])
+      /*
+       * The hero is stored per locale but served already resolved, so each
+       * language is one request and every field comes back as a plain string
+       * (`GeneralSetting::heroPayload()`). The URLs and the image are shared
+       * across locales; the backend falls back to the other language when one
+       * side is blank, so either response can supply them.
+       */
       .then(([resAr, resEn]) => {
-        const arHero = (resAr.data as any)?.data || resAr.data;
-        const enHero = (resEn.data as any)?.data || resEn.data;
-        if (arHero && enHero) {
-          setHero({
-            title: {
-              ar: (arHero.title && typeof arHero.title === 'object' ? arHero.title.ar : arHero.title) || '',
-              en: (enHero.title && typeof enHero.title === 'object' ? enHero.title.en : enHero.title) || '',
-            },
-            subtitle: {
-              ar: (arHero.subtitle && typeof arHero.subtitle === 'object' ? arHero.subtitle.ar : arHero.subtitle) || '',
-              en: (enHero.subtitle && typeof enHero.subtitle === 'object' ? enHero.subtitle.en : enHero.subtitle) || '',
-            },
-            primary_cta_label: {
-              ar: (arHero.primary_cta_label && typeof arHero.primary_cta_label === 'object' ? arHero.primary_cta_label.ar : arHero.primary_cta_label) || '',
-              en: (enHero.primary_cta_label && typeof enHero.primary_cta_label === 'object' ? enHero.primary_cta_label.en : enHero.primary_cta_label) || '',
-            },
-            primary_cta_url: arHero.primary_cta_url || enHero.primary_cta_url || '',
-            secondary_cta_label: {
-              ar: (arHero.secondary_cta_label && typeof arHero.secondary_cta_label === 'object' ? arHero.secondary_cta_label.ar : arHero.secondary_cta_label) || '',
-              en: (enHero.secondary_cta_label && typeof enHero.secondary_cta_label === 'object' ? enHero.secondary_cta_label.en : enHero.secondary_cta_label) || '',
-            },
-            secondary_cta_url: arHero.secondary_cta_url || enHero.secondary_cta_url || '',
-            image: arHero.image || enHero.image || null,
-          });
-        } else {
-          toast.error(t('noDataFound'));
-        }
+        const arHero = resAr.data;
+        const enHero = resEn.data;
+        setHero({
+          title: { ar: arHero.title || '', en: enHero.title || '' },
+          subtitle: { ar: arHero.subtitle || '', en: enHero.subtitle || '' },
+          primary_cta_label: {
+            ar: arHero.primary_cta_label || '',
+            en: enHero.primary_cta_label || '',
+          },
+          primary_cta_url: arHero.primary_cta_url || enHero.primary_cta_url || '',
+          secondary_cta_label: {
+            ar: arHero.secondary_cta_label || '',
+            en: enHero.secondary_cta_label || '',
+          },
+          secondary_cta_url: arHero.secondary_cta_url || enHero.secondary_cta_url || '',
+          image: arHero.image || enHero.image || null,
+        });
       })
       .catch(() => toast.error(t('noDataFound')))
       .finally(() => setLoading(false));

@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useLanguage } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { getToken } from '@/lib/auth';
+import { usePermissions } from '@/hooks/use-permissions';
 import { getSettings, updateSettings, type SettingsData } from '@/lib/api';
 import { toast } from 'sonner';
 import {
@@ -70,6 +71,8 @@ function SkeletonPage() {
 
 export default function SettingsClient({ initialData }: { initialData: SettingsData | null }) {
   const { t, dir } = useLanguage();
+  // Reaching this page needs `show-settings`; saving needs `edit-settings`.
+  const canEdit = usePermissions().can('edit-settings');
   const [token] = useState(() => getToken() ?? '');
 
   const [settings, setSettings] = useState<SettingsData | null>(initialData);
@@ -138,14 +141,16 @@ export default function SettingsClient({ initialData }: { initialData: SettingsD
           <h2 className="text-2xl font-bold text-secondary">{t('settings')}</h2>
           <p className="text-sm text-secondary/50 mt-0.5">{t('manageSettingsDesc')}</p>
         </div>
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="flex items-center gap-2 bg-primary hover:bg-primary/90 disabled:opacity-60 text-white px-5 py-2.5 rounded-full text-sm font-semibold transition-all shadow-sm shadow-primary/20 w-full sm:w-auto justify-center cursor-pointer"
-        >
-          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-          {saving ? t('saving') : t('saveChanges')}
-        </button>
+        {canEdit && (
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="flex items-center gap-2 bg-primary hover:bg-primary/90 disabled:opacity-60 text-white px-5 py-2.5 rounded-full text-sm font-semibold transition-all shadow-sm shadow-primary/20 w-full sm:w-auto justify-center cursor-pointer"
+          >
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+            {saving ? t('saving') : t('saveChanges')}
+          </button>
+        )}
       </div>
 
       <div className="space-y-6">
@@ -181,16 +186,18 @@ export default function SettingsClient({ initialData }: { initialData: SettingsD
       </div>
 
       {/* Floating save bar on mobile */}
-      <div className="sm:hidden fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-md border-t border-secondary/10 px-4 py-3 z-40">
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="w-full flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 disabled:opacity-60 text-white py-3 rounded-2xl text-sm font-bold transition-all cursor-pointer"
-        >
-          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-          {saving ? t('saving') : t('saveChanges')}
-        </button>
-      </div>
+      {canEdit && (
+        <div className="sm:hidden fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-md border-t border-secondary/10 px-4 py-3 z-40">
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="w-full flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 disabled:opacity-60 text-white py-3 rounded-2xl text-sm font-bold transition-all cursor-pointer"
+          >
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+            {saving ? t('saving') : t('saveChanges')}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

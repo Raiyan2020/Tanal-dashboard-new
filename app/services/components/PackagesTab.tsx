@@ -12,6 +12,7 @@ import {
 } from '@/lib/api';
 import { getToken } from '@/lib/auth';
 import { toast } from 'sonner';
+import { usePermissions } from '@/hooks/use-permissions';
 import { useLanguage } from '@/lib/i18n';
 
 interface PackagesTabProps {
@@ -39,6 +40,7 @@ export function PackagesTab({ serviceId, systemKey }: PackagesTabProps) {
   // mandatory there and hidden everywhere else.
   const requiresGuests = systemKey === BARCODE_INVITATIONS_KEY;
   const { t, language } = useLanguage();
+  const canEdit = usePermissions().can('edit-service');
   const [packages, setPackages] = useState<ApiServicePackage[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -158,12 +160,14 @@ export function PackagesTab({ serviceId, systemKey }: PackagesTabProps) {
           {ar ? 'باقات الخدمة' : 'Service Packages'}{' '}
           <span className="text-secondary/40 font-normal text-xs">({packages.length})</span>
         </span>
-        <button
-          onClick={openAdd}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-white rounded-xl text-xs font-medium cursor-pointer hover:bg-primary-dark transition-colors shadow-sm"
-        >
-          <Plus className="w-3.5 h-3.5" /> {ar ? 'إضافة باقة' : 'Add Package'}
-        </button>
+        {canEdit && (
+          <button
+            onClick={openAdd}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-white rounded-xl text-xs font-medium cursor-pointer hover:bg-primary-dark transition-colors shadow-sm"
+          >
+            <Plus className="w-3.5 h-3.5" /> {ar ? 'إضافة باقة' : 'Add Package'}
+          </button>
+        )}
       </div>
 
       {/* List */}
@@ -199,18 +203,22 @@ export function PackagesTab({ serviceId, systemKey }: PackagesTabProps) {
                   {desc && <p className="text-xs text-secondary/50 mt-1 line-clamp-1">{desc}</p>}
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    onClick={() => openEdit(pkg)}
-                    className="p-1.5 bg-white text-yellow-500 hover:bg-yellow-50 hover:text-yellow-600 rounded-lg transition-colors border border-secondary/5 cursor-pointer shadow-sm"
-                  >
-                    <Edit2 className="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    onClick={() => setDeleteTarget(pkg)}
-                    className="p-1.5 bg-white text-red-500 hover:bg-red-50 hover:text-red-600 rounded-lg transition-colors border border-secondary/5 cursor-pointer shadow-sm"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                  {canEdit && (
+                    <>
+                      <button
+                        onClick={() => openEdit(pkg)}
+                        className="p-1.5 bg-white text-yellow-500 hover:bg-yellow-50 hover:text-yellow-600 rounded-lg transition-colors border border-secondary/5 cursor-pointer shadow-sm"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => setDeleteTarget(pkg)}
+                        className="p-1.5 bg-white text-red-500 hover:bg-red-50 hover:text-red-600 rounded-lg transition-colors border border-secondary/5 cursor-pointer shadow-sm"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             );
