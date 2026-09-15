@@ -11,8 +11,8 @@ export default async function Page() {
   if (token) {
     try {
       const res = await getInvitations(token, { page: 1, per_page: 15 });
-      initialData = res.data.items.map(mapApiInvitation);
-      initialTotalPages = res.data.pagination.last_page;
+      initialData = res?.data.items.map(mapApiInvitation);
+      initialTotalPages = res?.data.pagination.last_page;
     } catch (e) {
       handlePrefetchError(e, 'invitations');
     }

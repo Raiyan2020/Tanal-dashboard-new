@@ -111,8 +111,8 @@ export default function InvitationsClient({
         period: periodParam,
       });
 
-      setInvitations(res.data.items.map(mapApiInvitation));
-      setTotalPages(res.data.pagination.last_page);
+      setInvitations(res?.data.items.map(mapApiInvitation));
+      setTotalPages(res?.data.pagination.last_page);
     } catch (err) {
       toast.error((err as Error).message || 'حدث خطأ أثناء تحميل قائمة الدعوات');
     } finally {

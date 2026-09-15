@@ -600,7 +600,7 @@ export function InvitationDetails({ invitation, onBack, onEdit }: InvitationDeta
         status: apiStatus,
       }, token);
 
-      const mapped = res.data.items.map((g) => ({
+      const mapped = res?.data?.items.map((g) => ({
         id: String(g.id),
         name: g.name,
         phone: g.full_phone,
